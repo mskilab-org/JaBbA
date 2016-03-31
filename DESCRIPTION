@@ -1,0 +1,19 @@
+Package: JaBbA
+Title: What the Package Does (one line, title case)
+Version: 0.0.0.9000
+Authors@R: person("Marcin", "Imielinski", , "mimielinski@nygenome.org", role = c("aut", "cre"))
+Description: What the package does (one paragraph)
+Depends:
+    R (>= 3.1.1),
+    Rcplex (>= 0.3),
+    Matrix,
+    gTrack
+Imports:
+    data.table (>= 1.9),
+    GenomicRanges (>= 1.18),
+    igraph (>= 0.7),
+    gUtils,
+    gTrack
+License: What license is it under?
+LazyData: true
+RoxygenNote: 5.0.1
