@@ -431,6 +431,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ## find disjoint union of tile and join with gaps
         tile = gr.fix(tile)
         tile = gr.fix(tile, bp1)
+        bp1 = gr.fix(bp1, tile) ## argh argh argh .. more pain avoiding hacks
         strand(tile) = '+'
         tile = disjoin(tile)
         tile = sort(c(tile, gaps(tile)))
