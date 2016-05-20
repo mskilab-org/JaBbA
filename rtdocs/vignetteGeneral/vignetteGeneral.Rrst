@@ -1,7 +1,18 @@
 General Vignette (Detailing some functions)
 ===========================================
 
-segstats
+segstats (calculates mean and standard deviation of a GRanges object with a supplied tumor depth, normal depth, and subsequent ratio. 
 ~~~~~~~~
+
+..{r starting-point}
+## upload coverage data for 10X HCC1143 cell line
+..ocovh = readRDS("~/Desktop/Projects/10X/files/HCC1143/cov/cov.rds")
+## tile the segments based on size of chromosomes
+cov = gr.tile(seqlengths(ocovh, 5e3)
+
+## calculate mean and standard deviation
+..cov = segstats(cov, ocovh, field  = 'ratio')
+
+.. .. 
 
 
