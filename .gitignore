@@ -1,0 +1,10 @@
+.*
+[#]*[#]
+.\#*
+*~
+_build*
+.Rproj.user
+*-concordance.tex
+*.log
+*.synctex.gz
+*.tex
