@@ -17,7 +17,7 @@ Calculate the **mean** and **standard deviation of GRanges object when supplied 
 
 ::
 
-    ## Error in is(gr, "GRanges"): could not find function "seqlengths"
+    ## Error in seqlengths(ocovh, 5000): unused argument (5000)
 
 
 .. sourcecode:: r
@@ -29,7 +29,7 @@ Calculate the **mean** and **standard deviation of GRanges object when supplied 
 
 ::
 
-    ## Error in match(x, table, nomatch = 0L): could not find function "values"
+    ## Error in (function (classes, fdef, mtable) : unable to find an inherited method for function 'strand<-' for signature '"standardGeneric", "character"'
 
 
 
