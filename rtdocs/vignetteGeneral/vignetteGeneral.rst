@@ -168,10 +168,4 @@ Calculate the **mean** and **standard deviation of GRanges object when supplied 
 
 
 
-::
-
-    ## Error in gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores): could not find function "munlist"
-
-
-
 
