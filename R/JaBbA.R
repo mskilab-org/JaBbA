@@ -602,7 +602,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ## (this is what is currently referenced by adj.ref and adj.ab)
     ## TODO: clean up this part
     tmp.nm = as.character(c(1:length(tile), -(1:length(tile))))
-    tile = c(tile, gr.flip(tile))
+    tile = c(tile, gr.flipstrand(tile))
     names(tile) = tmp.nm
 
     ## apply ix to adj.ref and adj.ab, and create "adj" which has union of reference and aberrant junctions
@@ -1147,7 +1147,7 @@ jbaMIP = function(
       neg.ix = which(strand(segstats)=='-')
 
       ## maps segments and reverse complements
-      seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flip(segstats[pos.ix]))]))
+      seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
       
       cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
       dup.ix = match(cll.m, unique(cll.m))
@@ -1302,7 +1302,7 @@ jbaMIP = function(
   og.ix = pos.ix 
 
   ## "duplicates" of og.ix i.e. revcomp vertices
-  dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flip(segstats[neg.ix]))])
+  dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
 
   if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
     stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
@@ -2114,7 +2114,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
               jab = list(segstats = jab$segstats[ix], adj = jab$adj[ix, ix], ab.edges = jab$ab.edges, purity = jab$purity, ploidy = jab$ploidy)
 
               tmp.adj = jab$adj*0
-              jab$segstats$ref.child = gr.match(gr.flip(flank(gr.flip(jab$segstats),1)), jab$segstats, ignore.strand = F)
+              jab$segstats$ref.child = gr.match(gr.flipstrand(flank(gr.flipstrand(jab$segstats),1)), jab$segstats, ignore.strand = F)
               jab$segstats$ref.parent = gr.match(flank(jab$segstats,1), jab$segstats, ignore.strand = F)
               ix = suppressWarnings(cbind(1:length(jab$segstats), jab$segstats$ref.child))
               nnaix = rowSums(is.na(ix))==0
@@ -2154,7 +2154,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     if (length(lends)>0)
       {
         strand(lends) = '+'        
-        lends = c(lends, gr.flip(lends))
+        lends = c(lends, gr.flipstrand(lends))
         lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
         lends$id = nrow(adj) + c(1:length(lends))
         lends$right = end(lends) == end(jab$segstats)[lends$partner.id]            
@@ -2262,7 +2262,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       
     if (length(loose.ix)>0)
       {
-        seg.map = match(out$segstats, gr.flip(out$segstats)) ## maps segs to rev comp
+        seg.map = match(out$segstats, gr.flipstrand(out$segstats)) ## maps segs to rev comp
         ed.map = match(paste(out$edges[, 'from'], out$edges[, 'to']), paste(seg.map[out$edges[, 'to']], seg.map[out$edges[, 'from']])) ## maps edges to rev comp
         temp.ix = which(ed.map>(1:length(ed.map)));
         ed.id = ed.map
@@ -2309,8 +2309,8 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       {
 #        ss$cn[ss$loose] = ss$cn[ss$loose]+0.5
         ss$cn[ss$loose] = ifelse(ss$right[ss$loose], segstats$cn[ss$partner.id[ss$loose]]*1.2, segstats$cn[ss$partner.id[ss$loose]]*1.2)
-        ss[ss$loose] = shift(ss[ss$loose], ifelse(ss[ss$loose]$right, -500, 500)) + 500
-#        ss[ss$loose] = gr.flip(ss[ss$loose]) + 100
+        ss[ss$loose] = GenomicRanges::shift(ss[ss$loose], ifelse(ss[ss$loose]$right, -500, 500)) + 500
+#        ss[ss$loose] = gr.flipstrand(ss[ss$loose]) + 100
         ss[ss$loose]$ywid = 0.001
         ss[ss$loose]$col = alpha('white', 0)
         ss[ss$loose]$border = alpha('white', 0)
@@ -3270,7 +3270,7 @@ jabba.alleles = function(
     if (verbose)
       cat('Annotating allelic vertices\n')
 
-    tmp.string = gr.string(asegstats, mb = F, other.col = 'type'); tmp.string2 = gr.string(gr.flip(asegstats), mb = F, other.col = 'type')
+    tmp.string = gr.string(asegstats, mb = F, other.col = 'type'); tmp.string2 = gr.string(gr.flipstrand(asegstats), mb = F, other.col = 'type')
     asegstats$flip.ix = match(tmp.string, tmp.string2)
     asegstats$phased = !unphased
         
@@ -3624,7 +3624,7 @@ loose.ends = function(sol, kag)
         slacks.tmp1$sink = TRUE
       }
 
-    slacks.tmp2 = gr.flip(gr.start(ss.p[which(ss.p$eslack.in>0)], win.size, force = T))
+    slacks.tmp2 = gr.flipstrand(gr.start(ss.p[which(ss.p$eslack.in>0)], win.size, force = T))
     if (length(slacks.tmp2)>0)
       {        
         slacks.tmp2$type = '?'
@@ -3639,7 +3639,7 @@ loose.ends = function(sol, kag)
     t4.ix = intersect(which(type4!=0), 1:length(ss.p))
     t4.ix = ifelse(ss.p[t4.ix]$right.ab==0, -(t4.ix+1), t4.ix) ##
           
-    slacks.t4 = c(gr.end(ss.p[t4.ix[t4.ix>0]], win.size, force = T), gr.flip(gr.start(ss.p[-t4.ix[t4.ix<0]], win.size, force = T)))
+    slacks.t4 = c(gr.end(ss.p[t4.ix[t4.ix>0]], win.size, force = T), gr.flipstrand(gr.start(ss.p[-t4.ix[t4.ix<0]], win.size, force = T)))
 
     if (length(slacks.t4)>0)
       {
@@ -4091,7 +4091,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                 jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
                 abs = rbind(jab$ab.edges[jix,1:2,1])        
                 rabs = rbind(jab$ab.edges[jix,1:2,2])
-                rcix = match(jab$segstats, gr.flip(jab$segstats)) ## map of seg to its reverse complement
+                rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
 
                 adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
                 adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
@@ -4339,7 +4339,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                     '##FORMAT=<ID=CN,Number=1,Type=String,Description="Copy number">'
                            )
 
-                rcix = match(jab$segstats, gr.flip(jab$segstats)) ## map of seg to its reverse complement
+                rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
                 six = which(!is.na(jab$segstats$cn) & !jab$segstats$loose & as.character(strand(jab$segstats))=='+')
                 ss = jab$segstats[six]
                 
@@ -6644,10 +6644,10 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
         ix = which(jab$adj[jab$ab.edges[,1:2,1]]>0)
         if (length(ix)>0)
           {
-            ra1 = gr.flip(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
+            ra1 = gr.flipstrand(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
             ra2 = gr.start(jab$segstats[jab$ab.edges[ix,2,1]], 1, ignore.strand = F)
-            ra1 = shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
-            ra2 = shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
+            ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
+            ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
             ra = grl.pivot(GRangesList(ra1,ra2))
           }
       }
@@ -6697,8 +6697,8 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     tip = which(strand(kg$tile)=='+')
     tin = which(strand(kg$tile)=='-')
     gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
-    gr$node.end = tip[gr.match(shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
-    gr$node.start.n = tin[gr.match(shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
+    gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
+    gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
     gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
     
 #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
@@ -7118,7 +7118,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
     current.state$cid2prev = 1:nrow(current.state$intervals)
     
     ## map reference intervals to their rev comp
-    int2rc = suppressWarnings(match(kag$tile, gr.flip(kag$tile)))
+    int2rc = suppressWarnings(match(kag$tile, gr.flipstrand(kag$tile)))
 
     ## keep track of telomeric reference intervals (todo: specify centromeric intervals as input or other customizable characteristics
     ## that will specify chromosomes that are kept from timepoint to timepoint in the simulation)    
@@ -9033,7 +9033,7 @@ multicoco = function(cov,
 #' @name ra_breaks
 #' @import VariantAnnotation
 #' @export
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, 
+ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA, 
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
   )
   {
@@ -9041,14 +9041,24 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
           {
               if (grepl('(.bedpe$)', rafile))                  
                   {
-                      ra.path = rafile
-                      
+                      ra.path = rafile                      
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
-                      nh = min(which(!grepl('#', readLines(ra.path))))-1
+
+                      ln = readLines(ra.path)
+                      if (is.na(skip))
+                          nh = min(which(!grepl('#', ln)))-1
+                      else
+                          nh = skip
+
+                      
+                      if ((length(ln)-skip)==0)
+                          return(GRangesList())
+                          
                       if (nh ==0)
                           rafile = fread(rafile, header = FALSE)
                       else
                           {
+                              
                               rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
                               if (is.null(rafile))
                                   rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
@@ -9343,8 +9353,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
          }
      else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
          {
-             ra1 = gr.flip(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-             ra2 = gr.flip(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+             ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+             ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
              out = grl.pivot(GRangesList(ra1, ra2))             
          }
      
