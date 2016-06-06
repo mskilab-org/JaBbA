@@ -9045,10 +9045,10 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
                       ln = readLines(ra.path)
-                      if (is.na(skip))
-                          nh = min(which(!grepl('#', ln)))-1
-                      else
-                          nh = skip
+                      if (is.na(skip)){
+                      	nh = min(which(!grepl('#', ln)))-1
+                      	}else{
+                      	nh = skip}
 
                       
                       if ((length(ln)-skip)==0)
