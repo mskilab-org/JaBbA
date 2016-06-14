@@ -401,7 +401,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ### HACK HACK to force seqlengths to play with each other if malformedo
         tmp.sl = seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
-        tmp.sl = grdt(grbind(bp1, bp2))[, max(end), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
+        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
         bp1 = gr.fix(bp1, tmp.sl)
         bp2 = gr.fix(bp2, tmp.sl)
     # first we tile the genome around the combined breakpoints
@@ -744,7 +744,7 @@ karyotrack = function(kag, paths = NULL, col = 'red', pad = 0)
                 edges[, end.from := ifelse(as.logical(strand(ss)[from]=='+'), end(ss)[from], start(ss)[from])]
                 edges[, start.to := ifelse(as.logical(strand(ss)[to]=='+'), start(ss)[to], end(ss)[to])]
                 
-                paths.u = grdt(paths.u)[, ix := 1:length(seqnames)]
+                paths.u = gr2dt(paths.u)[, ix := 1:length(seqnames)]
                 paths.up = paths.u[ , list(ix.from = (ix)[-(length(ix))], ix.to = (ix)[-1], color = col[1]), by = grl.ix]
                 paths.up[, from := paths.u$subject.id[ix.from]][, to := paths.u$subject.id[ix.to]]
                 paths.up[, strand.from := paths.u$strand[ix.from]][, strand.to := paths.u$strand[ix.to]]
@@ -1918,7 +1918,7 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
         junc.right = adj[, sum(cn), keyby = i]
         junc.left = adj[, sum(cn), keyby = j]
 
-        gr = grdt(jab$segstats)[, seg.id := 1:length(seqnames)][loose == FALSE & strand == '+' & !is.na(cn), ]
+        gr = gr2dt(jab$segstats)[, seg.id := 1:length(seqnames)][loose == FALSE & strand == '+' & !is.na(cn), ]
         gr[, cluster := {
             tmp = rle(cn)
             rep(paste(seqnames[1], 1:length(tmp$values), sep = '.'), tmp$length)
@@ -5055,14 +5055,14 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         
         tx.span = seg2gr(values(cds)) ## assumed that transcript span is encoded in the cds metadata (ie beginning end including UTR)
 
-        cdsu = grdt(grl.unlist(cds)[, c('grl.ix')])
+        cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
         setkey(cdsu, grl.ix)
 
         cds.span = cdsu[, list(start = min(start), end = max(end)), keyby = grl.ix][list(1:length(tx.span)), ]
 
         
-        utr.left = seg2gr(grdt(tx.span)[, list(seqnames = seqnames, start = start, strand = strand, end = cds.span[list(1:length(start)), start], transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
-        utr.right = seg2gr(grdt(tx.span)[, list(seqnames = seqnames, start = cds.span[list(1:length(start)), end], strand = strand, end = end, transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
+        utr.left = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = start, strand = strand, end = cds.span[list(1:length(start)), start], transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
+        utr.right = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = cds.span[list(1:length(start)), end], strand = strand, end = end, transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
         utr = c(utr.left, utr.right)
         
         names(values(tx.span))[match(c('Transcript_id', 'Transcript_name', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'transcript_name', 'gene_name')
