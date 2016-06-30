@@ -38,7 +38,7 @@
 ## to install igraph, may need "use GCC-4.8"
 ## installing RCplex need to run:
 ##
-##install.packages('Rcplex', configure.args = c("--with-cplex-include=/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/include/", "--with-cplex-lib='-L/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/lib/x86-64_sles10_4.1/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
+## install.packages('Rcplex', configure.args = c("--with-cplex-include=/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/include/", "--with-cplex-lib='-L/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/lib/x86-64_sles10_4.1/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
 ##
 ## install.packages('Rcplex', configure.args = c("--with-cplex-include=/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.6/cplex/include/", "--with-cplex-lib='-L/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.6/cplex/lib/x86-64_linux/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
 ##
@@ -52,38 +52,40 @@
 #' @name runJaBbA
 #' @title runJAbbA
 #' @details
-#' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  Generates the following files in the output directory
-#' karyograph.rds file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
+#' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  
+#' Generates the following files in the output directory:
+#' karyograph.rds --- file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
 #' TODO - incorporate DNAcopy into this for one stop operation
-#' jabba.rds file storing JaBbA object
-#' jabba.simple.rds file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
-#' jabba.raw.rds storing raw jbaMIP solution, this may be useful for debugging and QC
-#' jabba.png, jabba.simple.png gTrack images of the above reconstructions
-#' jabba.seg.txt tsv file with jabba.simple solution segments
-#' jabba.seg.rds GRanges rds with jabba.simple solution segments
-#' jabba.adj.txt tsv file with edges (ie node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
-#' jabba.vcf, jabba.simple.vcf  BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
-#' jabba.cnv.vcf, jabba.simple.cnv.vcf copy number style VCF showing jabba copy number output
+#' jabba.rds --- file storing JaBbA object
+#' jabba.simple.rds --- file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
+#' jabba.raw.rds --- storing raw jbaMIP solution, this may be useful for debugging and QC
+#' jabba.png, jabba.simple.png --- gTrack images of the above reconstructions
+#' jabba.seg.txt --- tsv file with jabba.simple solution segments
+#' jabba.seg.rds --- GRanges rds with jabba.simple solution segments
+#' jabba.adj.txt --- tsv file with edges (i.e. node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
+#' jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
+#' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 #' 
 #' 
-#' @param ra  path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
-#' @param abu path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
-#' @param field field of abu GRanges to use as fragment density signal
-#' @param seg optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
-#' @param cfield character, junction confidence meta data field in ra
-#' @param tfield character, tier confidence meta data field in ra
-#' @param outdir out directory to dump into, default ./
-#' @param nseg optional path to normal seg file with $cn meta data field
-#' @param hets optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
-#' @param name prefix for sample name to be output to seg file
-#' @param cores number of cores to use (default 1)
-#' @param nseg path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
-#' @param subsample numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
-#' @param tilim timeout for jbaMIP computation (default 1200 seconds)
-#' @param edgenudge numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
-#' @param slack.penalty penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, ie that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
-#' @param overwrite flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param ra --- path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
+#' @param abu --- path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
+#' @param field --- field of abu GRanges to use as fragment density signal
+#' @param seg --- optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
+#' @param cfield --- character, junction confidence meta data field in ra
+#' @param tfield --- character, tier confidence meta data field in ra
+#' @param outdir --- out directory to dump into, default ./
+#' @param nseg --- optional path to normal seg file with $cn meta data field
+#' @param hets --- optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
+#' @param name --- prefix for sample name to be output to seg file
+#' @param cores --- number of cores to use (default 1)
+#' @param nseg --- path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
+#' @param subsample --- numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
+#' @param tilim --- timeout for jbaMIP computation (default 1200 seconds)
+#' @param edgenudge --- numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
+#' @param slack.penalty --- penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
+#' @param overwrite --- flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @export
+
 JaBbA = function(
     ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
     abu, # path to cov file, rds of GRanges
@@ -94,10 +96,10 @@ JaBbA = function(
     nseg = NULL, # path to normal seg file with $cn meta data field
     hets = NULL, # path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
     name = 'tumor', ## prefix for sample name to be output to seg file
-    cores = 4, 
+    cores = 4, # default 1 
     field = 'ratio', ## character, meta data field to use from abu object to indicate numeric abundance, coverage
     subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment 
-    tilim = 1200, ## timeout for MIP portiuon
+    tilim = 1200, ## timeout for MIP portion
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
     slack.penalty = 1e3, ## nll penalty for each loose end copy
     overwrite = F ## whether to overwrite existing output
@@ -201,7 +203,7 @@ JaBbA = function(
         if (file.exists(hets))
             tryCatch(
                 {
-                    cat('Laoding hets\n')
+                    cat('Loading hets\n')
                     hetsd = fread(hets)
                     hets.gr = seg2gr(hetsd[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
                     cat('Computing alleles for jabd\n')
@@ -384,7 +386,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         bp2 = gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F)
     
         if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
-          stop('bp1 and bp2 must be signed intervals (ie either + or -)')
+          stop('bp1 and bp2 must be signed intervals (i.e. either + or -)')
         
         if (length(bp1) != length(bp2))
           stop('bp1 and bp2 inputs must have identical lengths')
@@ -893,7 +895,7 @@ segstats = function(target,
           {
             ## guessing alpha and beta priors for inverse gamma (for variance estimation)
             ## we want to bias this estimate by looking at a bunch of local "variance" samples
-            ## from signal .. ie a hundred adjacent markers
+            ## from signal .. i.e. a hundred adjacent markers
 #            tmp.sig = r$signal[!is.na(r$signal)]
             tmp.sig = val[!is.na(val)]
 
@@ -980,8 +982,8 @@ segstats = function(target,
 #'
 #' @param adj n x n adjacency matrix interpreted as binary (this is the $adj output of karyograph)
 #' @param segstats n x 1 GRanges object with "mean" and "sd" value fields
-#' @param beta numeric guess for beta (ie from ppgrid)
-#' @param gamma numeric guess for gamma (ie from ppgrid)
+#' @param beta numeric guess for beta (i.e. from ppgrid)
+#' @param gamma numeric guess for gamma (i.e. from ppgrid)
 #' @param slack.prior 1/slack.prior = penalty for each additional copy number of each slack edge, the higher slack.prior the more slack we allow in the reconstruction, should be intuitively calibrated to the expected "incompleteness" of the reconstruction, 1/slack.prior should be calibrated with respect to 1/(k*sd)^2 for each segment, so that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param field.ncn this field takes into account normal copy number in relative to absolute conversion
 #' @param adj.lb nxn matrix of lower bounds on particular copy numbers - this is used to force certain junctions into the graph
@@ -1028,7 +1030,7 @@ jbaMIP = function(
   gamma.guess = NA, 
   gamma.min = gamma.guess,
   gamma.max = gamma.guess,
-  cn.sd = 1, # sd of cn prior (mean is ploidy) - ie sd of local copy number from ploidy
+  cn.sd = 1, # sd of cn prior (mean is ploidy) - i.e. sd of local copy number from ploidy
   cn.prior = cn.sd,
   partition = T, ## whether to partition the problem into MIP subproblems depending on the relationships of the segment standard deviation and the value of the slack.prior (only works if gamma.guess, beta.guess are specified)
   purity.prior.mean = NA,
@@ -1425,7 +1427,7 @@ jbaMIP = function(
   
   Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
   
-  # vertices that will actually have constraints (ie those that have non NA segstats )
+  # vertices that will actually have constraints (i.e. those that have non NA segstats )
   v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
   
   # weighted mean across vertices contributing to mean
@@ -1872,7 +1874,7 @@ jbaMIP = function(
 ##############################################################
 #' jbaMIP.summarize
 #' 
-#' summarizes miqp result (ie multiple solutions) outputting data frame
+#' summarizes miqp result (i.e. multiple solutions) outputting data frame
 #' with summary info
 #' 
 ##############################################################
@@ -2149,7 +2151,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       lends = loose.ends(jab, kag)
       
       if (!is.null(lends))
-          lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (ie unused rearrangements)
+          lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
       
     if (length(lends)>0)
       {
@@ -2338,7 +2340,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
 #' list with items:
 #' $B incidence matrix of augmented graph (including slack vertices) (vertices x edges)
 #' rownames of $B are vertex names of $G and colnames of B are named with character version of their $G indices
-#' (ie column order of B  respects the original edge order in the solution)
+#' (i.e. column order of B  respects the original edge order in the solution)
 #'
 #' $e edge constraints for downstream karyoMIP, i.e the copy numbers at the edges
 #' $e.ij numedges x 2 vertex pair matrix denoting what are the vertex pairs corresponding to the cols of $B and entries of $e, $eclass, $etype etc
@@ -2381,7 +2383,7 @@ jbaMIP.process = function(
     
     ed.ij = which(sol$adj!=0, arr.ind = T)
 
-    ## B is vertices x edges (ie signed incidence matrix)
+    ## B is vertices x edges (i.e. signed incidence matrix)
     B = sparseMatrix(c(ed.ij[,1], ed.ij[,2]), rep(1:nrow(ed.ij), 2), x = rep(c(-1.00001, 1), each = nrow(ed.ij)), dims = c(nrow(sol$adj), nrow(ed.ij)))
     
     rownames(B) = 1:nrow(B)
@@ -2423,7 +2425,7 @@ jbaMIP.process = function(
       nrow(B) + match(recip.ix[ix.eslack.in], ix.eslack.out)
       )
       
-    ## match matrix against its reverse complement (ie rotation) to find reciprocal edges
+    ## match matrix against its reverse complement (i.e. rotation) to find reciprocal edges
     erecip.ix = mmatch(t(Bs), t(-Bs[recip.ix, ])) ## maps edges to their reciprocals
 
     tmp.na = which(is.na(erecip.ix))
@@ -2436,9 +2438,9 @@ jbaMIP.process = function(
     ## eclass will map length(erecip.ix) edges to length(erecip.ix)/2 edge equivalence class ids
     eclass = mmatch(rmat, rmat[!duplicated(rmat), ])
 
-    Bs = round(Bs) ## remove the 0.0001 dummy coefficients (ie for self loops)
+    Bs = round(Bs) ## remove the 0.0001 dummy coefficients (i.e. for self loops)
     
-    ## e will store observed copy states corresponding to edges (ie columns of Bs)
+    ## e will store observed copy states corresponding to edges (i.e. columns of Bs)
     e = c(sol$adj[which(sol$adj!=0)], sol$segstats$eslack.out[ix.eslack.out],  sol$segstats$eslack.in[ix.eslack.in])
     
     return(list(e = e, e.ij = ed.ij, B = Bs, eclass = eclass, etype = c(ifelse(grepl('slack', colnames(Bs)), 'slack', 'nonslack'))))
@@ -2457,7 +2459,7 @@ jbaMIP.process = function(
 #' @param segstats granges tiling genome populated with total copy counts on interval, mu_high, sd_high, mu_low, sd_low variables on alleles
 #' @param purity purity from solution
 #' @param gamma gamma param from jbaMIP
-#' @param slack.prior 1/slack.prior = penalty for each slack ie loose end copy in solution
+#' @param slack.prior 1/slack.prior = penalty for each slack i.e. loose end copy in solution
 #' @return
 #'
 #' list with fields
@@ -3026,7 +3028,7 @@ jabba.alleles = function(
     het.sites, ## granges with meta data fields for alt.count and 
     alt.count.field = 'alt.count.t',
     ref.count.field = 'ref.count.t',
-    split.ab = F, ## if split.ab == T, then will split across any "aberrant" segment (ie segment with ab edge entering or leaving prior to computing allelic states (note: this might create gaps)
+    split.ab = F, ## if split.ab == T, then will split across any "aberrant" segment (i.e. segment with ab edge entering or leaving prior to computing allelic states (note: this might create gaps)
     uncoupled = FALSE, ## if uncoupled, we just assign each high low allele the MLE conditioning on the total copy number
     conservative = FALSE, ## if TRUE then will leave certain allelic segments "unphased" if one cannot sync the high / low interval state with the incoming and / or outgoing junction state
     verbose = F  
@@ -3091,7 +3093,7 @@ jabba.alleles = function(
       cat('Computed SNP ploidy and allelic copy centers\n')
     
     ## now test deviation from each absolute copy combo using poisson model
-    ## ie counts ~ poisson(expected mean)
+    ## i.e. counts ~ poisson(expected mean)
     ##
     re.seg$low = sapply(1:length(re.seg), function(i)
       {
@@ -3714,7 +3716,7 @@ slack.breaks = function(segstats)
 #'
 #' TODO: Make user friendly, still pretty raw
 #' 
-#' takes |E| x k matrix of k extreme paths (ie contigs) across e edges of the karyograph
+#' takes |E| x k matrix of k extreme paths (i.e. contigs) across e edges of the karyograph
 #' and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence classes (both outputs of jbaMIP.process)
 #' and computes most likely karyotypes that fit the edge copy number profile subject to some prior likelihood
 #' over the k extreme paths
@@ -3723,7 +3725,7 @@ slack.breaks = function(segstats)
 #' @param e  edge copy numbers across |E| edges
 #' @param eclass  edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together, each class can have at most 2 members
 #' @param prior  prior log likelihood of a given contig being in the karyotype
-#' @param cpenalty karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype, should be calibrated to prior, ie higher than the contig-contig variance in the prior, otherwise complex karyotypes may be favored
+#' @param cpenalty karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype, should be calibrated to prior, i.e. higher than the contig-contig variance in the prior, otherwise complex karyotypes may be favored
 #' @param tilim time limit to optimizatoin
 #' @param nsolutions how many equivalent solutions to report
 #' @return
@@ -3737,7 +3739,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
   kclass = NULL,
   prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype 
   cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
-                # should be calibrated to prior, ie higher than the contig-contig variance in the prior,
+                # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
                 # otherwise complex karyotypes may be favored
   tilim = 100, epgap = 1, nsolutions = 50, objsense = 'max', ...)
   {
@@ -3768,7 +3770,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
       kclass = .e2class(K, eclass)
     
     kclass.counts = table(kclass)
-    if (any(kclass.counts>1)) ## any equiv ie strand flipped contig pairs? then make sure they appear in solutions togethrer
+    if (any(kclass.counts>1)) ## any equiv i.e. strand flipped contig pairs? then make sure they appear in solutions togethrer
       {
         bikclass = which(kclass.counts>1)
         Ac = Zero[1:length(bikclass), ]
@@ -3811,7 +3813,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 #'
 #' @param sol solution to karyoMIP
 #' @param K matrix of elementary paths (input to karyoMIP)
-#' @param e nrow(K) x 2 edge matrix representing vertex pairs (ie edges to which K is referring to)
+#' @param e nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)
 #' @param gr optional GRanges whose names are indexed by rownames of B
 #' @param mc.cores integer number of cores 
 #' @param verbose flag
@@ -3825,7 +3827,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 ##############################################################
 karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kclass (edges vectors)
   K, ## K matrix input to karyomip (edges x paths)
-  e, ## nrow(K) x 2 edge matrix representing vertex pairs (ie edges to which K is referring to)
+  e, ## nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)
   gr = NULL, ## optional GRanges who names are indexed by <<rownames>> of B
   mc.cores = 1,
   verbose = T
@@ -4019,9 +4021,9 @@ jabba.dist = function(jab, gr1, gr2,
         ## among ij pairs that land on the same (strand of the same) node
         ##
         ## several possibilities:
-        ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (ie was correctly calculated)
+        ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
         ## (2) if gr1.e[i] > gr2.s[j] then either
-        ##   (a) check if there is a self loop and adjust accordingly (ie add back width of current tile)
+        ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
         ##   (b) PITA case, compute shortest distance from i's child(ren) to j
 
         if (nrow(ij)>0)
@@ -4054,7 +4056,7 @@ jabba.dist = function(jab, gr1, gr2,
                     epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights                    
                     epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
                     
-                    ## aggregate (ie in case there are multiple children per node) by taking min width
+                    ## aggregate (i.e. in case there are multiple children per node) by taking min width
                     D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
                   }
               }
@@ -4172,8 +4174,8 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                         gr.loose$acn = gr.loose$cn                    
 
                         ## query parents / children of loose ends
-                        tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (ie is a parent)
-                        tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (ie is child)
+                        tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (i.e. is a parent)
+                        tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (i.e. is child)
                         
                         isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg? 
                         pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
@@ -4400,7 +4402,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
 #' 
 #' Walks are reconstructed locally within "clustersize" nodes of each aberrant edge, where
 #' clustersize is measured by the number of total edges.  Larger cluster sizes may fail to be
-#' computationally tractable, ie with a highly rearranged genome in an area of dense interconnectivity. 
+#' computationally tractable, i.e. with a highly rearranged genome in an area of dense interconnectivity. 
 #'
 #' @param sol JaBbA object
 #' @param outdir output directory
@@ -4423,7 +4425,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
 jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
   trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
   trim.w = 1e6, ## how far to trim in neighborhood of junction (only applicable when loci = NULL
-  prune = FALSE, ## whether to prune trivial walks ie those for whom a path can be drawn from first to last interval in a graph linking intervals with pairwise distance < d1 on the walk or distance < d2 on the reference
+  prune = FALSE, ## whether to prune trivial walks i.e. those for whom a path can be drawn from first to last interval in a graph linking intervals with pairwise distance < d1 on the walk or distance < d2 on the reference
   prune.d1 = 1e5, ## local distance threshold for walk pruning 
   prune.d2 = 1e5, ## reference distance threshold for walk pruning
   maxiterations = Inf, mc.cores = 1, genes = read.delim('~/DB/COSMIC/cancer_gene_census.tsv', strings = F)$Symbol, verbose = T, max.threads = 4, customparams = T, mem = 6, all.paths = FALSE, nomip = F, tilim = 100, nsolutions = 100, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10)
@@ -4526,7 +4528,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
       names(loci) = names(junction.ix)
       loci = loci[sapply(loci, length)>0]
     }
-  else ## if loci are provided (ie not junction centric) then we will not trim or prune
+  else ## if loci are provided (i.e. not junction centric) then we will not trim or prune
     {
       trim = F 
       prune = F
@@ -4648,7 +4650,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
               if (!is.null(junction.ix))
                 junc.pair = paste(sol$ab.edges[junction.ix[i], 1, ], sol$ab.edges[junction.ix[i], 2, ], sep = ',')
               
-              if (trim | prune) ## junction.ix should be not null here (ie they were provided as input or loci = NULL)
+              if (trim | prune) ## junction.ix should be not null here (i.e. they were provided as input or loci = NULL)
                 {
                   allps.u = grl.unlist(allps)
                   allps.u$ix.s = gr.match(gr.start(allps.u, ignore.strand = F), starts, ignore.strand = F)
@@ -5053,7 +5055,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
                 cds = .gencode_split(cds, by = 'transcript_id')
             }
         
-        tx.span = seg2gr(values(cds)) ## assumed that transcript span is encoded in the cds metadata (ie beginning end including UTR)
+        tx.span = seg2gr(values(cds)) ## assumed that transcript span is encoded in the cds metadata (i.e. beginning end including UTR)
 
         cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
         setkey(cdsu, grl.ix)
@@ -5278,7 +5280,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         }, mc.cores = mc.cores))
                     
         fus.sign = this.tx.span$cds.sign * this.tx.span$window.sign
-        paths = lapply(paths, function(x) if (fus.sign[x][1]<0) rev(x) else x) ## reverse "backward paths" (ie those producing fusions in backward order)
+        paths = lapply(paths, function(x) if (fus.sign[x][1]<0) rev(x) else x) ## reverse "backward paths" (i.e. those producing fusions in backward order)
         paths.first = sapply(paths, function(x) x[1])
         paths.last = sapply(paths, function(x) x[length(x)])
         paths.broken.start = ifelse(as.logical(strand(this.tx.span)[paths.first] == '+'), this.tx.span$left.broken[paths.first], this.tx.span$right.broken[paths.first])
@@ -5615,7 +5617,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
 
         ##
         ## now connect all.frags according to A
-        ## ie apply A connections to our fragments, so draw an edge between fragments
+        ## i.e. apply A connections to our fragments, so draw an edge between fragments
         ## if
         ## (1) there exists an edge connecting segment and
         ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
@@ -5796,7 +5798,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
 #' 
 #' Outputs a matrix K of the convex basis of matrix A
 #' 
-#' ie each column x = K[,i] is a minimal solution (with respect to sparsity) to 
+#' i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to 
 #' Ax = 0, x>=0
 #' 
 #' exclude.basis =  0, 1 matrix of dimension k x ncol(A) specifying k sparsity patterns that we would
@@ -6262,7 +6264,7 @@ adj2inc = function(A)
 #' @param sources graph indices to treat as sources (by default is empty)
 #' @param sinks graph indices to treat as sinks (by default is empty)
 #' @param verbose logical flag
-#' @return list of integer vectors corresponding to indices in A (ie vertices)
+#' @return list of integer vectors corresponding to indices in A (i.e. vertices)
 #' $paths = paths indices
 #' $cycles = cycle indices
 #' @export
@@ -7217,7 +7219,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
                         qrs.fid = rep(1, dim(qrs.paths)[3])
 
                         ## if we have multi qrs event and last.qrs is defined, then we constrain
-                        ## the first event to be in cis (ie on the same chromosome) as the previous
+                        ## the first event to be in cis (i.e. on the same chromosome) as the previous
                         if (!is.null(last.qrs))
                           qrs.paths = qrs.paths[qrs.paths[, 1] %in% current.state$intervals[abs(last.qrs), 'i'], ]
 
@@ -7248,7 +7250,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
                         ## last cid.  If not, then we throw them out
                         ## TODO: will check whether instantiations are within some threshold distance of each other
                         ## 
-                        ## if we run out of instantiations (ie the qrs cannot be fully instantiated) then we can 
+                        ## if we run out of instantiations (i.e. the qrs cannot be fully instantiated) then we can 
                         ## either implement a fragmented qrs (if force.event = T) or abort and try a different event
                         ##
                         
@@ -7460,7 +7462,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
                             current2frag[current2frag.nna] = match(current2frag[current2frag.nna], pix)
                             
                             ## remove any reference neighbors from the right side of this frag
-                            ## (ie it can only be attached through a subsequent adjacency)
+                            ## (i.e. it can only be attached through a subsequent adjacency)
                             fragment.partners[flocs[to.add.fid,'i'], 'right'] = NA 
                           }                                                                        
                       }
@@ -7788,7 +7790,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
 #' 
 #' least squares grid search for purity and ploidy modes
 #'
-#' @param segstats GRanges object of intervals with meta data fields "mean" and "sd" (ie output of segstats function)
+#' @param segstats GRanges object of intervals with meta data fields "mean" and "sd" (i.e. output of segstats function)
 #' @param allelic logical flag, if TRUE will also look for mean_high, sd_high, mean_low, sd_low variables and choose among top solutions from top copy number according to the best allelic fit
 #' @param mc.cores integer number of cores to use (default 1)
 #' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMIP
@@ -8945,7 +8947,7 @@ multicoco = function(cov,
 
                 ##                         #                    y_lev = y_lev[!is.na(cor), ]
                             
-                ##             ## build tree structure of rows of y_lev ie the variables in our optimization
+                ##             ## build tree structure of rows of y_lev i.e. the variables in our optimization
                 ##             ## map nodes to their parents 
                 ##             y_lev[, parent.ix := match(paste(lev+1, parent_lab), paste(lev, lab))]
                 ##             y_lev[, id := 1:length(parent.ix)]
@@ -9202,14 +9204,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                               strand(vgr.pair2)[tmpix] = '+'
                           }
 
-                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos1))
                           {
                               start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
                               end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
                           }
 
-                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (ie so that they refer to the base preceding the break for these junctions
+                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
                       if (any(pos2))
                           {
                               start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
