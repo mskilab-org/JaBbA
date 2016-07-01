@@ -788,7 +788,7 @@ karyoseg = function(kag, cov)
 #' segstats is a step in the JaBbA pipeline
 #'
 #' @details
-#' computes posterior means and sd's for a target tiling GRanges of segments (target)
+#' computes posterior mean's and sd's for a target tiling GRanges of segments (target)
 #' target must be a non-overlapping gapless strandless or two stranded tiling of the genome (eg output of gr.tile)
 #' if two stranded, then every stranded interval must have a mirror image interval included 
 #'
