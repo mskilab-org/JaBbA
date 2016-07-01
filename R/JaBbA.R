@@ -6380,6 +6380,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 #' @return paths and cycles of as list of vectors of aberrant edge index sequences,
 #' aberrant edges refer to edges described in kag$ab.edges matrix
 #' @export
+#####################################################
 chromoplexy = function(kag = NULL, # output of karyograph
   jab = NULL, ## optional alternate input, if NOT null then this will be used in place of kag
   sol = NULL, ## if sol is null, then copy state is ignored when determining amp or del bridges
