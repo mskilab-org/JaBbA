@@ -812,7 +812,8 @@ karyoseg = function(kag, cov)
 #' @param mc.cores number of cores to run on (default 1)
 #' @export
 segstats = function(target,
-  signal = NULL, field = 'signal',
+  signal = NULL, 
+  field = 'signal',
   asignal = NULL, ## granges corresponding to width 1 snp allele counts across the genome
   afields = c('ref.count', 'alt.count'), ## length 2 character vector specifying the two allele fields of asignal
   prior_weight = 1,
