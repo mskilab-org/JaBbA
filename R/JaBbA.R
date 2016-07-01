@@ -581,7 +581,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     # note: indices of matrix represent edge labels
     seg.ix = 1:length(tile)
     ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)], seg.ix[2:(length(seg.ix))])
-#    ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
+    # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
     ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) == as.character(seqnames(tile[ref.pairs[,2]]))), ]
 
     if (nrow(ref.pairs)>0)
