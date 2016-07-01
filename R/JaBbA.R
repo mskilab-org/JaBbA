@@ -85,6 +85,7 @@
 #' @param slack.penalty --- penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param overwrite --- flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @export
+############################################
 
 JaBbA = function(
     ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
@@ -367,7 +368,7 @@ ra_tier = function(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10, min.t
 #' $ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
 #'             in both orientations
 #' @export
-##########
+############################################
 karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of ra_breaks(dranger.df) where dranger is df of dranger output)
     tile = NULL, # pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
     label.edges = FALSE        
@@ -689,6 +690,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @param paths GRanges or GRangesList
 #' @return gTrack of karyograph with particular nodes / edges colored with specified colors
 #' @export
+############################################
 karyotrack = function(kag, paths = NULL, col = 'red', pad = 0)
     {
         if (length(paths)==0)
@@ -811,6 +813,7 @@ karyoseg = function(kag, cov)
 #' @param subsample number between 0 and 1 with which to subsample per segment for coverage (useful for superdense coverage eg 50 bases to avoid correlations between samples due to read overlap)
 #' @param mc.cores number of cores to run on (default 1)
 #' @export
+############################################
 segstats = function(target,
   signal = NULL, 
   field = 'signal',
@@ -1012,6 +1015,7 @@ segstats = function(target,
 #' $cn.prior input cn.prior
 #' $slack.prior input slack.prior
 #' @export
+############################################
 jbaMIP = function(
   adj, # binary n x n adjacency matrix ($adj output of karyograph)
   segstats, # n x 1 GRanges object with "mean" and "sd" value fields
@@ -2103,6 +2107,7 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
 #' @param verbose logical flag
 #' @param keep.all keep.all (default TRUE) whether to keep 0 copy junctions or collapse segments across these as well
 #' @export
+############################################
 JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   {
       if (is.null(kag))
@@ -2348,7 +2353,6 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
 #' $eclass id for each unique edge / anti-edge equivalence class
 #' $etype specifies whether edge is slack or nonslack
 #' @export
-#'
 ###################################################################
 jbaMIP.process = function(
   ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object, 
@@ -3024,7 +3028,7 @@ jbaMIP.allelic = function(
 #' $ab.ix = indices of aberrant edges in $aadj
 #' $ref.ix = indices of reference edges in $aadj
 #' @export
-####################    
+############################################
 jabba.alleles = function(
     jab,
     het.sites, ## granges with meta data fields for alt.count and 
@@ -5040,6 +5044,7 @@ reads.to.walks = function(bam, walks, outdir = './test', hg = read_hg(fft = T), 
 #' annotates every possible altered transcript in region including
 #'   - transcripts with truncated 
 #' @export
+############################################
 annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbose = F, prom.window = 1e3, max.chunk = 1e9, mc.cores = 1, exhaustive = FALSE)
     {
         require(igraph)
@@ -5515,6 +5520,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 #' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
 #' @return GRangesList of walks corresponding to transcript boundaires
 #' @export
+################################
 fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, query = NULL, prom.window = 1e3, verbose = T, max.chunk = 1e10, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10, exhaustive = FALSE, debug = NULL, mc.cores = 1)
     {
         if (!is.null(junctions))
@@ -6367,7 +6373,9 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 
 
 #################################################
-#' Determines chromoplexy paths from standard JaBbA outpu
+#' chromoplexy
+#'
+#' Determines chromoplexy paths from standard JaBbA output
 #' 
 #' Outputs all chromoplexy paths and cycles
 #' (i.e. paths and cycles in breakpoint graph) allowing quasi-reciprocal
@@ -6640,6 +6648,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
 #' NOTE: values x_ij in these matrices should be interpreted with a 1e-9 offset to yield the actual value y_ij
 #' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
 #' @export
+############################################
 proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F, mc.cores = 1, 
   max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
   )
@@ -7798,6 +7807,7 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
 #' @param mc.cores integer number of cores to use (default 1)
 #' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMIP
 #' @export
+############################################
 ppgrid = function(
   segstats, # n x 1 GRanges object with "mean" and "sd" value fields, optional field $ncn for "normal tissue" cn (default = 2)
 
@@ -8116,6 +8126,7 @@ ppgrid = function(
 #' @return
 #' numeric vector of integer copy numbers
 #' @export
+############################################
 rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
   {        
     mu = values(gr)[, field]
@@ -9027,7 +9038,7 @@ multicoco = function(cov,
 #####
 #####
 
-
+############################################
 #' ra_breaks
 #'
 #' takes in either file or data frame from dranger or snowman or path to BND / SV type vcf file
@@ -9038,6 +9049,7 @@ multicoco = function(cov,
 #' @name ra_breaks
 #' @import VariantAnnotation
 #' @export
+############################################
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA, 
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
   )
@@ -9789,6 +9801,7 @@ chromhmmpx_stub = function(rg.span.file, chromhmm.file, this.ra.file, out.file, 
 #' @param mc.cores number of cores
 #' @param verbose Default FALSE
 #' @export
+############################################
 gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
     {
         ix.q = order(query)
