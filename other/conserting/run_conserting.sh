@@ -1,7 +1,13 @@
 #!/bin/bash
 
-## modify paths
 CONSERTING_ROOT_DIR=/xchip/gistic/Jeremiah/Projects/Jabba/CONSERTING/code
+
+if [[ ! -e $CONSERTING_ROOT_DIR ]]; then
+    echo "Change the CONSERTING_ROOT_DIR to the path on your system"
+    exit 1
+fi
+
+## modify paths
 export PATH=$PATH:$CONSERTING_ROOT_DIR
 export CLASSPATH=$CLASSPATH:$CONSERTING_ROOT_DIR:$CONSERTING_ROOT_DIR/bambino_bundle_1.06.jar:$CONSERTING_ROOT_DIR/sam-1.65.jar:$CONSERTING_ROOT_DIR/mysql-connector-java-5.1.39.tar.gz
 
@@ -15,6 +21,13 @@ linkr $NORM norm.bam
 ## convert BAM to WIG
 time sh bam2wig.sh tum.bam tum.wig
 time sh bam2wig.sh norm.bam norm.wig
+
+#### STILL NEED TO FIGURE OUT WHAT IS NEXT
+
+
+
+
+
 
 ## function for symlinking BAMs
 function linkr() {

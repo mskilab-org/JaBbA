@@ -2,12 +2,8 @@
 
 ## get the tarball
 wget http://ftp.stjude.org/pub/software/conserting/CONSERTING_code.tgz
-
-## move to that directory 
-cd code
-
-## extract CONSERTING code
 tar xzfv CONSERTING_code.tgz
+cd code
 
 ## get the bigwig to wig script
 wget http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/bigWigToWig
