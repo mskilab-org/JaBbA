@@ -17,7 +17,7 @@ karyoMIP(K, e, eclass = 1:length(e), kclass = NULL, prior = rep(0,
 
 \item{prior}{prior log likelihood of a given contig being in the karyotype}
 
-\item{cpenalty}{karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype, should be calibrated to prior, ie higher than the contig-contig variance in the prior, otherwise complex karyotypes may be favored}
+\item{cpenalty}{karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype, should be calibrated to prior, i.e. higher than the contig-contig variance in the prior, otherwise complex karyotypes may be favored}
 
 \item{tilim}{time limit to optimizatoin}
 
@@ -33,7 +33,7 @@ Used by jabba.walk.
 \details{
 TODO: Make user friendly, still pretty raw
 
-takes |E| x k matrix of k extreme paths (ie contigs) across e edges of the karyograph
+takes |E| x k matrix of k extreme paths (i.e. contigs) across e edges of the karyograph
 and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence classes (both outputs of jbaMIP.process)
 and computes most likely karyotypes that fit the edge copy number profile subject to some prior likelihood
 over the k extreme paths

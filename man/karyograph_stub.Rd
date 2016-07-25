@@ -7,7 +7,8 @@
 \usage{
 karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
   dranger.file = NULL, out.file, ra.file = NULL, force.seqlengths = NULL,
-  field = "ratio", mc.cores = 1, max.chunk = 1e+08, subsample = NULL)
+  purity = NA, ploidy = NA, field = "ratio", mc.cores = 1,
+  max.chunk = 1e+08, subsample = NULL)
 }
 \description{
 karyograph

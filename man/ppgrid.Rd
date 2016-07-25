@@ -9,7 +9,7 @@ ppgrid(segstats, allelic = FALSE, purity.min = 0.01, purity.max = 1,
   ploidy.max = 6, plot = F, verbose = F, mc.cores = 10)
 }
 \arguments{
-\item{segstats}{GRanges object of intervals with meta data fields "mean" and "sd" (ie output of segstats function)}
+\item{segstats}{GRanges object of intervals with meta data fields "mean" and "sd" (i.e. output of segstats function)}
 
 \item{allelic}{logical flag, if TRUE will also look for mean_high, sd_high, mean_low, sd_low variables and choose among top solutions from top copy number according to the best allelic fit}
 

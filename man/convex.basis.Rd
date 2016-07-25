@@ -12,7 +12,7 @@ convex.basis
 
 Outputs a matrix K of the convex basis of matrix A
 
-ie each column x = K[,i] is a minimal solution (with respect to sparsity) to 
+i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to 
 Ax = 0, x>=0
 
 exclude.basis =  0, 1 matrix of dimension k x ncol(A) specifying k sparsity patterns that we would

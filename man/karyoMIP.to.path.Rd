@@ -11,7 +11,7 @@ karyoMIP.to.path(sol, K, e, gr = NULL, mc.cores = 1, verbose = T)
 
 \item{K}{matrix of elementary paths (input to karyoMIP)}
 
-\item{e}{nrow(K) x 2 edge matrix representing vertex pairs (ie edges to which K is referring to)}
+\item{e}{nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)}
 
 \item{gr}{optional GRanges whose names are indexed by rownames of B}
 

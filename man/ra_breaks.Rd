@@ -6,7 +6,7 @@
 \usage{
 ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
   chr.convert = T, snowman = FALSE, swap.header = NULL,
-  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE,
+  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
   get.loose = FALSE)
 }
 \description{

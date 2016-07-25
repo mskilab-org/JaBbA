@@ -22,7 +22,7 @@
 \item{verbose}{logical flag}
 }
 \value{
-list of integer vectors corresponding to indices in A (ie vertices)
+list of integer vectors corresponding to indices in A (i.e. vertices)
 $paths = paths indices
 $cycles = cycle indices
 }

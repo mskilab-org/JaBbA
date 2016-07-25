@@ -60,6 +60,6 @@ Optional flags allow making huts around specific junctions or specified loci (GR
 
 Walks are reconstructed locally within "clustersize" nodes of each aberrant edge, where
 clustersize is measured by the number of total edges.  Larger cluster sizes may fail to be
-computationally tractable, ie with a highly rearranged genome in an area of dense interconnectivity.
+computationally tractable, i.e. with a highly rearranged genome in an area of dense interconnectivity.
 }
 

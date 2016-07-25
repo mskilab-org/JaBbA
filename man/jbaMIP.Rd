@@ -23,9 +23,9 @@ jbaMIP(adj, segstats, beta = NA, gamma = NA, field.ncn = "ncn",
 
 \item{segstats}{n x 1 GRanges object with "mean" and "sd" value fields}
 
-\item{beta}{numeric guess for beta (ie from ppgrid)}
+\item{beta}{numeric guess for beta (i.e. from ppgrid)}
 
-\item{gamma}{numeric guess for gamma (ie from ppgrid)}
+\item{gamma}{numeric guess for gamma (i.e. from ppgrid)}
 
 \item{field.ncn}{this field takes into account normal copy number in relative to absolute conversion}
 

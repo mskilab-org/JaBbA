@@ -2,7 +2,7 @@
 % Please edit documentation in R/JaBbA.R
 \name{chromoplexy}
 \alias{chromoplexy}
-\title{Determines chromoplexy paths from standard JaBbA outpu}
+\title{chromoplexy}
 \usage{
 chromoplexy(kag = NULL, jab = NULL, sol = NULL, all = F, ref.only = F,
   filt.jab = T, paths = F, dist = 1000, cn.dist = dist, verbose = F,
@@ -24,6 +24,9 @@ paths and cycles of as list of vectors of aberrant edge index sequences,
 aberrant edges refer to edges described in kag$ab.edges matrix
 }
 \description{
+Determines chromoplexy paths from standard JaBbA output
+}
+\details{
 Outputs all chromoplexy paths and cycles
 (i.e. paths and cycles in breakpoint graph) allowing quasi-reciprocal
 rearrangements with amplification / deletion bridge distance threshold "dist"

@@ -7,7 +7,7 @@
 jbaMIP.summarize(sol)
 }
 \description{
-summarizes miqp result (ie multiple solutions) outputting data frame
+summarizes miqp result (i.e. multiple solutions) outputting data frame
 with summary info
 }
 

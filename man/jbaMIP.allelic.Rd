@@ -16,7 +16,7 @@ jbaMIP.allelic(adj, segstats, purity, gamma, partition = T,
 
 \item{gamma}{gamma param from jbaMIP}
 
-\item{slack.prior}{1/slack.prior = penalty for each slack ie loose end copy in solution}
+\item{slack.prior}{1/slack.prior = penalty for each slack i.e. loose end copy in solution}
 }
 \value{
 list with fields

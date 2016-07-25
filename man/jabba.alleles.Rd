@@ -2,8 +2,7 @@
 % Please edit documentation in R/JaBbA.R
 \name{jabba.alleles}
 \alias{jabba.alleles}
-\title{Populates allelic value s for JaBbA object.  This does not explicitly impose junction balance constraints on alleles, but rather just computes
-the maximum likelihood estimate given allelic counts and the inferred total copy number on a given segment according to JaBbA}
+\title{jabba.alleles}
 \usage{
 jabba.alleles(jab, het.sites, alt.count.field = "alt.count.t",
   ref.count.field = "ref.count.t", split.ab = F, uncoupled = FALSE,

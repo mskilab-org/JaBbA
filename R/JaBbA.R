@@ -398,13 +398,14 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         values(bp1)$bp.id = 1:length(bp1);    
         values(bp2)$bp.id = 1:length(bp1)+length(bp1);
     
-        sgn1 = c('-'=-1, '+'=1)[as.character(strand(bp1))]
+        pgrid = sgn1 = c('-'=-1, '+'=1)[as.character(strand(bp1))]
         sgn2 = c('-'=-1, '+'=1)[as.character(strand(bp2))]
         
         ### HACK HACK to force seqlengths to play with each other if malformedo
         tmp.sl = seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
-        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
+                                        #        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
+        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][names(tmp.sl.og), structure(pmax(V1, tmp.sl.og, na.rm = TRUE), names = names(tmp.sl.og))]
         bp1 = gr.fix(bp1, tmp.sl)
         bp2 = gr.fix(bp2, tmp.sl)
     # first we tile the genome around the combined breakpoints
@@ -464,8 +465,11 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     else
         tbp = NULL;
       
-    if (length(junctions)>0)
-      g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
+      if (length(junctions)>0)
+          if (length(tbp)>0)
+              g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
+          else
+              g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()]))))
     else
       g = gaps(gr.stripstrand(sort(tbp)));
 
@@ -3943,13 +3947,16 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' @return a reduced set of windows within neighborhood k
 #' of seed on the graph (only includes edges with weight !=0)
 #' @export
-#####################################################
+#########x############################################
 jabba.hood = function(jab, win, k = 1, pad = 0)
   {
-    ix = which(gr.in(jab$segstats, win))
-    G = graph.adjacency(jab$adj!=0)
-    vix = unique(unlist(neighborhood(G, ix, order = k)))
-    return(streduce(jab$segstats[vix], pad))
+      ix = which(gr.in(jab$segstats, win))
+
+      G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)      
+      if (is.null(G)) ## sometimes igraph doesn't like Matrix
+          G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
+      vix = unique(unlist(neighborhood(G, ix, order = k)))
+      return(streduce(jab$segstats[vix], pad))
   }
 
 
@@ -4616,16 +4623,25 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
             {
               td.seg = sol$td
               td.seg$y1 = y1
+              td = c(td.seg, td.rg)
             }
           else
-            td.seg = gTrack(sol$segstats, y.field = 'cn', angle = 0, col ='black', height = 6, labels.suppress = T, y1 = y1)
-          
-          td = c(gTrack(grs, draw.paths = T, path.cex.arrow = 0, border = NA, angle = 0, ywid = 0.5, path.stack.x.gap = 1e6, height = 20, labels.suppress.gr = T),
-            td.seg,
-            td.rg)
-          plot(td,
-                  windows = win, links = kag$junctions)
-          dev.off()
+              {
+                  td.seg = gTrack(sol$segstats, y.field = 'cn', angle = 0, col ='black', height = 6, labels.suppress = T, y1 = y1)
+                  
+                                        #          td = c(gTrack(grs, draw.paths = T, path.cex.arrow = 0, border = NA, angle = 0, ywid = 0.5, path.stack.x.gap = 1e6, height = 20, labels.suppress.gr = T),
+                                    
+                  gt.walk = gTrack(grs, draw.paths = T, border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
+                  gt.walk$path.cex.arrow = 0
+                  gt.walk$path.stack.x.gap = 1e6
+                  td = c(
+                      gt.walk,
+                      td.seg,
+                      td.rg)
+                  plot(td,
+                       windows = win, links = kag$junctions)
+                  dev.off()
+              }
           
           df = data.frame(label = label, cn = p$cn, walk = sapply(grs, function(x) paste(gr.string(x, mb = F), collapse = ',')), widths = sapply(grs, function(x) paste(width(x), collapse = ',')), width = sapply(grs, function(x) sum(width(x))), numpieces = sapply(grs, length), type = 'walk') 
           df = rbind(data.frame(label = label, cn = NA, walk = paste(gr.string(win, mb = F), collapse = ','), widths = paste(width(win), collapse = ','), width = sum(width(win)), type = 'window', numpieces = length(win)), df)
@@ -4829,9 +4845,13 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
               values(allps) = NULL
               out$allpaths = allps
               out$allpaths.og = allps.og ## untouched all.paths if we want to reheat eg after computing 10X support
-              out$td.allpaths = c(gTrack(out$allpaths, draw.paths = T, path.cex.arrow = 0, border = NA, angle = 0, ywid = 0.5, path.stack.x.gap = 1e6, height = 20, labels.suppress.gr = T),
-                td.seg,
-                td.rg)
+              gt.walk = gTrack(out$allpaths, draw.paths = T,border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
+              gt.walk$path.cex.arrow = 0
+              gt.walk$path.stack.x.gap = 1e6
+              out$td.allpaths = c(
+                  gt.walk,
+                  td.seg,
+                  td.rg)
               pdf(outfile.allpaths.pdf, height = 30, width = 24)
               plot(out$td.allpaths,
                       windows = win, links = kag$junctions)
@@ -7828,9 +7848,10 @@ ppgrid = function(
   if (verbose)
       cat('Setting up matrices .. \n')
 
-  purity.guesses = seq(0, 1, purity.step)
-  #  purity.guesses = seq(pmax(0, purity.min), pmin(1.00, purity.max), purity.step)
-  ploidy.guesses = seq(pmin(0.5, ploidy.min), pmax(10, ploidy.max), ploidy.step)
+#  purity.guesses = seq(0, 1, purity.step)
+  purity.guesses = seq(pmax(0, purity.min), pmin(1.00, purity.max), purity.step)
+                                        #ploidy.guesses = seq(pmin(0.5, ploidy.min), pmax(10, ploidy.max), ploidy.step)
+  ploidy.guesses = seq(pmax(0.5, ploidy.min), pmax(0.5, ploidy.max), ploidy.step)
   
   if (allelic)
       if (!all(c('mean_high', 'mean_low', 'sd_high', 'sd_low') %in% names(values(segstats))))
@@ -7899,6 +7920,10 @@ ppgrid = function(
   dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
 
   cat('\n')
+
+  ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
+  ## cix = as.numeric(colnames(NLL))>=ploidy.min & as.numeric(colnames(NLL))<=ploidy.max  
+  ## NLL = NLL[rix, cix, drop = FALSE]
   
   a = rep(NA, nrow(NLL));
   b = rep(NA, ncol(NLL)+2)
@@ -7915,18 +7940,32 @@ ppgrid = function(
   NLLlc = rbind(b, b, cbind(a, NLL, a))
   NLLlr = rbind(b, b, cbind(a, a, NLL))
 
-  M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc))]
-  
-  ix = which(M, arr.ind= T);
-  C = hclust(d = dist(ix), method = 'single')
-  cl = cutree(C, h = 2)
+  if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
+      M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+  else if (ncol(NLL)==1) ## one column, only go up and down
+      M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+  else ## only row, only go left right
+      M = (NLLc < NLLcl & NLLc < NLLcr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
 
-  minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
-  
+  if (length(M)>1)
+      {
+          ix = which(M, arr.ind= T);
+          if (nrow(ix)>1)
+              {
+                  C = hclust(d = dist(ix), method = 'single')
+                  cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
+                  minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
+              }
+          else
+              minima = ix[1,, drop = FALSE]
+      }
+  else
+      minima = cbind(1,1)
+
   out = data.frame(purity = as.numeric(rownames(NLL)[minima[,1]]), ploidy = as.numeric(colnames(NLL)[minima[,2]]), NLL = NLL[minima],
       i = minima[,1], j = minima[,2])
 
-  out = out[order(out$NLL), ]
+  out = out[order(out$NLL), , drop = FALSE]
   rownames(out) = 1:nrow(out)
   out = out[out$purity>=purity.min & out$purity<=purity.max & out$ploidy>=ploidy.min & out$ploidy<=ploidy.max, ]
   out$gamma = 2/out$purity -2
@@ -9062,13 +9101,15 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
                       ln = readLines(ra.path)
-                      if (is.na(skip)){
-                      	nh = min(which(!grepl('#', ln)))-1
-                      	}else{
-                      	nh = skip}
+                      if (is.na(skip))
+                          {
+                              nh = min(which(!grepl('^((#)|(chrom))', ln)))-1
+                          }
+                      else
+                          nh = skip
 
                       
-                      if ((length(ln)-skip)==0)
+                      if ((length(ln)-nh)==0)
                           return(GRangesList())
                           
                       if (nh ==0)
@@ -9508,6 +9549,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     out.file,
     ra.file = NULL,
     force.seqlengths = NULL,
+    purity =  NA,
+    ploidy = NA,    
     field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
     {
       loose.ends = GRanges()
@@ -9585,10 +9628,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
               hets = fread(het.file)
               cat('loaded hets\n')
               hets.gr = seg2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
-              this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'))
+              this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'), mc.cores = mc.cores)
           }
       else
-          this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample)
+          this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
       
       this.kag$segstats$ncn = 2
             
@@ -9614,9 +9657,13 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
       pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
       if (!is.null(het.file))
-          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores, ploidy.min = 1.2, allelic = TRUE)
+          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores,
+              purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+              ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
       else
-          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores, ploidy.min = 1.2, allelic = FALSE)
+          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores,
+              purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+              ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
       
       dev.off()
       
@@ -9687,6 +9734,8 @@ cbs_stub = function(cov.file, out.file, field = 'ratio', alpha = 1e-5)
 
 #' run ramip
 ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
+    purity.min = NA, purity.max = NA,
+    ploidy.min = NA, ploidy.max = NA, 
   edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
   ab.force = NULL ## indices of aberrant junctions to force include into the solution
   )
@@ -9694,10 +9743,10 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
     cat('Starting', kag.file, '\n')
 
     this.kag = readRDS(kag.file)    
-    
+
     if (is.null(this.kag$gamma) | is.null(this.kag$beta))
       {
-        pp = ppgrid(this.kag$segstats, verbose = T, plot = T)
+        pp = ppgrid(this.kag$segstats, verbose = T, plot = T, purity.min = purity.min, purity.max = purity.max, ploidy.min = ploidy.min, ploidy.max = ploidy.max)
         this.kag$beta = pp[1,]$beta
         this.kag$gamma = pp[1,]$gamma
     }
@@ -9861,4 +9910,25 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
         names(out) = as.character(1:length(query))
         return(out)
     }
+
+
+##################################
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#' 
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+##################################
+vaggregate = function(...)
+  {
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+  }
 

@@ -11,52 +11,53 @@ JaBbA(ra, abu, seg, cfield = NULL, tfield = NULL, outdir = "./",
   slack.penalty = 1000, overwrite = F)
 }
 \arguments{
-\item{ra}{path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)}
+\item{ra}{--- path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)}
 
-\item{abu}{path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density}
+\item{abu}{--- path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density}
 
-\item{seg}{optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings}
+\item{seg}{--- optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings}
 
-\item{cfield}{character, junction confidence meta data field in ra}
+\item{cfield}{--- character, junction confidence meta data field in ra}
 
-\item{tfield}{character, tier confidence meta data field in ra}
+\item{tfield}{--- character, tier confidence meta data field in ra}
 
-\item{outdir}{out directory to dump into, default ./}
+\item{outdir}{--- out directory to dump into, default ./}
 
-\item{nseg}{optional path to normal seg file with $cn meta data field}
+\item{nseg}{--- optional path to normal seg file with $cn meta data field}
 
-\item{hets}{optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n}
+\item{hets}{--- optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n}
 
-\item{name}{prefix for sample name to be output to seg file}
+\item{name}{--- prefix for sample name to be output to seg file}
 
-\item{cores}{number of cores to use (default 1)}
+\item{cores}{--- number of cores to use (default 1)}
 
-\item{field}{field of abu GRanges to use as fragment density signal}
+\item{field}{--- field of abu GRanges to use as fragment density signal}
 
-\item{subsample}{numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data}
+\item{subsample}{--- numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data}
 
-\item{tilim}{timeout for jbaMIP computation (default 1200 seconds)}
+\item{tilim}{--- timeout for jbaMIP computation (default 1200 seconds)}
 
-\item{edgenudge}{numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.}
+\item{edgenudge}{--- numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.}
 
-\item{slack.penalty}{penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, ie that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)}
+\item{slack.penalty}{--- penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)}
 
-\item{overwrite}{flag whether to overwrite existing output directory contents or just continue with existing files.}
+\item{overwrite}{--- flag whether to overwrite existing output directory contents or just continue with existing files.}
 
-\item{nseg}{path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
+\item{nseg}{--- path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
 }
 \details{
-Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  Generates the following files in the output directory
-karyograph.rds file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
+Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  
+Generates the following files in the output directory:
+karyograph.rds --- file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
 TODO - incorporate DNAcopy into this for one stop operation
-jabba.rds file storing JaBbA object
-jabba.simple.rds file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
-jabba.raw.rds storing raw jbaMIP solution, this may be useful for debugging and QC
-jabba.png, jabba.simple.png gTrack images of the above reconstructions
-jabba.seg.txt tsv file with jabba.simple solution segments
-jabba.seg.rds GRanges rds with jabba.simple solution segments
-jabba.adj.txt tsv file with edges (ie node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
-jabba.vcf, jabba.simple.vcf  BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
-jabba.cnv.vcf, jabba.simple.cnv.vcf copy number style VCF showing jabba copy number output
+jabba.rds --- file storing JaBbA object
+jabba.simple.rds --- file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
+jabba.raw.rds --- storing raw jbaMIP solution, this may be useful for debugging and QC
+jabba.png, jabba.simple.png --- gTrack images of the above reconstructions
+jabba.seg.txt --- tsv file with jabba.simple solution segments
+jabba.seg.rds --- GRanges rds with jabba.simple solution segments
+jabba.adj.txt --- tsv file with edges (i.e. node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
+jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
+jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 }
 

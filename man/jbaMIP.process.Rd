@@ -15,7 +15,7 @@ jbaMIP.process(sol, allelic = F)
 list with items:
 $B incidence matrix of augmented graph (including slack vertices) (vertices x edges)
 rownames of $B are vertex names of $G and colnames of B are named with character version of their $G indices
-(ie column order of B  respects the original edge order in the solution)
+(i.e. column order of B  respects the original edge order in the solution)
 
 $e edge constraints for downstream karyoMIP, i.e the copy numbers at the edges
 $e.ij numedges x 2 vertex pair matrix denoting what are the vertex pairs corresponding to the cols of $B and entries of $e, $eclass, $etype etc
