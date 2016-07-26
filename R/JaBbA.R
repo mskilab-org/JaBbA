@@ -9605,10 +9605,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
               nseg = readRDS(nseg.file)
               sl = .fixsl(sl, nseg)
           }
-      else
-          {
-              this.kag$segstats$ncn = 2
-          }
       
       ## make sure all sl's are equiv
       this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
@@ -9620,6 +9616,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       
       this.ra = gr.fix(this.ra, sl, drop = T)
       this.kag = karyograph(this.ra, this.seg)
+
+      if (is.null(nseg.file))
+          this.kag$segstats$ncn = 2
       
       cat('Computing segstats\n')
 
