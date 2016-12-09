@@ -405,7 +405,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         tmp.sl = seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
                                         #        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
-        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][names(tmp.sl.og), structure(pmax(V1, tmp.sl.og, na.rm = TRUE), names = names(tmp.sl.og))]
+        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end+1, na.rm = TRUE), keyby = seqnames][names(tmp.sl.og), structure(pmax(V1, tmp.sl.og, na.rm = TRUE), names = names(tmp.sl.og))]
         bp1 = gr.fix(bp1, tmp.sl)
         bp2 = gr.fix(bp2, tmp.sl)
     # first we tile the genome around the combined breakpoints
@@ -1067,6 +1067,11 @@ jbaMIP = function(
   if (length(segstats) != nrow(adj))
     stop('length(segstats) !=  nrow(adj)')
 
+  if (is.null(adj.lb))
+      adj.lb = 0*adj
+  
+  message('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
+  
   #####
   # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
   #####
@@ -1086,6 +1091,7 @@ jbaMIP = function(
       ## is greater than k / slack.prior penalty (where k is some copy difference
       ## that we would never imagine a "reasonable" slack to have to over-rule      
       fix = as.integer(which(residual.diff>(8/slack.prior))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
+      
       if (verbose)
         cat('Fixing', length(fix), 'nodes that are unmovable by slack\n')
 
@@ -1206,6 +1212,7 @@ jbaMIP = function(
           
           args$adj = tmp.adj
           args$adj.nudge = adj.nudge[uix, uix, drop = F]
+          args$adj.lb = adj.lb[uix, uix, drop = F]
           args$segstats = segstats[uix]
           args$cn.fix = cn.fix[uix]
           args$cn.lb = cn.lb[uix]
@@ -1213,9 +1220,7 @@ jbaMIP = function(
           args$partition = F
           args$nsolutions = 1 
           args$ploidy.min = 0 ## no ploidy constraints          
-          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
-
-          
+          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5          
           
           if (verbose)
             cat('Starting cluster ', k, 'of', length(cll), 'which has', length(uix), 'nodes comprising',
@@ -1267,13 +1272,13 @@ jbaMIP = function(
       out$beta = beta.guess;
       out$gamma = gamma.guess;
       
-      target.less = rowSums(adj, na.rm = T)==0
-      source.less = colSums(adj, na.rm = T)==0
-      out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - rowSums(out$adj)[!target.less]
-      out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - colSums(out$adj)[!source.less]
+      target.less = Matrix::rowSums(adj, na.rm = T)==0
+      source.less = Matrix::colSums(adj, na.rm = T)==0
+      out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
+      out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
 
-      out$segstats$ecn.out =  rowSums(out$adj)
-      out$segstats$ecn.in =  colSums(out$adj)
+      out$segstats$ecn.out =  Matrix::rowSums(out$adj)
+      out$segstats$ecn.in =  Matrix::colSums(out$adj)
 
       out$segstats$edges.in = sapply(1:length(out$segstats),
         function(x) {ix = which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
@@ -1811,7 +1816,7 @@ jbaMIP = function(
     cat('Post processing .. \n')
   
   sol.l = lapply(sol.l, function(sol)
-         {                               
+  {
            vcn = round(sol$xopt[v.ix])
            ecn = round(sol$xopt[e.ix])
            sol$residual = round(sol$xopt[s.ix])
@@ -1836,8 +1841,8 @@ jbaMIP = function(
            sol$adj[edges] = ecn;
            sol$segstats = segstats
            sol$segstats$cn = round(vcn)
-           sol$segstats$ecn.in = round(colSums(sol$adj))
-           sol$segstats$ecn.out = round(rowSums(sol$adj))
+           sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
+           sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
            sol$segstats$edges.in = sapply(1:length(sol$segstats),
              function(x) {ix = which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
            sol$segstats$edges.out = sapply(1:length(sol$segstats),
@@ -2400,10 +2405,10 @@ jbaMIP.process = function(
     tmp.ix = which(abs(B)>=1)
     B[tmp.ix] = round(B[tmp.ix]) ## "0.00001" hack to take care of eclass matching below, these are length 1 self loop edge cases
     
-    ix.tel.5 = which(colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres    
+    ix.tel.5 = which(Matrix::colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres    
     sol$segstats$eslack.in[ix.tel.5] = sol$segstats$cn[ix.tel.5]  
 
-    ix.tel.3 = which(rowSums(sol$adj!=0)==0)
+    ix.tel.3 = which(Matrix::rowSums(sol$adj!=0)==0)
     sol$segstats$eslack.out[ix.tel.3] = sol$segstats$cn[ix.tel.3]  ## make fake slacks for telomeres
     
     ix.eslack.out = which(sol$segstats$eslack.out!=0);
@@ -3069,7 +3074,7 @@ jabba.alleles = function(
       {
         ab.adj = jab$adj
         ab.adj[ref.jun] = 0        
-        has.ab = as.numeric(rowSums(ab.adj!=0)!=0 | colSums(ab.adj!=0)!=0)[which(strand(jab$segstats)=='+')]
+        has.ab = as.numeric(Matrix::rowSums(ab.adj!=0)!=0 | colSums(ab.adj!=0)!=0)[which(strand(jab$segstats)=='+')]
         has.ab.rand = runif(length(ss.p)) * 1e-6 * has.ab
       }
 
@@ -3291,8 +3296,8 @@ jabba.alleles = function(
     asegstats.final$edges.out = sapply(1:length(asegstats.final),
       function(x) {ix = which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
 
-    asegstats.final$slack.in = asegstats.final$cn - colSums(aadj.final)
-    asegstats.final$slack.out = asegstats.final$cn - rowSums(aadj.final)
+    asegstats.final$slack.in = asegstats.final$cn - Matrix::colSums(aadj.final)
+    asegstats.final$slack.out = asegstats.final$cn - Matrix::rowSums(aadj.final)
 
     asegstats.final$new.ind = asegstats.final$phased.out = asegstats.final$phased.in = asegstats.final$id = NULL
     asegstats.final$tile.id = as.integer(factor(gr.string(gr.stripstrand(asegstats.final), mb = F, other.cols = 'type')))
@@ -3592,8 +3597,8 @@ loose.ends = function(sol, kag)
     ix.left[neg.ix] = ix.left[rev(neg.ix)]
     
     ss[strand(ss)=='-'] = rev(ss[strand(ss)=='-'])
-    tmp.right = rowSums(adj.ab)
-    tmp.left = colSums(adj.ab)
+    tmp.right = Matrix::rowSums(adj.ab)
+    tmp.left = Matrix::colSums(adj.ab)
     mask = c(as.numeric(diff(as.numeric(as.factor(seqnames(ss))))==0 & diff(as.numeric(as.factor(strand(ss))))==0), 0)
     ss$left.ab[ix.left] = tmp.left[ix.left]
     ss$right.ab[ix.right] = tmp.right[ix.right]
@@ -5154,7 +5159,9 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
 
         cds.u = grl.unlist(cds[this.tx.span$tx.id])
-        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+        #ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
+
         
         tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
         
@@ -5565,24 +5572,21 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
         if (is.null(A) | is.null(seg))
             stop('Some essential args are NULL')
 
+        if (!is(cds, 'GRangesList'))
+            cds = NULL
+        else if (!all(c('Transcript_id', 'Gene_name') %in% names(values(cds))))
+            cds = NULL                               
+        
         if (is.null(cds))
             {
                 if (verbose)
-                    cat('reading in gencode CDS\n')
-                
-                cds = read_gencode('CDS')
-            }
-        
-        if (!is(cds, 'GRangesList'))
-            {
-                if (verbose)
-                    cat('splitting cds\n')
-                cds = .gencode_transcript_split(cds[cds$type == 'CDS'])
+                    message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')                
+                cds = read_gencode('cds')
             }
         
         tx.span = seg2gr(values(cds))
 
-        names(values(tx.span))[match(c('Transcript_id', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'gene_name')
+        names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
         
         if (verbose)
             cat('got transcript boundaries\n')
@@ -9786,12 +9790,13 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
     adj.lb = NULL
     if (!is.null(ab.force))
       {
-        print(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
-        adj.lb = this.kag$adj*0
-        adj.lb[as.vector(this.kag$ab.edges[ab.force, 3, ])] = 1
+          print(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
+          adj.lb = this.kag$adj*0
+          adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
+          adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
       }
     
-    ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = T)
+    ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.lb = adj.lb , adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = T)
     saveRDS(ra.sol, out.file)
 
     if (customparams)
