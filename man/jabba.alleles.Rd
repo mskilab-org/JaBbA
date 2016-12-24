@@ -5,8 +5,8 @@
 \title{jabba.alleles}
 \usage{
 jabba.alleles(jab, het.sites, alt.count.field = "alt.count.t",
-  ref.count.field = "ref.count.t", split.ab = F, uncoupled = FALSE,
-  conservative = FALSE, verbose = F)
+  ref.count.field = "ref.count.t", baf.field = "baf.t", split.ab = F,
+  uncoupled = FALSE, conservative = FALSE, verbose = F)
 }
 \arguments{
 \item{jab}{JaBbA object}

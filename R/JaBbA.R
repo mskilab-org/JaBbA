@@ -1941,11 +1941,11 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
         }, by = seqnames]
         
         lix = jab$segstats$loose        
-        gr[, loose.right := rowSums(as.matrix(jab$adj[seg.id, lix, drop = FALSE]))]
-        gr[, loose.left := colSums(as.matrix(jab$adj[lix, seg.id, drop = FALSE]))]
+        gr[, loose.right := Matrix::rowSums(as.matrix(jab$adj[seg.id, lix, drop = FALSE]))]
+        gr[, loose.left := Matrix::colSums(as.matrix(jab$adj[lix, seg.id, drop = FALSE]))]
 
-        gr[, loose.right := rowSums(as.matrix(jab$adj[seg.id, lix, drop = FALSE]))]
-        gr[, loose.left := colSums(as.matrix(jab$adj[lix, seg.id, drop = FALSE]))]
+        gr[, loose.right := Matrix::rowSums(as.matrix(jab$adj[seg.id, lix, drop = FALSE]))]
+        gr[, loose.left := Matrix::colSums(as.matrix(jab$adj[lix, seg.id, drop = FALSE]))]
         
         if (nrow(junc.left)>0)
             {
@@ -2134,7 +2134,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
               jab$segstats$ref.child = gr.match(gr.flipstrand(flank(gr.flipstrand(jab$segstats),1)), jab$segstats, ignore.strand = F)
               jab$segstats$ref.parent = gr.match(flank(jab$segstats,1), jab$segstats, ignore.strand = F)
               ix = suppressWarnings(cbind(1:length(jab$segstats), jab$segstats$ref.child))
-              nnaix = rowSums(is.na(ix))==0
+              nnaix = Matrix::rowSums(is.na(ix))==0
               if (any(nnaix))
                   tmp.adj[ix[nnaix,, drop = F]] = 1
 
@@ -3043,14 +3043,54 @@ jabba.alleles = function(
     het.sites, ## granges with meta data fields for alt.count and 
     alt.count.field = 'alt.count.t',
     ref.count.field = 'ref.count.t',
+    baf.field = 'baf.t',
     split.ab = F, ## if split.ab == T, then will split across any "aberrant" segment (i.e. segment with ab edge entering or leaving prior to computing allelic states (note: this might create gaps)
     uncoupled = FALSE, ## if uncoupled, we just assign each high low allele the MLE conditioning on the total copy number
     conservative = FALSE, ## if TRUE then will leave certain allelic segments "unphased" if one cannot sync the high / low interval state with the incoming and / or outgoing junction state
     verbose = F  
   )
   {
-      if (!all(c(alt.count.field, ref.count.field) %in% names(values(het.sites))))
-          stop('count fields not found in meta data of het.sites input')
+      if (!all(c(alt.count.field, ref.count.field) %in% names(values(het.sites)))){
+          cat('count fields not found in meta data of het.sites input, trying BAF...')
+          if (!(baf.field %in% names(values(het.sites))))
+              stop('BAF field not found in meta data of het.sites input either!')
+          else{
+              ## TODO: change the stats model to beta
+              ## outputs are re.seg$low and re.seg$high
+              ## test deviations of observed BAF from expected by beta distribution
+              if (verbose)
+                  cat('Processing', length(het.sites),
+                      'het sites using fields', baf.field, '\n')
+
+############ below are copied from old poisson model
+              
+    ## ## now test deviation from each absolute copy combo using poisson model
+    ## ## i.e. counts ~ poisson(expected mean)
+    ## ##
+    ## re.seg$low = sapply(1:length(re.seg), function(i)
+    ##   {
+    ##     if (verbose)
+    ##       cat('.')    
+    ##     x = lows[[i]]
+    ##     if (length(x)==0)
+    ##       return(NA)
+    ##     y = highs[[i]]
+    ##     tot.cn = cn[i]
+    ##     ll = sapply(0:(floor(tot.cn/2)), function(j) sum(ppois(x,centers[j+1], log.p = T) + ppois(y,centers[tot.cn-j+1],log.p = T)))
+    ##     ll = ll - min(ll)
+    ##     return(which.max(ll)-1)
+    ##   })
+
+    ## if (verbose)
+    ##   cat('\n')
+
+    ## re.seg$high = re.seg$cn-re.seg$low
+
+              
+          }
+      } else {
+          ## stop('count fields not found in meta data of het.sites input')
+
     if (verbose)
       cat('Processing', length(het.sites), 'het sites using fields', alt.count.field, 'and', ref.count.field, '\n')
     
@@ -3074,7 +3114,7 @@ jabba.alleles = function(
       {
         ab.adj = jab$adj
         ab.adj[ref.jun] = 0        
-        has.ab = as.numeric(Matrix::rowSums(ab.adj!=0)!=0 | colSums(ab.adj!=0)!=0)[which(strand(jab$segstats)=='+')]
+        has.ab = as.numeric(Matrix::rowSums(ab.adj!=0)!=0 | Matrix::colSums(ab.adj!=0)!=0)[which(strand(jab$segstats)=='+')]
         has.ab.rand = runif(length(ss.p)) * 1e-6 * has.ab
       }
 
@@ -3128,7 +3168,9 @@ jabba.alleles = function(
       cat('\n')
 
     re.seg$high = re.seg$cn-re.seg$low
-    
+          }
+###########################################################################
+    ## borderline, below are common to both methods    
     jab$segstats$cn.low = round(gr.val(jab$segstats, re.seg, 'low', na.rm = TRUE)$low)
     jab$segstats$cn.high = round(gr.val(jab$segstats, re.seg, 'high', na.rm = TRUE)$high)
     na.ix = !gr.val(jab$segstats, re.seg, 'low', FUN = function(x,w,na.rm) any(!is.na(x)))$low | !gr.val(jab$segstats, re.seg, 'high', FUN = function(x,w,na.rm) any(!is.na(x)))$high
@@ -3879,7 +3921,7 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 
   is.slack = rowSums(is.na(e))!=0
   
-  out$is.cyc = colSums(K[is.slack, contigs, drop = F])==0 & colSums((B %*% K[, contigs, drop = F])!=0)==0
+  out$is.cyc = Matrix::colSums(K[is.slack, contigs, drop = F])==0 & Matrix::colSums((B %*% K[, contigs, drop = F])!=0)==0
   out$cn = sol$kcn[contigs]
   out$kix = contigs;
   out$kix2 = contigs2;
@@ -3942,26 +3984,72 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' jabba.hood
 #' 
 #' Given JaBbA  object
-#' and seed window "win", outputs a reduced set of windows within neighborhood k
-#' of seed on the graph (only includes edges with weight !=0)
+#' and seed window "win", outputs a reduced set of windows within neighborhoof of n coordinate (ork nodes)
+#' within the seed region(s) on the graph (only includes edges with weight !=0)
 #'
 #' @param jab JaBbA object
 #' @param win GRanges of window of interest
+#' @param d = distance in coordinates on graph
 #' @param k Neighborhood on graph around window of interest to query
 #' @param pad pad level at which to collapse nearly reference adjacent intervals
 #' @return a reduced set of windows within neighborhood k
 #' of seed on the graph (only includes edges with weight !=0)
 #' @export
 #########x############################################
-jabba.hood = function(jab, win, k = 1, pad = 0)
-  {
-      ix = which(gr.in(jab$segstats, win))
+jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE)
+{
+    if (ignore.strand)
+        win = gr.stripstrand(win)
+    
+    if (is.null(k)) ## use distance
+    {
+        seg.s = suppressWarnings(gr.start(jab$segstats, ignore.strand = TRUE))
+        seg.e = suppressWarnings(gr.end(jab$segstats, ignore.strand = TRUE))
+        D.s = suppressWarnings(jabba.dist(jab, win, seg.s))
+        D.e = suppressWarnings(jabba.dist(jab, win, seg.e))
 
-      G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)      
-      if (is.null(G)) ## sometimes igraph doesn't like Matrix
-          G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
-      vix = unique(unlist(neighborhood(G, ix, order = k)))
-      return(streduce(jab$segstats[vix], pad))
+        min.s = apply(D.s, 2, min, na.rm = TRUE)
+        min.e = apply(D.e, 2, min, na.rm = TRUE)
+        s.close = min.s<=d
+        e.close = min.e<=d
+        
+        if (any(ix <- s.close & e.close))
+            win.both = jab$segstats[ix]
+        else
+            win.both = GRanges()
+
+        ## note: we use distance to the <other end> to gauge how much to trim
+        ## since the closest path from the "far" side may not go through the near
+        ## side (ie we might under trim)
+        
+        ## if end is too far then trim right side of intervals
+        if (any(ix <- (s.close & !e.close)))
+            win.trim.s = GRanges(seqnames(jab$segstats)[ix],
+                                 IRanges(start(seg.s)[ix], start(seg.s)[ix] + (d - min.s[ix])), strand = strand(seg.s)[ix], seqlengths = seqlengths(jab$segstats))
+        else
+            win.trim.s = GRanges()
+
+        ## if start is too far then trim left of interval,
+        if (any(ix <- (!s.close & e.close)))
+            win.trim.e = GRanges(seqnames(jab$segstats)[ix],
+                                 IRanges(end(seg.e)[ix] - (d - min.e[ix]), end(seg.e)[ix]), strand = strand(seg.s)[ix], seqlengths = seqlengths(jab$segstats))
+        else
+            win.trim.e = GRanges()
+       
+        out = streduce(c(win.both[, c()], win.trim.s[, c()], win.trim.e[, c()]))
+        if (!bagel)
+            out = streduce(c(win[, c()], out[, c()]))
+        return(streduce(out, pad))
+    }
+    else ## use graph connections
+    {      
+        G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
+        
+        if (is.null(G)) ## sometimes igraph doesn't like Matrix
+            G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
+        vix = unique(unlist(neighborhood(G, ix, order = k)))              
+        return(streduce(jab$segstats[vix], pad))
+    }
   }
 
 
@@ -3985,9 +4073,13 @@ jabba.hood = function(jab, win, k = 1, pad = 0)
 jabba.dist = function(jab, gr1, gr2,
   matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs 
   max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
+  include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
   EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned  
   )
-  {
+{
+    ngr1 = length(gr1)
+    ngr2 = length(gr2)
+    
     if (is.null(jab$segstats))
       tiles = jab$tile
     else
@@ -3998,40 +4090,117 @@ jabba.dist = function(jab, gr1, gr2,
     else
       G = jab$G
 
-    if (any(ix <- strand(gr1)=='*'))
-      strand(gr1)[ix] = '+'
-
+    ## keep track of original ids when we collapse 
+    gr1$id = 1:length(gr1)
+    gr2$id = 1:length(gr2)
+    
+    ## check for double stranded intervals
+    ## add corresponding nodes if present
+    if (any(ix <- strand(gr1)=='*')) 
+    {
+        strand(gr1)[ix] = '+'
+        gr1 = c(gr1, gr.flipstrand(gr1[ix]))
+    }
+    
     if (any(ix <- strand(gr2)=='*'))
-      strand(gr2)[ix] = '+'
-        
+    {
+        strand(gr2)[ix] = '+'
+        gr2 = c(gr2, gr.flipstrand(gr2[ix]))
+    }
+
+    ## expand nodes by jabba model to get internal connectivity
+    if (include.internal)
+    {
+        gr1 = gr1[, 'id'] %**% jab$segstats
+        gr2 = gr2[, 'id'] %**% jab$segstats	
+    }
+    
     tmp = get.edges(G, E(G))
     E(G)$from = tmp[,1]
     E(G)$to = tmp[,2]
     E(G)$weight = width(tiles)[E(G)$to]
-
+               
     gr1.e = gr.end(gr1, ignore.strand = FALSE)
+    gr1.s = gr.start(gr1, ignore.strand = FALSE)
+    gr2.e = gr.end(gr2, ignore.strand = FALSE)
     gr2.s = gr.start(gr2, ignore.strand = FALSE)
 
-    gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.e
+    gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
+    gr1.s$ix = gr.match(gr1.s, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
+
     gr2.s$ix= gr.match(gr2.s, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
+    gr2.e$ix= gr.match(gr2.e, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
 
-    ## offset to add to distance when query is in middle of a node
+    ## 3' offset from 3' end of query intervals to ends of jabba segs  to add / subtract to distance when query is in middle of a node
     off1 = ifelse(as.logical(strand(gr1.e)=='+'), end(tiles)[gr1.e$ix]-end(gr1.e), start(gr1.e) - start(tiles)[gr1.e$ix])
-    off2 = ifelse(as.logical(strand(gr2.s)=='+'), start(gr2.s) - start(tiles)[gr2.s$ix], end(tiles)[gr2.s$ix]-end(gr2.s))
+    off2 = ifelse(as.logical(strand(gr2.s)=='+'), end(tiles)[gr2.s$ix]-end(gr2.s), start(gr2.s) - start(tiles)[gr2.s$ix])
 
+    ## reverse offset now calculate 3' offset from 5' of intervals
+    off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ ix])
+    off2r = ifelse(as.logical(strand(gr2.e)=='+'), end(tiles)[gr2.e$ix]-start(gr2.e), end(gr2.e) - start(tiles)[gr2.e$ix])
+
+    ## compute unique indices for forward and reverse analyses
     uix1 = unique(gr1.e$ix)
     uix2 = unique(gr2.s$ix)
-    
+    uix1r = unique(gr1.s$ix)
+    uix2r = unique(gr2.e$ix)
+
+    ## and map back to original indices
     uix1map = match(gr1.e$ix, uix1)
-    uix2map = match(gr2.s$ix, uix2)
+    uix2map = match(gr2.s$ix, uix2)   
+    uix1mapr = match(gr1.s$ix, uix1r)
+    uix2mapr = match(gr2.e$ix, uix2r)
 
     self.l = which(diag(jab$adj)>0)
     
     if (is.infinite(max.dist)) ## in this case we do not bother making sparse matrix and can compute distances very quickly with one call to shortest.paths
-      {
+    {        
+        ## need to take into account forward and reverse scenarios of "distance" here
+        ## ie upstream and downstream connections between query and target
+        ## edges are annotated with width of target
+
+        ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair 
+        ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
+        ## and (2) subtracting the 3' offset of uix2        
+        Df = sweep(
+            sweep(
+                shortest.paths(G, uix1, uix2, weights = E(G)$weight, mode = 'out')[uix1map, uix2map, drop = F],
+                1, off1, '+'), ## add uix1 3' offset to all distances 
+            2, off2, '-') ## subtract uix2 3' offset to all distances 
+
+
+        ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
+        ## now represent "source" node widths (ie of the flipped edges)
+        # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
+        ## and (2) adding the 3' offset of uix2
+        ## and using the reverse indices
+        Dr = sweep(
+            sweep(
+                t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
+                1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+            2, off2r , '+') ## add uix2 offset to all distances
+
+
+
+        Df2 = sweep(
+            sweep(
+                shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
+                1, off1r, '+'), ## add uix1 3' offset to all distances 
+            2, off2, '-') ## subtract uix2 3' offset to all distances 
+
+
+        Dr2 = sweep(
+            sweep(
+                t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
+                1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+            2, off2r , '+') ## add uix2 offset to all distances
+
         
-        D = sweep(sweep(shortest.paths(G, uix1, uix2, weights = E(G)$weight, mode = 'out')[uix1map, uix2map, drop = F], 1, off1, '+'), 2, 1 + off2 - width(tiles)[uix2], '+')
+
+        # then we do the same thing but flipping uix1r vs uix
         
+        D = pmin(Df, Dr, Df2, Dr2)
+          
         ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
         ## ij contains pairs of gr1 and gr2 indices that map to the same node
         ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
@@ -4047,8 +4216,8 @@ jabba.dist = function(jab, gr1, gr2,
         if (nrow(ij)>0)
           {
             ## rix are present 
-            rix = as.logical(((strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
-              (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
+            rix = as.logical(((strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] < start(gr2[ij[,'j']])) |
+              (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] > end(gr2)[ij[,'j']])))
 
 ##            if (any(rix))
  ##             D[ij[rix, c('i', 'j'), drop = F]] = width(tiles)[ij[rix, 'nid']] - off1[ij[rix, 'i']] - off2[ij[rix, 'j']]
@@ -4079,9 +4248,21 @@ jabba.dist = function(jab, gr1, gr2,
                   }
               }
           }
-                              
       }
 
+    ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
+    ## connections inside our queries ..
+    ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
+
+    ## melt distance matrix into ij
+    ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
+    dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]]
+    
+    tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
+    setkey(tmp, id1)    
+    D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]        
+
+    
     return(D)    
   }
 
@@ -4130,14 +4311,14 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                         gr1$jid = jix
                         gr1$nid = abs[,1]
                         gr1$acn = jcn
-                        gr1$rcn = rowSums(adj.ref[gr1$nid, , drop = FALSE])        
+                        gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])        
                         gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
                         
                         gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
                         gr2$jid = jix
                         gr2$nid = abs[,2]
                         gr2$acn = jcn
-                        gr2$rcn =  colSums(adj.ref[,gr2$nid, drop = FALSE])
+                        gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
                         gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
                         
                         gr1$mid = gr2$ID
@@ -4197,7 +4378,11 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                         
                         isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg? 
                         pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
-                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent, 
+
+##                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent, 
+
+                        gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent, 
+
                         
                         gr.loose$cn = jab$segstats$cn[pcid]
                         ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
@@ -4601,7 +4786,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                       loci[[i]] = loci[[i]]$win
                   }
           
-          is.cyc = colSums(K[h$etype[eix] == 'slack', ])==0 & colSums((h$B[, eix, drop = F] %*% K)!=0)==0
+          is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
           karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior)
           kag.sol = karyo.sol[[1]]
           p = karyoMIP.to.path(kag.sol, K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores))
@@ -5159,9 +5344,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
 
         cds.u = grl.unlist(cds[this.tx.span$tx.id])
-        #ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
-        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
-
+        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
         
         tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
         
@@ -5276,8 +5459,8 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 
         require(Matrix)
         A = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(this.tx.span),2))
-        sources = which(colSums(A!=0)==0)
-        sinks = which(rowSums(A!=0)==0)
+        sources = which(Matrix::colSums(A!=0)==0)
+        sinks = which(Matrix::rowSums(A!=0)==0)
 
         G = graph.adjacency(A)
         C = clusters(G, 'weak')
@@ -5295,7 +5478,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
                 return(NULL)
             if (length(x)==2)
                 list(x[c(tmp.source, tmp.sink)])            
-            else if (all(rowSums(tmp.mat)<=1) & all(colSums(tmp.mat)<=1))
+            else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
                 get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
             else
                 {
@@ -5676,7 +5859,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
             cat('computed subgraph\n')
         
         A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
-        keep.nodes = which(rowSums(A.frag)>0 | colSums(A.frag)>0)
+        keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
         A.frag = A.frag[keep.nodes, keep.nodes]
         all.frags = all.frags[keep.nodes]
         
@@ -5701,7 +5884,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
                 return(NULL)
             if (length(x)==2)
                 list(x[c(tmp.source, tmp.sink)])            
-            else if (all(rowSums(tmp.mat)<=1) & all(colSums(tmp.mat)<=1))
+            else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
                 get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
             else
                 {
@@ -5895,9 +6078,9 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
           print(Sys.time() - st)
 
         if (verbose)
-          cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(rowSums(K_i!=0)), "\n")
+          cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(Matrix::rowSums(K_i!=0)), "\n")
 
-        i = remaining[which.min(rowSums(A_i[remaining,, drop = FALSE]>=ZERO)*rowSums(A_i[remaining,, drop = FALSE]<=(-ZERO)))]  # chose "cheapest" rows
+        i = remaining[which.min(Matrix::rowSums(A_i[remaining,, drop = FALSE]>=ZERO)*Matrix::rowSums(A_i[remaining,, drop = FALSE]<=(-ZERO)))]  # chose "cheapest" rows
 
         remaining = setdiff(remaining, i);
 #        order = c(order, i);
@@ -5939,7 +6122,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                     print('Exceeding maximum number of chunks in convex.basis computation')
                     stop('Exceeding maximum number of chunks in convex.basis computation')
                   }
-                keep = which(colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
+                keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
                 H = H[keep, , drop = FALSE]
                 
                 # remove rows in H that have subsets in K_i2
@@ -5951,7 +6134,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                           print('Exceeding maximum number of chunks in convex.basis computation')
                           stop('Exceeding maximum number of chunks in convex.basis computation')
                         }
-                      keep = which(colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0) 
+                      keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0) 
                       H = H[keep, , drop = FALSE]
                     }
                 
@@ -5964,7 +6147,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                           print('Exceeding maximum number of chunks in convex.basis computation')
                           stop('Exceeding maximum number of chunks in convex.basis computation')
                         }
-                      keep = which(colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0) 
+                      keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0) 
                       H = H[keep, , drop = FALSE]
                     }
                 
@@ -5989,7 +6172,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                 print('Exceeding maximum number of chunks in convex.basis computation')
                 stop('Exceeding maximum number of chunks in convex.basis computation')
               } 
-            keep = colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
+            keep = Matrix::colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
             if (verbose)
               cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
             K_i = K_i[keep, , drop = F]            
@@ -6003,7 +6186,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                 print('Exceeding maximum number of chunks in convex.basis computation')
                 stop('Exceeding maximum number of chunks in convex.basis computation')
               } 
-            keep = colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
+            keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
             if (verbose)
               cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
             K_i = K_i[keep, , drop = F]            
@@ -6036,7 +6219,7 @@ collapse.paths = function(G, segstats, verbose = T)
       cat('graph size:', nrow(out), 'nodes\n')
   
   ## first identify all nodes with exactly one parent and child to do initial collapsing of graph
-  singletons = which(rowSums(out)==1 & colSums(out)==1)
+  singletons = which(Matrix::rowSums(out)==1 & Matrix::colSums(out)==1)
 
   if (verbose)
       cat('Collapsing simple paths..\n')
@@ -6062,8 +6245,8 @@ collapse.paths = function(G, segstats, verbose = T)
                           sets[setj[-1]] = list(NULL)
 
                           ## connect this node to the parent and child of the set                         
-                          parent = setdiff(which(rowSums(out[, setj, drop = FALSE])>0), setj)
-                          child = setdiff(which(colSums(out[setj, , drop = FALSE])>0), setj)
+                          parent = setdiff(which(Matrix::rowSums(out[, setj, drop = FALSE])>0), setj)
+                          child = setdiff(which(Matrix::colSums(out[setj, , drop = FALSE])>0), setj)
                           out[setj, c(setj, child)] = FALSE
                           out[c(setj, parent), setj] = FALSE
                           out[parent, setj[1]] = TRUE
@@ -6076,7 +6259,7 @@ collapse.paths = function(G, segstats, verbose = T)
       cat('done\nnow fixing branches\n')
   
   todo = rep(FALSE, nrow(G))
-  todo[rowSums(out)==1 | colSums(out)==1] = TRUE
+  todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE
 
   while (sum(todo)>0)
       {
@@ -6175,7 +6358,7 @@ collapse.paths = function(G, segstats, verbose = T)
 ###############################################
 sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
   {
-    nz = colSums(as.matrix(A)!=0, 1)>0
+    nz = Matrix::colSums(as.matrix(A)!=0, 1)>0
     
     if (is.null(dim(A)) | is.null(dim(B)))
       return(NULL)
@@ -6308,20 +6491,20 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
   {
     require(igraph)
 
-    blank.vertices = which(rowSums(A)==0 & colSums(A)==0)
+    blank.vertices = which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
     
     if (ALL)
       all = T
     
     if (all)
       {
-        source.vertices = which(rowSums(A)>0 & colSums(A)==0)
-        sink.vertices = which(colSums(A)>0 & rowSums(A)==0)
+        source.vertices = which(Matrix::rowSums(A)>0 & Matrix::colSums(A)==0)
+        sink.vertices = which(Matrix::colSums(A)>0 & Matrix::rowSums(A)==0)
       }
 
     out = list(cycles = NULL, paths = NULL)
     
-    node.ix = which(rowSums(A!=0)>0 | colSums(A!=0)>0)
+    node.ix = which(Matrix::rowSums(A!=0)>0 | Matrix::colSums(A!=0)>0)
     if (length(node.ix)==0)
       return(out)
 
@@ -6347,9 +6530,9 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     if (all(is.na(K)))
       return(out)
     
-    K = K[, colSums(K[1:ncol(B), ,drop = FALSE])!=0, drop = FALSE] ## remove any pure source to sink paths
+    K = K[, Matrix::colSums(K[1:ncol(B), ,drop = FALSE])!=0, drop = FALSE] ## remove any pure source to sink paths
     
-    is.cyc = colSums(B %*% K[1:ncol(B), ,drop = FALSE]!=0)==0
+    is.cyc = Matrix::colSums(B %*% K[1:ncol(B), ,drop = FALSE]!=0)==0
     
     out$cycles = lapply(which(is.cyc),
       function(i)
@@ -9100,21 +9283,28 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
       if (is.character(rafile))
           {
               if (grepl('(.bedpe$)', rafile))                  
-                  {
+              {
                       ra.path = rafile                      
                       cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
                       ln = readLines(ra.path)
                       if (is.na(skip))
-                          {
-                              nh = min(which(!grepl('^((#)|(chrom))', ln)))-1
+                      {
+                              nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                              if (is.infinite(nh))
+                                  nh = 1
                           }
                       else
                           nh = skip
 
-                      
+                                       
                       if ((length(ln)-nh)==0)
-                          return(GRangesList())
+                          if (get.loose)
+                              return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+                          else                              
+                              return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
+#                          return(GRangesList())
+                      
                           
                       if (nh ==0)
                           rafile = fread(rafile, header = FALSE)
@@ -9578,7 +9768,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       }        
       else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
           {        
-              tmp.ra = ra_breaks(ra.file, get.loose = T)
+              tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)              
               this.ra = tmp.ra$junctions
               loose.ends = tmp.ra$loose.ends
           }
@@ -9905,7 +10095,7 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
                                     last.y = all.ix[i]
                                 }
                         }
-                    out = out[rowSums(is.na(out))==0, ]
+                    out = out[Matrix::rowSums(is.na(out))==0, ]
                     return(out)
                 }, ql, sl[names(ql)], mc.cores = mc.cores, SIMPLIFY = FALSE)
 

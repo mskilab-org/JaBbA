@@ -4,12 +4,15 @@
 \alias{jabba.hood}
 \title{jabba.hood}
 \usage{
-jabba.hood(jab, win, k = 1, pad = 0)
+jabba.hood(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE,
+  bagel = FALSE)
 }
 \arguments{
 \item{jab}{JaBbA object}
 
 \item{win}{GRanges of window of interest}
+
+\item{d}{= distance in coordinates on graph}
 
 \item{k}{Neighborhood on graph around window of interest to query}
 
@@ -21,7 +24,7 @@ of seed on the graph (only includes edges with weight !=0)
 }
 \description{
 Given JaBbA  object
-and seed window "win", outputs a reduced set of windows within neighborhood k
-of seed on the graph (only includes edges with weight !=0)
+and seed window "win", outputs a reduced set of windows within neighborhoof of n coordinate (ork nodes)
+within the seed region(s) on the graph (only includes edges with weight !=0)
 }
 

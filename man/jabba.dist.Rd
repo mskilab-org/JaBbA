@@ -4,7 +4,8 @@
 \alias{jabba.dist}
 \title{jabba.dist}
 \usage{
-jabba.dist(jab, gr1, gr2, matrix = T, max.dist = Inf, EPS = 1e-09)
+jabba.dist(jab, gr1, gr2, matrix = T, max.dist = Inf,
+  include.internal = TRUE, EPS = 1e-09)
 }
 \arguments{
 \item{jab}{JaBbA object}
