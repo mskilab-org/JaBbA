@@ -4002,55 +4002,55 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
         win = gr.stripstrand(win)
     
     if (is.null(k)) ## use distance
-    {
-        seg.s = suppressWarnings(gr.start(jab$segstats, ignore.strand = TRUE))
-        seg.e = suppressWarnings(gr.end(jab$segstats, ignore.strand = TRUE))
-        D.s = suppressWarnings(jabba.dist(jab, win, seg.s))
-        D.e = suppressWarnings(jabba.dist(jab, win, seg.e))
+        {
 
-        min.s = apply(D.s, 2, min, na.rm = TRUE)
-        min.e = apply(D.e, 2, min, na.rm = TRUE)
-        s.close = min.s<=d
-        e.close = min.e<=d
-        
-        if (any(ix <- s.close & e.close))
-            win.both = jab$segstats[ix]
-        else
-            win.both = GRanges()
+            ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
+            
+            if (is.null(ss))
+                ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
+            
+            if (ignore.strand)
+                ss = gr.stripstrand(ss)
 
-        ## note: we use distance to the <other end> to gauge how much to trim
-        ## since the closest path from the "far" side may not go through the near
-        ## side (ie we might under trim)
-        
-        ## if end is too far then trim right side of intervals
-        if (any(ix <- (s.close & !e.close)))
-            win.trim.s = GRanges(seqnames(jab$segstats)[ix],
-                                 IRanges(start(seg.s)[ix], start(seg.s)[ix] + (d - min.s[ix])), strand = strand(seg.s)[ix], seqlengths = seqlengths(jab$segstats))
-        else
-            win.trim.s = GRanges()
+            ss = disjoin(ss)            
+            win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
+                         
+            seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
+            seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
+            D.s = suppressWarnings(jabba.dist(jab, win, seg.s))
+            D.e = suppressWarnings(jabba.dist(jab, win, seg.e))
+            
+            min.s = apply(D.s, 2, min, na.rm = TRUE)
+            min.e = apply(D.e, 2, min, na.rm = TRUE)
+            s.close = min.s<=d
+            e.close = min.e<=d
 
-        ## if start is too far then trim left of interval,
-        if (any(ix <- (!s.close & e.close)))
-            win.trim.e = GRanges(seqnames(jab$segstats)[ix],
-                                 IRanges(end(seg.e)[ix] - (d - min.e[ix]), end(seg.e)[ix]), strand = strand(seg.s)[ix], seqlengths = seqlengths(jab$segstats))
-        else
-            win.trim.e = GRanges()
-       
-        out = streduce(c(win.both[, c()], win.trim.s[, c()], win.trim.e[, c()]))
-        if (!bagel)
-            out = streduce(c(win[, c()], out[, c()]))
-        return(streduce(out, pad))
-    }
+            ## now for all "left close" starts we add whatever distance to that point + pad
+            gr.start(ss)[s.close]
+            
+
+            out = GRanges()
+            if (any(s.close))
+                out = c(out, flank(seg.s[s.close], -(d-min.s[s.close])))
+    
+            if (any(e.close))
+                out = c(out, shift(flank(seg.e[e.close], d-min.e[e.close]),1))
+
+            if (!bagel)
+                out = streduce(c(win[, c()], out[, c()]))
+
+            return(streduce(out, pad))
+        }
     else ## use graph connections
-    {      
-        G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
-        
-        if (is.null(G)) ## sometimes igraph doesn't like Matrix
-            G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
-        vix = unique(unlist(neighborhood(G, ix, order = k)))              
-        return(streduce(jab$segstats[vix], pad))
-    }
-  }
+        {      
+            G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
+            
+            if (is.null(G)) ## sometimes igraph doesn't like Matrix
+                G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
+            vix = unique(unlist(neighborhood(G, ix, order = k)))              
+            return(streduce(jab$segstats[vix], pad))
+        }
+}
 
 
 ######################################################
@@ -4071,12 +4071,18 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
 #' @export
 #######################################################
 jabba.dist = function(jab, gr1, gr2,
-  matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs 
-  max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
-  include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
-  EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned  
+    matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs 
+    max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
+    include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
+    verbose = TRUE,
+    EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned  
   )
 {
+    if (verbose)
+        now = Sys.time()
+    
+    intersect.ix = gr.findoverlaps(gr1, gr2, ignore.strand = FALSE)
+    
     ngr1 = length(gr1)
     ngr2 = length(gr2)
     
@@ -4114,6 +4120,12 @@ jabba.dist = function(jab, gr1, gr2,
         gr1 = gr1[, 'id'] %**% jab$segstats
         gr2 = gr2[, 'id'] %**% jab$segstats	
     }
+
+    if (verbose)
+        {
+            message('Finished making gr objects')
+            print(Sys.time() -now)
+        }
     
     tmp = get.edges(G, E(G))
     E(G)$from = tmp[,1]
@@ -4136,7 +4148,7 @@ jabba.dist = function(jab, gr1, gr2,
     off2 = ifelse(as.logical(strand(gr2.s)=='+'), end(tiles)[gr2.s$ix]-end(gr2.s), start(gr2.s) - start(tiles)[gr2.s$ix])
 
     ## reverse offset now calculate 3' offset from 5' of intervals
-    off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ ix])
+    off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ix])
     off2r = ifelse(as.logical(strand(gr2.e)=='+'), end(tiles)[gr2.e$ix]-start(gr2.e), end(gr2.e) - start(tiles)[gr2.e$ix])
 
     ## compute unique indices for forward and reverse analyses
@@ -4152,6 +4164,12 @@ jabba.dist = function(jab, gr1, gr2,
     uix2mapr = match(gr2.e$ix, uix2r)
 
     self.l = which(diag(jab$adj)>0)
+
+    if (verbose)
+        {
+            message('Finished mapping gr1 and gr2 objects to jabba graph')
+            print(Sys.time() -now)
+        }
     
     if (is.infinite(max.dist)) ## in this case we do not bother making sparse matrix and can compute distances very quickly with one call to shortest.paths
     {        
@@ -4180,27 +4198,29 @@ jabba.dist = function(jab, gr1, gr2,
                 1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
             2, off2r , '+') ## add uix2 offset to all distances
 
-
-
         Df2 = sweep(
             sweep(
                 shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
                 1, off1r, '+'), ## add uix1 3' offset to all distances 
             2, off2, '-') ## subtract uix2 3' offset to all distances 
 
-
         Dr2 = sweep(
             sweep(
                 t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
                 1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
             2, off2r , '+') ## add uix2 offset to all distances
-
         
+       
+        # then we do the same thing but flipping uix1r vs uix        
+        D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
 
-        # then we do the same thing but flipping uix1r vs uix
+        if (verbose)
+            {
+                message('Finished computing distances')
+                print(Sys.time() -now)
+            }
+    
         
-        D = pmin(Df, Dr, Df2, Dr2)
-          
         ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
         ## ij contains pairs of gr1 and gr2 indices that map to the same node
         ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
@@ -4216,13 +4236,11 @@ jabba.dist = function(jab, gr1, gr2,
         if (nrow(ij)>0)
           {
             ## rix are present 
-            rix = as.logical(((strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] < start(gr2[ij[,'j']])) |
-              (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] > end(gr2)[ij[,'j']])))
+              rix = as.logical((
+                  (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
+                      (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
 
-##            if (any(rix))
- ##             D[ij[rix, c('i', 'j'), drop = F]] = width(tiles)[ij[rix, 'nid']] - off1[ij[rix, 'i']] - off2[ij[rix, 'j']]
-
-            ij = ij[!rix, , drop = F] ## NTD with these since they are calculated correctly
+            ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
             
             if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops              
               {
@@ -4248,11 +4266,18 @@ jabba.dist = function(jab, gr1, gr2,
                   }
               }
           }
+        
+        if (verbose)
+            {
+                message('Finished correcting distances')
+                print(Sys.time() -now)
+            }
       }
 
     ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
     ## connections inside our queries ..
     ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
+
 
     ## melt distance matrix into ij
     ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
@@ -4262,6 +4287,16 @@ jabba.dist = function(jab, gr1, gr2,
     setkey(tmp, id1)    
     D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]        
 
+    ## finally zero out any intervals that actually intersect
+    ## (edge case not captured when we just examine ends)
+    if (length(intersect.ix)>0)
+        D[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0    
+
+    if (verbose)
+        {
+            message('Finished aggregating distances to original object')
+            print(Sys.time() -now)
+        }
     
     return(D)    
   }
