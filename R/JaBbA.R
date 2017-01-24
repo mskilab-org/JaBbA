@@ -52,38 +52,49 @@
 #' @name JaBbA
 #' @title JaBbA
 #' @details
-#' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  
+#' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.
+#' 
 #' Generates the following files in the output directory:
+#' 
 #' karyograph.rds --- file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
-#' TODO - incorporate DNAcopy into this for one stop operation
+#' 
+#' 
 #' jabba.rds --- file storing JaBbA object
+#' 
 #' jabba.simple.rds --- file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
+#' 
 #' jabba.raw.rds --- storing raw jbaMIP solution, this may be useful for debugging and QC
+#' 
 #' jabba.png, jabba.simple.png --- gTrack images of the above reconstructions
+#' 
 #' jabba.seg.txt --- tsv file with jabba.simple solution segments
+#' 
 #' jabba.seg.rds --- GRanges rds with jabba.simple solution segments
+#' 
 #' jabba.adj.txt --- tsv file with edges (i.e. node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
+#' 
 #' jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
+#' 
 #' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 #' 
 #' 
-#' @param ra --- path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
-#' @param abu --- path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
-#' @param field --- field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
-#' @param seg --- optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
-#' @param cfield --- character, junction confidence meta data field in ra
-#' @param tfield --- character, tier confidence meta data field in ra
-#' @param outdir --- out directory to dump into, default ./
-#' @param nseg --- optional path to normal seg file with $cn meta data field
-#' @param hets --- optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
-#' @param name --- prefix for sample name to be output to seg file
-#' @param cores --- number of cores to use (default 1)
-#' @param nseg --- path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
-#' @param subsample --- numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
-#' @param tilim --- timeout for jbaMIP computation (default 1200 seconds)
-#' @param edgenudge --- numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
-#' @param slack.penalty --- penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
-#' @param overwrite --- flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param ra  GRangesList of junctions OR path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
+#' @param coverage  GRanges of coverage OR path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
+#' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
+#' @param seg  optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
+#' @param cfield  character, junction confidence meta data field in ra
+#' @param tfield  character, tier confidence meta data field in ra
+#' @param outdir  out directory to dump into, default ./
+#' @param nseg  optional path to normal seg file with $cn meta data field
+#' @param hets  optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
+#' @param name  prefix for sample name to be output to seg file
+#' @param cores  number of cores to use (default 1)
+#' @param nseg  path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
+#' @param subsample  numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
+#' @param tilim  timeout for jbaMIP computation (default 1200 seconds)
+#' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
+#' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
+#' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @export
 #' @import DNAcopy
 ############################################
