@@ -49,8 +49,8 @@
 ##
 ##
 
-#' @name runJaBbA
-#' @title runJAbbA
+#' @name JaBbA
+#' @title JaBbA
 #' @details
 #' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.  
 #' Generates the following files in the output directory:
@@ -69,7 +69,7 @@
 #' 
 #' @param ra --- path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
 #' @param abu --- path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
-#' @param field --- field of abu GRanges to use as fragment density signal
+#' @param field --- field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
 #' @param seg --- optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
 #' @param cfield --- character, junction confidence meta data field in ra
 #' @param tfield --- character, tier confidence meta data field in ra
@@ -85,12 +85,12 @@
 #' @param slack.penalty --- penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param overwrite --- flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @export
+#' @import DNAcopy
 ############################################
-
 JaBbA = function(
     ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
-    abu, # path to cov file, rds of GRanges
-    seg, # path to seg file, rds of GRanges
+    coverage, # path to cov file, rds of GRanges
+    seg = NULL, # path to seg file, rds of GRanges
     cfield = NULL, # character, junction confidence meta data field in ra
     tfield = NULL, # character, tier confidence meta data field in ra
     outdir = './', # out directory to dump into
@@ -98,7 +98,7 @@ JaBbA = function(
     hets = NULL, # path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
     name = 'tumor', ## prefix for sample name to be output to seg file
     cores = 4, # default 1 
-    field = 'ratio', ## character, meta data field to use from abu object to indicate numeric abundance, coverage
+    field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
     subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment 
     tilim = 1200, ## timeout for MIP portion
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
@@ -123,24 +123,90 @@ JaBbA = function(
     seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
     nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
-    numsegs = length(readRDS(seg))
 
+    message('Reading in coverage')
+    if (is.character(coverage))
+    {
+        if (grepl('\\.rds$', coverage))
+        {
+            cov = readRDS(coverage)
+        }
+        else
+        {
+            message('Importing seg from UCSC format')
+            cov = import.ucsc(coverage)
+            field = 'score';
+            cov = gr.fix(cov)
+        }
+    }
+    else
+        cov = coverage
+    
+    
+    if (is.null(seg))
+    {
+        message('No segmentation provided via seg variable, so performing segmentation using CBS')
+        vals = values(cov)[, field]
+        ix = which(!is.na(vals))
+        cna = CNA(log(vals[ix]), as.character(seqnames(cov))[ix], start(cov)[ix], data.type = 'logratio')
+        cat('finished making cna\n')
+        seg = segment(smooth.CNA(cna), alpha = 1e-5, verbose = T)
+        cat('finished segmenting\n')
+        seg = seg2gr(print(seg), seqlengths(cov)) ## remove seqlengths that have not been segmented
+        seg = gr.fix(seg, seqlengths(cov), drop = T)
+        cat(length(seg), ' segments produced\n')
+        names(seg) = NULL
+    }
+    else
+    {
+        if (is.character(seg))
+        {
+            if (grepl('\\.rds$', seg))
+            {
+                cov = readRDS(seg)
+            }
+            else
+            {
+                message('Importing seg from UCSC format')
+                cov = import.ucsc(seg)
+                field = 'score';
+            }
+        }
+        else
+            cov = seg
+    }
+       
+    
     if (!is.null(hets))
         if (!file.exists(hets))
             {
                 warning(sprintf('hets file "%s" not found, ignoring hets\n'))
                 hets = NULL
             }
-    
-    if (grepl('rds$', ra) | grepl('vcf$', ra) | grepl('vcf\\.gz$', ra))
+
+    if (!is.character(ra))
         {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, abu, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, het.file = hets)
+                karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, het.file = hets)
+            else
+                warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+        }
+    else
+    {
+        if (grepl('rds$', ra) | grepl('vcf$', ra) | grepl('vcf\\.gz$', ra))
+        {
+            if (overwrite | !file.exists(kag.file))
+                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, het.file = hets)
+            else
+                warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         } else  {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, abu, dranger.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, subsample = subsample, het.file = hets)
+                karyograph_stub(seg, coverage, dranger.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, subsample = subsample, het.file = hets)
+            else
+                warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         }
-
+    }
+        
     kag = readRDS(kag.file)
     
     if (!is.null(cfield))
@@ -249,15 +315,6 @@ JaBbA = function(
         writeLines(c("\t"), junctions.txt.file)
 
     saveRDS(kag$junctions, junctions.rds.file)
-
-    if (grepl('\\.rds$', abu))        
-        cov = readRDS(abu)
-    else
-        {
-            cov = import.ucsc(abu)
-            field = 'score';
-        }
-        
     
     tmp.cov = sample(cov, 5e5)
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
@@ -1223,7 +1280,8 @@ jbaMIP = function(
           if (verbose)
             cat('Starting cluster ', k, 'of', length(cll), 'which has', length(uix), 'nodes comprising',
                 sum(as.numeric(width(segstats[uix])))/2/1e6, 'MB and', length(unique(seqnames((segstats[uix])))),
-                'chromosomes, including', paste(names(sort(-table(seqnames((segstats[uix])))))[1:min(4, length(unique(seqnames((segstats[uix])))))], collapse = ', '), '\n')
+                'chromosomes, including', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
+                     length(unique(seqnames((segstats[uix])))))]), collapse = ', '), '\n')
 
 
           out = do.call('jbaMIP', args)
@@ -1795,7 +1853,7 @@ jbaMIP = function(
       sol$xopt = sol$x;
     }
   else
-    sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
+    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
   
   if (is.null(sol$xopt))
     sol.l = sol
@@ -9806,6 +9864,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     cov.file, ## path to rds file GRanges of coverage with meta data field "field"
     nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
     het.file = NULL,
+    ra = NULL,
     dranger.file = NULL,
     out.file,
     ra.file = NULL,
@@ -9814,43 +9873,57 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ploidy = NA,    
     field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
     {
-      loose.ends = GRanges()
-      if (!is.null(dranger.file))
-          {
-              this.dranger = read.delim(dranger.file, strings = F)
-              
-              if (ncol(this.dranger)<=1) ## wrong separator
-                  this.dranger = read.delim(dranger.file, sep = ',', strings = F)
-              
-              if (!is.null(this.dranger$strand1) & !is.null(this.dranger$strand2)) 
-                  {
-                      ## looks like snowman input flip breaks so that they are pointing away from junction
-                      this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
-                      this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
-                  }
-              
-              this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
-              this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
-              this.ra = ra_breaks(this.dranger, seqlengths = hg_seqlengths())
-      }        
-      else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
-          {        
-              tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)              
-              this.ra = tmp.ra$junctions
-              loose.ends = tmp.ra$loose.ends
-          }
-      else
-        this.ra = readRDS(ra.file)
-      ## if we don't have normal segments then coverage file will be our bible for seqlengths
+        loose.ends = GRanges()
 
-      if (grepl('\\.rds$', cov.file))        
-          this.cov = readRDS(cov.file)
-      else
-          {
-              this.cov = import.ucsc(cov.file)
-              field = 'score';
-          }
-      
+        
+        if (!is.null(ra))
+            this.ra = ra
+        else
+        {
+            
+                if (!is.null(dranger.file))
+                {
+                    this.dranger = read.delim(dranger.file, strings = F)
+                    
+                    if (ncol(this.dranger)<=1) ## wrong separator
+                        this.dranger = read.delim(dranger.file, sep = ',', strings = F)
+                    
+                    if (!is.null(this.dranger$strand1) & !is.null(this.dranger$strand2)) 
+                    {
+                        ## looks like snowman input flip breaks so that they are pointing away from junction
+                        this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
+                        this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
+                    }
+                    
+                    this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
+                    this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
+                    this.ra = ra_breaks(this.dranger, seqlengths = hg_seqlengths())
+                }        
+                else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
+                {        
+                    tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)              
+                    this.ra = tmp.ra$junctions
+                    loose.ends = tmp.ra$loose.ends
+                }
+                else
+                    this.ra = readRDS(ra.file)
+                }
+        ## if we don't have normal segments then coverage file will be our bible for seqlengths
+
+
+        if (is.character(cov.file))
+        {
+            if (grepl('\\.rds$', cov.file))        
+                this.cov = readRDS(cov.file)
+            else
+            {
+                this.cov = import.ucsc(cov.file)
+                field = 'score';
+            }
+        }
+        else
+            this.cov = cov.file
+              
       ## now make sure we have the "best" seqlengths
       .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
 
@@ -9860,15 +9933,22 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       else
           sl = .fixsl(force.seqlengths, this.cov)
 #      sl = .fixsl(seqlengths(this.ra), this.cov)
-      
+
       if (!is.null(nseg.file))
-          {
+      {
+          if (is.character(nseg.file))              
               nseg = readRDS(nseg.file)
-              sl = .fixsl(sl, nseg)
-          }
+          else
+              nseg = nseg.file          
+          sl = .fixsl(sl, nseg)
+      }
       
-      ## make sure all sl's are equiv
-      this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+        ## make sure all sl's are equiv
+        if (is.character(seg.file))
+            this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+        else
+            this.seg = seg.file
+        
       if (length(loose.ends>0))
           {
               cat('Adding loose ends from vcf file to seg file')

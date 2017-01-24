@@ -6,9 +6,9 @@
      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))}
 \usage{
 karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
-  dranger.file = NULL, out.file, ra.file = NULL, force.seqlengths = NULL,
-  purity = NA, ploidy = NA, field = "ratio", mc.cores = 1,
-  max.chunk = 1e+08, subsample = NULL)
+  ra = NULL, dranger.file = NULL, out.file, ra.file = NULL,
+  force.seqlengths = NULL, purity = NA, ploidy = NA, field = "ratio",
+  mc.cores = 1, max.chunk = 1e+08, subsample = NULL)
 }
 \description{
 karyograph
