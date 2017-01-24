@@ -5,7 +5,7 @@
 \title{jabba.hood}
 \usage{
 jabba.hood(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE,
-  bagel = FALSE)
+  bagel = FALSE, verbose = FALSE)
 }
 \arguments{
 \item{jab}{JaBbA object}

@@ -5,8 +5,9 @@
 \title{chromoplexy}
 \usage{
 chromoplexy(kag = NULL, jab = NULL, sol = NULL, all = F, ref.only = F,
-  filt.jab = T, paths = F, dist = 1000, cn.dist = dist, verbose = F,
-  interval = 400, chunksize = 5000)
+  filt.jab = T, reciprocal = TRUE, hijacked = TRUE, paths = F,
+  dist = 1000, cn.dist = dist, verbose = F, interval = 400,
+  chunksize = 5000)
 }
 \arguments{
 \item{jab}{JaBbA object}

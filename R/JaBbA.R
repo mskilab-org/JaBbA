@@ -532,8 +532,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         # eg imagine a|bp1|b
         #            c|bp2|d
         # "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
-
-
           
           ab.pairs = cbind(
               ifelse(as.logical(strand(bp1)=='+'), gr.match(GenomicRanges::shift(gr.start(bp1), 1), gr.start(tile)), 
@@ -3996,7 +3994,7 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' of seed on the graph (only includes edges with weight !=0)
 #' @export
 #########x############################################
-jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE)
+jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE, verbose = FALSE)
 {
     if (ignore.strand)
         win = gr.stripstrand(win)
@@ -4017,8 +4015,8 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
                          
             seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
             seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
-            D.s = suppressWarnings(jabba.dist(jab, win, seg.s))
-            D.e = suppressWarnings(jabba.dist(jab, win, seg.e))
+            D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
+            D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
             
             min.s = apply(D.s, 2, min, na.rm = TRUE)
             min.e = apply(D.e, 2, min, na.rm = TRUE)
@@ -4031,10 +4029,10 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
 
             out = GRanges()
             if (any(s.close))
-                out = c(out, flank(seg.s[s.close], -(d-min.s[s.close])))
+                out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
     
             if (any(e.close))
-                out = c(out, shift(flank(seg.e[e.close], d-min.e[e.close]),1))
+                out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
 
             if (!bagel)
                 out = streduce(c(win[, c()], out[, c()]))
@@ -4071,11 +4069,12 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
 #' @export
 #######################################################
 jabba.dist = function(jab, gr1, gr2,
-    matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs 
-    max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
-    include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
-    verbose = TRUE,
-    EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned  
+                      matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs
+                      directed= FALSE, ## flag specifying whether we are computing a "directed distance" across only paths FROM gr1 TO gr2 on graph (ie gr2-->gr1 paths do not count
+                      max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
+                      include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
+                      verbose = FALSE,
+                      EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned  
   )
 {
     if (verbose)
@@ -4133,36 +4132,55 @@ jabba.dist = function(jab, gr1, gr2,
     E(G)$weight = width(tiles)[E(G)$to]
                
     gr1.e = gr.end(gr1, ignore.strand = FALSE)
-    gr1.s = gr.start(gr1, ignore.strand = FALSE)
-    gr2.e = gr.end(gr2, ignore.strand = FALSE)
     gr2.s = gr.start(gr2, ignore.strand = FALSE)
 
+
+    if (!directed)
+        {
+            gr1.s = gr.start(gr1, ignore.strand = FALSE)
+            gr2.e = gr.end(gr2, ignore.strand = FALSE)
+        }
+
     gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
-    gr1.s$ix = gr.match(gr1.s, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
-
     gr2.s$ix= gr.match(gr2.s, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
-    gr2.e$ix= gr.match(gr2.e, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
 
+    if (!directed)
+        {
+            gr1.s$ix = gr.match(gr1.s, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
+            gr2.e$ix= gr.match(gr2.e, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
+        }
+            
     ## 3' offset from 3' end of query intervals to ends of jabba segs  to add / subtract to distance when query is in middle of a node
     off1 = ifelse(as.logical(strand(gr1.e)=='+'), end(tiles)[gr1.e$ix]-end(gr1.e), start(gr1.e) - start(tiles)[gr1.e$ix])
     off2 = ifelse(as.logical(strand(gr2.s)=='+'), end(tiles)[gr2.s$ix]-end(gr2.s), start(gr2.s) - start(tiles)[gr2.s$ix])
 
     ## reverse offset now calculate 3' offset from 5' of intervals
-    off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ix])
-    off2r = ifelse(as.logical(strand(gr2.e)=='+'), end(tiles)[gr2.e$ix]-start(gr2.e), end(gr2.e) - start(tiles)[gr2.e$ix])
-
+    if (!directed)
+        {
+            off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ix])
+            off2r = ifelse(as.logical(strand(gr2.e)=='+'), end(tiles)[gr2.e$ix]-start(gr2.e), end(gr2.e) - start(tiles)[gr2.e$ix])
+        }
+    
     ## compute unique indices for forward and reverse analyses
     uix1 = unique(gr1.e$ix)
     uix2 = unique(gr2.s$ix)
-    uix1r = unique(gr1.s$ix)
-    uix2r = unique(gr2.e$ix)
+
+    if (!directed)
+        {
+            uix1r = unique(gr1.s$ix)
+            uix2r = unique(gr2.e$ix)
+        }
 
     ## and map back to original indices
     uix1map = match(gr1.e$ix, uix1)
-    uix2map = match(gr2.s$ix, uix2)   
-    uix1mapr = match(gr1.s$ix, uix1r)
-    uix2mapr = match(gr2.e$ix, uix2r)
+    uix2map = match(gr2.s$ix, uix2)
 
+    if (!directed)
+        {
+            uix1mapr = match(gr1.s$ix, uix1r)
+            uix2mapr = match(gr2.e$ix, uix2r)
+        }
+    
     self.l = which(diag(jab$adj)>0)
 
     if (verbose)
@@ -4187,32 +4205,37 @@ jabba.dist = function(jab, gr1, gr2,
             2, off2, '-') ## subtract uix2 3' offset to all distances 
 
 
-        ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
-        ## now represent "source" node widths (ie of the flipped edges)
-        # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
-        ## and (2) adding the 3' offset of uix2
-        ## and using the reverse indices
-        Dr = sweep(
-            sweep(
-                t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
-                1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-            2, off2r , '+') ## add uix2 offset to all distances
+        if (!directed)
+            {
+                ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
+                ## now represent "source" node widths (ie of the flipped edges)
+                                        # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
+                ## and (2) adding the 3' offset of uix2
+                ## and using the reverse indices
+                Dr = sweep(
+                    sweep(
+                        t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
+                        1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                    2, off2r , '+') ## add uix2 offset to all distances
 
-        Df2 = sweep(
-            sweep(
-                shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
-                1, off1r, '+'), ## add uix1 3' offset to all distances 
-            2, off2, '-') ## subtract uix2 3' offset to all distances 
+                Df2 = sweep(
+                    sweep(
+                        shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
+                        1, off1r, '+'), ## add uix1 3' offset to all distances 
+                    2, off2, '-') ## subtract uix2 3' offset to all distances 
 
-        Dr2 = sweep(
-            sweep(
-                t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
-                1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-            2, off2r , '+') ## add uix2 offset to all distances
+                Dr2 = sweep(
+                    sweep(
+                        t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
+                        1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                    2, off2r , '+') ## add uix2 offset to all distances
+                D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
+            }
+        else
+            D = Df
         
-       
         # then we do the same thing but flipping uix1r vs uix        
-        D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
+
 
         if (verbose)
             {
@@ -4224,7 +4247,7 @@ jabba.dist = function(jab, gr1, gr2,
         ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
         ## ij contains pairs of gr1 and gr2 indices that map to the same node
         ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
-
+        
         ## among ij pairs that land on the same (strand of the same) node
         ##
         ## several possibilities:
@@ -6638,6 +6661,8 @@ chromoplexy = function(kag = NULL, # output of karyograph
   all = F, ## if TRUE, will try to enumerate all possible cycles, otherwise will return (an arbitrary) minimal decomposition into the shortest "chains" of balanced rearrangements
   ref.only = F, ## if T will only compute distance criteria on reference (i.e. won't use any subsequent rearrangements)
   filt.jab = T, ## filter out 0 copy edges if input is a jabba object
+  reciprocal = TRUE, ## aka deletion bridge
+  hijacked = TRUE,  ## aka amplification bridge
   paths = F, dist = 1e3, cn.dist = dist, verbose = F, interval = 400, chunksize = 5000)
   {
     if (!is.null(jab))
@@ -6690,32 +6715,39 @@ chromoplexy = function(kag = NULL, # output of karyograph
     
     #    emap = c(1:nrow(kag$ab.edges), -(1:nrow(kag$ab.edges)))
     emap = c(nnab, -nnab)
-
-    ## deletion bridge, or reciprocal
-
-    D1 = D2 = sparseMatrix(1, 1, x = 0, dims = rep(nrow(ab.edges),2))
-
+    
+    D1 = D2 = array(Inf, dim = rep(nrow(ab.edges),2))
+    
     uix = unique(c(ab.edges[,1], ab.edges[,2]))
     uixmap1 = match(ab.edges[,1], uix)
     uixmap2 = match(ab.edges[,2], uix)
-
+    
     tmp = shortest.paths(G, uix, uix, weights = E(G)$weights.source, mode = 'out')
 
-    ## "deletion bridge", i.e. source to sink bridge 
-    D1 = t(sweep(tmp[uixmap1, uixmap2], 
-      1, width(kag$tile[ab.edges[,1]]))) ## subtract width of first vertex from path length (second vertex already excluded)
-    D1[do.call('rbind', lapply(ab.edges[,2], function(x) ab.edges[,1] %in% x))] = NA ## edge case where e1 sink = e2 source
-        
-    ## "amplification bridge", i.e. sink to source bridge
-    D2 = sweep(tmp[uixmap2, uixmap1],
-      2, -width(kag$tile[ab.edges[,1]])) ## add width of last vertex to path (first vertex already included)          
+
+    ## deletion bridge, or reciprocal
+    if (reciprocal)
+    {
+        ## "deletion bridge", i.e. source to sink bridge 
+        D1 = t(sweep(tmp[uixmap1, uixmap2], 
+                     1, width(kag$tile[ab.edges[,1]]))) ## subtract width of first vertex from path length (second vertex already excluded)
+        D1[do.call('rbind', lapply(ab.edges[,2], function(x) ab.edges[,1] %in% x))] = NA ## edge case where e1 sink = e2 source
+    }
     
+    ## "amplification bridge", i.e. sink to source bridge
+    if (hijacked)
+    {    
+        D2 = sweep(tmp[uixmap2, uixmap1],
+                   2, -width(kag$tile[ab.edges[,1]])) ## add width of last vertex to path (first vertex already included)
+    }
+
+             
     D = matrix(pmin(D1, D2, na.rm = T), nrow = nrow(D1), ncol = nrow(D2))
     D.which = matrix(ifelse(D1<D2, 1, 2), nrow = nrow(D1), ncol = nrow(D2))
     D.which[is.na(D.which)] = 2
     D[is.infinite(D)] = NA
     D[cbind(1:nrow(D), 1:nrow(D))] = NA
-
+    
     ## quasi pairs are ab edge pairs within a certain distance of each other on the graph
     quasi.pairs = which(D<dist, arr.ind = T)
     quasi.pairs.which = D.which[quasi.pairs]
