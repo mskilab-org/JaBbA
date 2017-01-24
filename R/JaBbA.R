@@ -78,7 +78,7 @@
 #' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 #' 
 #' 
-#' @param ra  GRangesList of junctions OR path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
+#' @param ra  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList 
 #' @param coverage  GRanges of coverage OR path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
 #' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
 #' @param seg  optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings 
@@ -152,7 +152,14 @@ JaBbA = function(
     }
     else
         cov = coverage
+
     
+    if (!(field %in% names(values(cov))))
+    {
+        new.field = names(values(cov))[1]
+        warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
+        field = new.field
+    }
     
     if (is.null(seg))
     {
@@ -304,6 +311,7 @@ JaBbA = function(
             jabba2vcf(jabd.simple, jabba.simple.vcf.file)
             jabba2vcf(jabd.simple, jabba.simple.cnv.vcf.file, cnv = TRUE)            
         }, error = function(e) print("Jabba VCF generation failed"))
+
             
     seg.adj = cbind(data.frame(sample = rep(name, nrow(jabd$edges))), jabd$edges[, c('from', 'to', 'cn', 'type')])
     write.tab(seg.adj, seg.adj.file)
@@ -4451,13 +4459,13 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                         gr1$mid = gr2$ID
                         gr2$mid = gr1$ID
                         
-                        gr1$REF = as.character(get_seq(hg, gr.stripstrand(gr1)))
+                        gr1$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr1))), error = function(e) 'N')
                         gr1$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(gr1$REF, '[', seqnames(gr2), ':', start(gr2), '[', sep = ''),
                             ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr1$REF, ']', seqnames(gr2), ':', start(gr2), ']', sep = ''),
                                    ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr2), ':', start(gr2), '[', gr1$REF, sep = ''),
                                           paste(']', seqnames(gr2), ':', start(gr2), ']', gr1$REF, sep = '')))) ## last one is A- --> B-
                         
-                        gr2$REF = as.character(get_seq(hg, gr.stripstrand(gr2)))
+                        gr2$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr2))), error = function(e) 'N')
                         gr2$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(']', seqnames(gr1), ':', start(gr1), ']', gr2$REF, sep = ''),
                             ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr1), ':', start(gr1), '[', gr2$REF, sep = ''),
                                    ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
@@ -4515,7 +4523,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                         ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
                         gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
                         gr.loose$mid = NA
-                        gr.loose$REF = as.character(get_seq(hg, gr.stripstrand(gr.loose)))
+                        gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
 
                         ## again, same rationale as above, parent = left loose end, child = right loose end
                         gr.loose$ALT = ifelse(isp, paste('.', gr.loose$REF, sep = ''), paste(gr.loose$REF, '.', sep = ''))
@@ -4679,7 +4687,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                     {
                         body = data.frame("CHROM" = seqnames(ss), POS = start(ss),
                             ID = paste(sampleid, '_seg', six, sep = ''),
-                            REF = as.character(get_seq(hg, gr.stripstrand(gr.start(ss,1)))),
+                            REF = as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))),
                             ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
                             QUAL = ".",
                             FILTER = "PASS",
@@ -5281,7 +5289,7 @@ reads.to.walks = function(bam, walks, outdir = './test', hg = read_hg(fft = T), 
         if (verbose)
           cat('Fetching walk sequences\n')
         
-        walk.seq = get_seq(hg, walks, mc.cores = mc.cores)
+        walk.seq = ffTrack::get_seq(hg, walks, mc.cores = mc.cores)
         names(walk.seq) = names(walks)
                 
         sapply(1:length(walks), function(x) writeXStringSet(walk.seq[x], walk.fa[x]))
@@ -10284,3 +10292,18 @@ vaggregate = function(...)
     return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
   }
 
+write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
+  {
+      if (!is.data.frame(x))
+          x = as.data.frame(x)
+
+      write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
+  }
+
+alpha = function(col, alpha)
+{
+  col.rgb = col2rgb(col)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}
