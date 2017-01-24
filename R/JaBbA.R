@@ -99,7 +99,7 @@
 #' @import DNAcopy
 ############################################
 JaBbA = function(
-    ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from junction)
+    ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
     coverage, # path to cov file, rds of GRanges
     seg = NULL, # path to seg file, rds of GRanges
     cfield = NULL, # character, junction confidence meta data field in ra
@@ -327,7 +327,7 @@ JaBbA = function(
 
     saveRDS(kag$junctions, junctions.rds.file)
     
-    tmp.cov = sample(cov, 5e5)
+    tmp.cov = sample(cov, pmin(length(cov), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
     
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
