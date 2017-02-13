@@ -5479,7 +5479,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
 
         cds.u = grl.unlist(cds[this.tx.span$tx.id])
-        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
         
         tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
         
