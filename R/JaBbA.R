@@ -5479,7 +5479,8 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
 
         cds.u = grl.unlist(cds[this.tx.span$tx.id])
-        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+                                        #        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
         
         tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
         
@@ -9861,6 +9862,88 @@ print_eq = function(Ab, xlabels = NULL)
   }
 
 
+#' jgraph
+#'
+#' takes in a jabba object and threshold for clusters and "quasi-reciprocal"
+#' junctions
+#'
+#' @name jgraph
+#' @export
+jgraph = function(jab, thresh_cl = 1e6, all = FALSE, thresh_r = 1e3, clusters = FALSE)
+{   
+    ## identify sinks and sources
+    jix = which(values(jab$junctions)$cn>0)    
+    so = gr.end(jab$segstats[as.integer(jab$ab.edges[jix,1,1:2])], ignore.strand = FALSE)
+    si = gr.start(jab$segstats[as.integer(jab$ab.edges[jix,2,1:2])], ignore.strand = FALSE)
+    jid = rep(jix, 2)
+    recip = rep(c(FALSE, TRUE), each = length(jix))
+
+
+    ## compute directed and undirected distances from sinks to sources
+    gundir = jabba.dist(jab, si, so, directed = FALSE)
+    gdir = jabba.dist(jab, si, so, directed = TRUE)
+
+
+    gedges = gdir<=thresh_cl
+    redges = gundir<=thresh_r & gdir>thresh_cl ## reciprocal edges are indirect that are non-indirect connections
+
+
+    ## pick only closest g edge leaving a node
+    ## this will be asymmetric
+    ## since a_j may be closest to b_i
+    ## but aa_i may not be closest to bb_j
+    gfilt = t(apply(gdir, 1, function(x) sign((1:length(x) %in% which.min(x)))))
+
+    ## key mathematical property:
+    ## (identical to stranded adjacency matrix in jabba)
+    ## recip, recip is identical to t(!recip, !recip)
+    ## BUT recip, !recip and !recip, recip are distinct and symmetric
+
+    ## just try these checks all should be empty
+    ## which(gedges[!recip, !recip] != t(gedges[recip, recip]), arr.ind = TRUE)
+    ## which(gedges[!recip, recip] != t(gedges[!recip, recip]), arr.ind = TRUE)
+    ## which(gedges[recip, !recip] != t(gedges[recip, !recip]), arr.ind = TRUE)
+
+
+    Gg.dist = pmin(gdir[recip, recip], gdir[!recip, recip], gdir[recip, !recip], gdir[!recip, recip])
+    Gr.dist = pmin(gundir[recip, recip], gundir[!recip, recip], gundir[recip, !recip], gundir[!recip, recip])
+
+
+    ## Gg and Gr should be symmetric
+    Gg = sign(gedges[recip, recip]) + sign(gedges[!recip, recip]) + sign(gedges[recip, !recip]) + sign(gedges[!recip, !recip])
+    Gr = sign(redges[recip, recip]) + sign(redges[recip, !recip]) + sign(redges[!recip, recip]) + sign(redges[!recip, !recip])
+    Gr[cbind(1:nrow(Gr), 1:nrow(Gr))] = 0 ## no self reciprocal edges, as tempting as that might be
+
+    ## Ggf won't be symmetric but we will make it and also make sure we don't remove self loops
+    Ggf = sign(gfilt[recip, recip]) + sign(gfilt[!recip, recip]) + sign(gfilt[recip, !recip]) + sign(gfilt[!recip, !recip])
+    Ggf = Ggf+t(Ggf) + diag(rep(1, nrow(Ggf)))
+
+    M = Matrix(0,
+               nrow = length(jab$junctions),
+               ncol = length(jab$junctions))
+    
+    out = list(Gg = M,
+               Gr = M,
+               Ggd = M,
+               Grd = M)                      
+    
+    out$Gg[jix, jix] = sign(Gg)*sign(Ggf)
+    out$Gr[jix, jix] = sign(Gr)
+
+    ## some fake reciprocals leak through somehow - get rid!! (TOFIX)
+                                        #    out$Gr[which(out$Gg!=0, arr.ind = TRUE)] = 0
+
+    if (clusters)
+    {
+        out = split(1:nrow(out$Gr),
+                    igraph::clusters(igraph::graph.adjacency(out$Gg + out$Gr))$membership)
+        out = out[rev(order(sapply(out, length)))]
+        names(out) = 1:length(out)
+    }
+    
+    return(out)
+}
+
 ######################## wrappers
 ######################## todo: wrap these into a single "jabba" call
 
@@ -10306,4 +10389,201 @@ alpha = function(col, alpha)
   out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
   names(out) = names(col)
   return(out)
+}
+
+
+#' @name jab2json
+#' @title jab2json
+#'
+#' @description
+#' 
+#' Dumps JaBbA graph into json
+#'
+#'
+#'
+#' @param jab input jab object
+#' @param file output json file
+#' @author Marcin Imielinski
+jab2json = function(jab, file, maxcn = 100, maxweight = 100)
+{    
+
+    #' ++ = RL
+    #' +- = RR
+    #' -+ = LL
+    qw = function(x) paste0('"', x, '"')
+
+    ymin = 0;
+    ymax = maxcn;
+    
+    nodes = jab$segstats %Q% (strand == "+")
+    id = rep(1:length(nodes), 2)
+    id.type = ifelse(nodes$loose, 'loose_end', 'interval')
+    str = ifelse(as.character(strand(jab$segstats))=='+', 1, -1)
+
+    node.dt = data.table(
+        iid = 1:length(nodes),
+        chromosome = qw(as.character(seqnames(nodes))),
+        startPoint = as.character(start(nodes)),
+        strand = "*",
+        endPoint = as.character(end(nodes)),    
+        title = as.character(1:length(nodes)),
+        type = ifelse(nodes$loose, "loose_end", "interval"),
+        y = pmin(maxcn, nodes$cn))
+
+    aadj = jab$adj*0
+    rix = which(rowSums(is.na(jab$ab.edges[, 1:2, '+']))==0)
+    aadj[rbind(jab$ab.edges[rix, 1:2, '+'], jab$ab.edges[rix, 1:2, '+'])] = 1
+    ed = which(jab$adj!=0, arr.ind = TRUE)
+
+    if (nrow(ed)>0)
+        {
+            ed.dt = data.table(
+                so = id[ed[,1]],
+                so.str = str[ed[,1]],
+                si = id[ed[,2]],
+                weight = jab$adj[ed],
+                title = "",
+                type = ifelse(aadj[ed], 'ALT', 'REF'),
+                si.str = str[ed[,2]])[, sig := ifelse(so<si,
+                                                      paste0(so * so.str, '_', -si*si.str),
+                                                      paste0(-si * si.str, '_', so*so.str)
+                                                      )][!duplicated(sig), ][, cid := 1:length(weight), ][,
+                                                                                                          ":="(so = so*so.str, si = -si*si.str)]             
+            connections.json = ed.dt[, paste0(
+                c("connections: [", paste(
+                                        "\t{",
+                                        "cid: ", cid,
+                                        ", source: ", so,
+                                        ", sink:", si,
+                                        ", title: ", qw(title),
+                                        ", type: ", qw(type),
+                                        ", weight: ", pmin(maxweight, weight),
+                                        "}",
+                                        sep = "",
+                                        collapse = ',\n'),             
+                  "]"),
+                collapse = '\n')
+                ]    
+        }
+
+    intervals.json = node.dt[, paste0(
+        c("intervals: [", paste(
+                              "\t{",
+                              "iid: ", iid,
+                              ", chromosome: ", chromosome,
+                              ", startPoint: ", startPoint,
+                              ", endPoint: ", endPoint,
+                              ", y: ", y,
+                              ", title: ", qw(title),
+                              ", type: ", qw(type),
+                              ", strand: ", qw(strand),
+                              "}",
+                              sep = "",
+                              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    meta.json =
+        paste('meta: {\n\t',
+              paste(
+                  c(paste('"ymin:"', ymin),
+                  paste('"ymax:"', ymax)),
+                  collapse = ',\n\t'),
+              '\n}')
+
+    out = paste(c("var json = {",
+                  paste(
+                      c(meta.json,
+                      intervals.json,              
+                      connections.json),
+                      collapse = ',\n'
+                  ),"}"),                                                          
+                  sep = "")
+    
+    writeLines(out, file)
+}
+
+
+#' @name gr2json
+#' @title gr2json
+#'
+#' @description
+#' 
+#' Dumps GRanges into JSON with metadata features as data points in  "intervals"
+#'
+#'
+#'
+#' @param GRange input jab object
+#' @param file output json file
+#' @author Marcin Imielinski
+gr2json = function(intervals, file, y = rep("null", length(intervals)), labels = '', maxcn = 100, maxweight = 100)
+{    
+
+    #' ++ = RL
+    #' +- = RR
+    #' -+ = LL
+    qw = function(x) paste0('"', x, '"')
+
+    ymin = 0;
+    ymax = maxcn;
+    
+    nodes = intervals
+    id = rep(1:length(nodes), 2)
+
+    node.dt = data.table(
+        iid = 1:length(nodes),
+        chromosome = qw(as.character(seqnames(nodes))),
+        startPoint = as.character(start(nodes)),
+        strand = as.character(strand(nodes)),
+        endPoint = as.character(end(nodes)),
+        y = y, 
+        title = labels)
+
+    oth.cols = setdiff(names(values(nodes)), colnames(node.dt))
+    node.dt = as.data.table(cbind(node.dt, values(nodes)[, oth.cols]))
+
+    oth.cols = union('type', oth.cols)
+    if (is.null(node.dt$type))
+        node.dt$type = 'interval'
+    
+    intervals.json = node.dt[, paste0(
+        c("intervals: [", paste(
+                              "\t{",
+                              "iid: ", iid,
+                              ", chromosome: ", chromosome,
+                              ", startPoint: ", startPoint,
+                              ", endPoint: ", endPoint,
+                              ", y: ", y,
+                              ", title: ", qw(title),
+                               ", strand: ", qw(strand),
+                              eval(parse(text = ## yes R code making R code making JSON .. sorry .. adding additional columns
+                                             paste0("paste0(",
+                                                    paste0('", ', oth.cols, ':", qw(', oth.cols, ')', collapse = ','),
+                                                    ")", collapse = ''))),                                  
+                              "}",                              
+                              sep = "",
+                              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    meta.json =
+        paste('meta: {\n\t',
+              paste(
+                  c(paste('"ymin:"', ymin),
+                  paste('"ymax:"', ymax)),
+                  collapse = ',\n\t'),
+              '\n}')
+
+    out = paste(c("var json = {",
+                  paste(
+                      c(meta.json,
+                        intervals.json          
+                        ),
+                      collapse = ',\n'
+                  ),"}"),                                                          
+                sep = "")
+
+    writeLines(out, file)
 }
