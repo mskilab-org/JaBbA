@@ -4385,7 +4385,11 @@ jabba.dist = function(jab, gr1, gr2,
     
     tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
     setkey(tmp, id1)    
-    D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]        
+    Dtmp = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])
+    D = matrix(NA, nrow = ngr1, ncol = ngr2, dimnames = list(1:as.character(ngr1),
+                                                             1:as.character(ngr2)))
+    D[rownames(Dtmp), colnames(Dtmp)] = Dtmp
+   
 
     ## finally zero out any intervals that actually intersect
     ## (edge case not captured when we just examine ends)
@@ -4416,7 +4420,7 @@ jabba.dist = function(jab, gr1, gr2,
 #' @return returns character string or writes to file if specified
 #' @export
 #########################################
-jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T), cnv = FALSE)
+jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = skidb::read_hg(fft = T), cnv = FALSE)
     {
         require(data.table)
         vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
@@ -4654,18 +4658,24 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = read_hg(fft = T),
                 sl = seqlengths(jab$segstats)
                 header = '##fileformat=VCFv4.2'
                 header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
-                header = c(header, '##source=JaBbAV0.1 CNV')        
+                header = c(header, '##source=JaBbAV0.1 CNV')
+
                 if (inherits(hg, "BSgenome"))
                     {
                         header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
                         header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
                     }
+                else if (inherits(hg, "ffTrack"))
+                {
+                    header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+                }                
                 else
-                    {
-                        header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
-                    }
-
+                {
+                    header = c(header, sprintf("##reference=NA"))
+                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+                }
+                
                 header = c(header,
                     '##ALT=<ID=DEL,Description="Decreased copy number relative to reference">',
                     '##ALT=<ID=DUP,Description="Increased copy number relative to reference">',
@@ -5245,7 +5255,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
 #' These bams are in "walk coordinates"
 #' @export
 ##############################################
-reads.to.walks = function(bam, walks, outdir = './test', hg = read_hg(fft = T), mc.cores = 1, insert.size = 1e3, verbose = T)
+reads.to.walks = function(bam, walks, outdir = './test', hg = skidb::read_hg(fft = T), mc.cores = 1, insert.size = 1e3, verbose = T)
   {
     system(paste('mkdir -p', outdir))
     

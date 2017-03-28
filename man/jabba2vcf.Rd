@@ -4,8 +4,8 @@
 \alias{jabba2vcf}
 \title{jabba2vcf}
 \usage{
-jabba2vcf(jab, fn = NULL, sampleid = "sample", hg = read_hg(fft = T),
-  cnv = FALSE)
+jabba2vcf(jab, fn = NULL, sampleid = "sample", hg = skidb::read_hg(fft =
+  T), cnv = FALSE)
 }
 \arguments{
 \item{jab}{JaBbA object}

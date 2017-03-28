@@ -4,7 +4,7 @@
 \alias{reads.to.walks}
 \title{reads.to.walks}
 \usage{
-reads.to.walks(bam, walks, outdir = "./test", hg = read_hg(fft = T),
+reads.to.walks(bam, walks, outdir = "./test", hg = skidb::read_hg(fft = T),
   mc.cores = 1, insert.size = 1000, verbose = T)
 }
 \arguments{
