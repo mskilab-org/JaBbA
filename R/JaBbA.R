@@ -4355,15 +4355,19 @@ jabba.dist = function(jab, gr1, gr2,
                   {                  
                     ch = G[[ij[, 'nid']]] ## list of i nodes children for all remaining ij pairs
                     chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
+
+                    if (ncol(chu)>1)
+                        {
                     
                     ## now find paths from children to corresponding j
-                    epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
-                    epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights                    
-                    epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
-                    
-                    ## aggregate (i.e. in case there are multiple children per node) by taking min width
-                    D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
-                  }
+                            epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
+                            epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights                    
+                            epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
+                            
+                            ## aggregate (i.e. in case there are multiple children per node) by taking min width
+                            D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
+                        }
+                    }
               }
           }
         
