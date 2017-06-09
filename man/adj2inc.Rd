@@ -11,4 +11,3 @@ converts adjacency matrix (of directed graph) into incidence matrix - ie
 an nodes x edges matrix, for each edge i connecting node j to k, column i will have -1 at position
 j and +1 at position k
 }
-

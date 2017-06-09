@@ -14,4 +14,3 @@ karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
 karyograph
      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
 }
-

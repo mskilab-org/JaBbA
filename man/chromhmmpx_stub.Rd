@@ -10,4 +10,3 @@ chromhmmpx_stub(rg.span.file, chromhmm.file, this.ra.file, out.file,
 \description{
 run gene-chromhmm px analysis
 }
-

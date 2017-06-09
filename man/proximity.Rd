@@ -38,4 +38,3 @@ Takes a set of n "query" elements (GRanges object, e.g. genes) and determines th
 This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a karyograph path are in
 cis (i.e. share a chromosome) in the tumor genome.
 }
-

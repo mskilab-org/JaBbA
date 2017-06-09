@@ -49,4 +49,3 @@ and last exon position in a - transcript.
 Assumes that exons are ordered in each grl item in the order of transcription (i.e. right most exon for negative strand transcripts)
 (e.g. output of read_refGene(grl = T))
 }
-

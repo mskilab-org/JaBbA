@@ -11,4 +11,3 @@ performs preliminary segmentation on preliminary karyograph using CBS on coverag
 only segments inter-junction reference intervals above min.width (which is usually defined as 20 times the coverage width)
 returns the new karyograph with the addition partitions (and reference interval pairs)
 }
-

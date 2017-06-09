@@ -31,4 +31,3 @@ computes neg log likelihood ($nll) for purity, ploidy combo and mle abs copy num
 \details{
 v can be over-ridden to compute NLL for other (eg non MLE) values
 }
-

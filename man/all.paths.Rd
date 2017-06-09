@@ -32,4 +32,3 @@ Low level function to enumerate all elementary paths and cycles through graph
 \details{
 takes directed graph represented by n x n binary adjacency matrix  A and outputs all cycles and paths between source.vertices, sink.vertices
 }
-

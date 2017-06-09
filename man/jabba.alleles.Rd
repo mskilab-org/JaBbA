@@ -38,4 +38,3 @@ $ref.ix = indices of reference edges in $aadj
 Populates allelic value s for JaBbA object.  This does not explicitly impose junction balance constraints on alleles, but rather just computes
 the maximum likelihood estimate given allelic counts and the inferred total copy number on a given segment according to JaBbA
 }
-

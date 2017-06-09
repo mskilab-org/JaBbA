@@ -26,4 +26,3 @@ basis vectors v such that nz(exclude.ranges[i, ]) C  nz(abs(A)*v)) for some patt
 any non-neg linear comb of any intermediate-basis vector that satisfies this property will satisfy it,
 as a result we can exclude these vectors when we see them.
 }
-

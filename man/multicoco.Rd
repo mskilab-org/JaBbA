@@ -23,4 +23,3 @@ cov is a constant with GRanges of coverage samples with (by default) fields $rea
 
 base = is the multiple with which to perform "numlevs" additional scales of correction
 }
-

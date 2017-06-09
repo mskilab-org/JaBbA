@@ -19,4 +19,3 @@ Takes karyograph and outputs gTrack +/- highlighting of one or more paths define
 Edges will only be highlighted when the exact interval pair corresponding to the edge is included in
 the graph
 }
-

@@ -34,4 +34,3 @@ These bams are in "walk coordinates"
 
 Assumes bwa mem installed an runnable from command line.
 }
-

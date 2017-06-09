@@ -9,4 +9,3 @@ cbs_stub(cov.file, out.file, field = "ratio", alpha = 1e-05)
 \description{
 run cbs
 }
-

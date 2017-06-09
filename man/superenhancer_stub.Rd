@@ -10,4 +10,3 @@ superenhancer_stub(rg.span.file, se.bed.file, this.ra.file, out.file,
 \description{
 run super-enhancer analysis
 }
-

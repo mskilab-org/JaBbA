@@ -28,4 +28,3 @@ Computes distance between pairs of intervals on JaBbA graph
 \details{
 Given "jabba" object and input granges gr1 and gr2 of (signed) intervals
 }
-

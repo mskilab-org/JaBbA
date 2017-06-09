@@ -36,4 +36,3 @@ cds = gencode cds GRanges gff3 / gtf input
 
 "gene_name" GRangesList meta data field is used in annotation and in not creating "splice" fusions that arise from different transcripts of the same gene.
 }
-

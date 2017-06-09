@@ -18,4 +18,3 @@ and connects points on the genome in the following orientation:
 - segment source slack --> + granges at start point of segment
 - segment target slack --> - granges at endpoint of segment
 }
-

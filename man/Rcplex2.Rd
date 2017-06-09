@@ -11,4 +11,3 @@ Rcplex2(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
 \description{
 over-ride Rcplex
 }
-

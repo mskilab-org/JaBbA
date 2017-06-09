@@ -23,4 +23,3 @@ jabba.melt
 melt JaBbA graph into "events" that decompose the total ploidy into amplicons (or deleticons, if anti = TRUE)
 Each amplicons / deleticon is flanked by either (1) junctions (2) loose ends or (3) chromosome ends / telomeres
 }
-

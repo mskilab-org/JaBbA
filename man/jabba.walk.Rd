@@ -62,4 +62,3 @@ Walks are reconstructed locally within "clustersize" nodes of each aberrant edge
 clustersize is measured by the number of total edges.  Larger cluster sizes may fail to be
 computationally tractable, i.e. with a highly rearranged genome in an area of dense interconnectivity.
 }
-

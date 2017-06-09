@@ -29,4 +29,3 @@ converts purity / ploidy to gamma / beta (or reverse)
 \details{
 takes in gr with signal field "field"
 }
-

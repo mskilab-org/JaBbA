@@ -49,4 +49,3 @@ Reference edges connect intervals that are adjacent in the reference genome, and
 of this) through cancer genome paired end analysis.
 Note that every node, edge, and path in this karyograph has a "reciprocal path"
 }
-

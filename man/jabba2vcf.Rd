@@ -24,4 +24,3 @@ returns character string or writes to file if specified
 \description{
 Converts jabba output to vcf file according to 4.2 "BND" syntax
 }
-

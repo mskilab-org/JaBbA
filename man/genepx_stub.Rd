@@ -10,4 +10,3 @@ genepx_stub(rg.span.file, this.ra.file, out.file, verbose = T,
 \description{
 run gene-gene px analysis
 }
-

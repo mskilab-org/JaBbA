@@ -32,4 +32,3 @@ Outputs all chromoplexy paths and cycles
 (i.e. paths and cycles in breakpoint graph) allowing quasi-reciprocal
 rearrangements with amplification / deletion bridge distance threshold "dist"
 }
-

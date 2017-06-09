@@ -29,4 +29,3 @@ $path.grl if path.grl == T
 \description{
 for a karyoMIP solution and associated K matrix of n x e elementary paths  (input to karyoMIP), and v x e edge signed incidence matrix
 }
-

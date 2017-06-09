@@ -33,4 +33,3 @@ a granges of het.sites with $ref.count and $alt.count
 assumes segstats has fields $cn populated
 and adj has copy states
 }
-

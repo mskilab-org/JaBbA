@@ -38,4 +38,3 @@ and length |E| vector of edge copy numbers (eclass), length |E| vector of edge e
 and computes most likely karyotypes that fit the edge copy number profile subject to some prior likelihood
 over the k extreme paths
 }
-

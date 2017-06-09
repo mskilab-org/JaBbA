@@ -27,4 +27,3 @@ type2 = cn drop, no junction on this side slack
 type3 = no cn diff, used junction on other side, slack
 type4 = no cn diff, unused junction on other side, no slack
 }
-

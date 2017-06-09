@@ -4,7 +4,7 @@
 \alias{collapse.paths}
 \title{collapse.paths}
 \usage{
-collapse.paths(G, segstats, verbose = T)
+collapse.paths(G, verbose = T)
 }
 \description{
 collapse simple paths in a graph G (adjacency matrix or igraph object)
@@ -12,4 +12,3 @@ returns m x m new adjacency matrix and map of old vertex id's to new ones
 $adj = m x m matrix
 #map = length n with indices 1 .. m
 }
-

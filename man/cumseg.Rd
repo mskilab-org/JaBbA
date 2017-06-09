@@ -11,4 +11,3 @@ cumseg(gr, field = "signal", log = T, type = "bic", alg = "stepwise",
 Wrapper around cumSeg to segment numeric data in an input GRanges with signal meta data field (e.g. $signal)
 Returns a GRAnges of piecewise constant regions with their associated value
 }
-

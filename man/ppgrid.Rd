@@ -21,4 +21,3 @@ data.frame with top purity and ploidy solutions and associated gamma and beta va
 \description{
 least squares grid search for purity and ploidy modes
 }
-

@@ -25,4 +25,3 @@ in a karyograph that can be proven to have copy number greater than 0
 Takes as input adjacency matrix specifying junction copy numbers
 and numeric vector specifying node copy numbers.
 }
-

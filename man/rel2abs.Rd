@@ -31,4 +31,3 @@ rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale
 \details{
 takes in gr with signal field "field"
 }
-

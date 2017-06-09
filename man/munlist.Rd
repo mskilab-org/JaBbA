@@ -17,4 +17,3 @@ or matrices.
 force.cbind = T will force concatenation via 'cbind'
 force.rbind = T will force concatenation via 'rbind'
 }
-

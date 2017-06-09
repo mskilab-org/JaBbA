@@ -4103,7 +4103,6 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
             ## now for all "left close" starts we add whatever distance to that point + pad
             gr.start(ss)[s.close]
             
-
             out = GRanges()
             if (any(s.close))
                 out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
@@ -4119,7 +4118,8 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
     else ## use graph connections
         {      
             G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
-            
+
+            ix = which(jab$segstats %^% win)
             if (is.null(G)) ## sometimes igraph doesn't like Matrix
                 G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
             vix = unique(unlist(neighborhood(G, ix, order = k)))              
@@ -4340,7 +4340,7 @@ jabba.dist = function(jab, gr1, gr2,
                   (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
                       (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
 
-            ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
+              ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
             
             if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops              
               {
@@ -4390,9 +4390,9 @@ jabba.dist = function(jab, gr1, gr2,
     tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
     setkey(tmp, id1)    
     Dtmp = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])
-    D = matrix(NA, nrow = ngr1, ncol = ngr2, dimnames = list(1:as.character(ngr1),
+    D = matrix(NA, nrow = ngr1, ncol = ngr2, dimnames = list(NULL,
                                                              1:as.character(ngr2)))
-    D[rownames(Dtmp), colnames(Dtmp)] = Dtmp
+    D[1:nrow(Dtmp), colnames(Dtmp)] = Dtmp
    
 
     ## finally zero out any intervals that actually intersect
@@ -4405,7 +4405,6 @@ jabba.dist = function(jab, gr1, gr2,
             message('Finished aggregating distances to original object')
             print(Sys.time() -now)
         }
-    
     return(D)    
   }
 
@@ -4736,6 +4735,366 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = skidb::read_hg(ff
     }
 
 
+
+#' @name jabba.gwalk
+#' @title jabba.gwalk
+#' @descriptionk
+#'
+#' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
+#' 
+#' @param jab JaBbA object
+#' #
+#' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
+#' @export
+jabba.gwalk = function(jab, verbose = FALSE)
+{
+    cn.adj = jab$adj
+    adj = as.matrix(cn.adj)
+    adj.new = adj*0
+    adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
+    if (verbose)
+        message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+    
+    ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
+    ab.edges = ab.edges[rowSums(is.na(ab.edges))==0, ]
+    adj[ab.edges] = sign(cn.adj[ab.edges]) ## make ab.edges = 1
+    adj[is.na(adj)] = 0
+    cn.adj[which(is.na(cn.adj))] = 0
+        
+    G = graph.adjacency(adj, weighted = 'weight')
+
+    
+    ## define ends not using degree (old method) but using either telomeres or loose ends
+    ## (otherwise lots of fake ends at homozygous deleted segments)
+    ss = gr2dt(jab$segstats)[ , vid:= 1:length(seqnames)]
+    ss[loose == TRUE, is.end := TRUE]
+    ss[loose == FALSE, is.end := 1:length(loose) %in% c(which.min(start), which.max(end)), by = list(seqnames, strand)]
+    ends = which(ss$is.end)
+
+    ## sanity check
+    unb = which(!ss$is.end & rowSums(jab$adj, na.rm = TRUE) != colSums(jab$adj, na.rm = TRUE))
+
+    if (length(unb)>0)
+    {
+        message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+        ends = c(ends, unb)         ## shameless HACK ... TOFIX
+    }
+
+    ## ends = which(degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)    
+    i = 0
+    D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+        
+    ## sort shortest paths
+    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+  
+    maxrow = length(ends)*max(cn.adj[ends, ends], na.rm = TRUE)
+    vpaths = rep(list(NA), maxrow)
+    epaths = rep(list(NA), maxrow)
+    cns = rep(NA, maxrow)
+
+
+    #' first peel off "simple" paths i.e. zero degree
+    #' ends with >0 copy number
+    psimp =  which(degree(G, mode = 'out')==0 & degree(G, mode = 'in')==0 & jab$segstats$cn>0)
+    i = 0
+    if (length(psimp)>0)
+    {
+        vpaths[1:length(psimp)] = split(psimp, 1:length(psimp))
+        epaths[1:length(psimp)] = lapply(psimp, function(x) cbind(NA, NA)) ## there is no "edge" associated with a zero total degree node 
+        cns[1:length(psimp)] = jab$segstats$cn[psimp]
+        i = length(psimp)
+    }
+        
+    ## now iterate from shortest to longest path
+    ## peel that path off and see if it is still there ..
+    ## and see if it is still there 
+    ## peel off top path and add to stack, then update cn.adj
+
+    tile.map = gr2dt(jab$segstats)[, .(id = 1:length(tile.id), tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+    rtile.map = gr2dt(jab$segstats)[, .(id = 1:length(tile.id), tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+    setkey(tile.map, id)
+    setkey(rtile.map, tile.id)
+
+    
+    while (nrow(ij)>0)
+    {
+        if (verbose)
+            message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' ends to resolve' )
+        i = i+1
+        vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+        epaths[[i]] = cbind(p[-length(p)], p[-1])
+        cns[i] = min(cn.adj[epaths[[i]]])
+
+        rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
+        repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
+        plen = length(rvpath)
+        hplen = floor(length(rvpath)/2)
+        ## ## (awkward) check for palindromicity for odd and even length palindromes
+        ## if (all((vpaths[[i]]==rvpath)[c(1:hplen,(plen-hplen+1):plen)]))
+        ##         palindromic = TRUE         
+        ## else
+        ## {
+        ##     vpaths[[i+1]] = rvpath
+        ##     epaths[[i+1]] = repath
+        ##     cns[i+1] = cns[i]
+        ##     palindromic = FALSE
+        ## }
+        palindromic = TRUE ## set to true while we "figure things out"
+
+        #' so now we want to subtract that cn units of that path from the graph
+        #' so we want to update the current adjacency matrix to remove that path
+        #' while keeping track of of the paths on the stack
+        cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
+        
+        if (!palindromic) ## update reverse complement unless palindromic
+            cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
+        
+        if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
+        {
+            message('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
+            cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]           
+            if (!palindromic) ## update reverse complement unless palindromic
+                cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
+            i = i-1
+            ij = ij[-1, ]
+        }
+        else ## continue, reduce
+        {
+            adj.new[epaths[[i]]] = adj.new[epaths[[i]]] + cns[i]
+            if (!palindromic)
+                adj.new[epaths[[i+1]]] = adj.new[epaths[[i+1]]] + cns[i]
+
+            ## if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
+            ##     browser()
+            
+            to.rm = epaths[[i]][which(cn.adj[epaths[[i]]]==0), ,drop = FALSE]
+            if (!palindromic) ## update reverse complement
+                to.rm = rbind(to.rm, epaths[[i+1]][which(cn.adj[epaths[[i+1]]]==0), ,drop = FALSE])
+            
+            if (nrow(to.rm)>0)
+            {
+                adj[to.rm] = 0
+                G = graph.adjacency(adj, weighted = 'weight')
+                new.ends = setdiff(which(
+                (degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
+                & degree(G)>0), ends)
+
+                if (length(new.ends)>0)
+                    browser()
+                
+                D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+                ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+            }
+            else
+                ij = ij[-1, ]
+
+            if (!palindromic) ## increase extra counter to account for reverse complement
+                i = i+1
+        }
+    }
+    if (verbose)
+        message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+
+    vpaths = vpaths[1:i]
+    epaths = epaths[1:i]
+    cns = cns[1:i]
+
+
+    #' how to deal with cycles?
+    #' first peel off simple (ie one off) cycles
+    vcycles = rep(list(NA), maxrow)
+    ecycles = rep(list(NA), maxrow)
+    ccns = rep(NA, maxrow)
+
+    csimp = which(diag(cn.adj)!=0)
+    i = 0
+    if (length(csimp)>0)
+    {
+        vcycles[1:length(csimp)] = split(csimp, 1:length(csimp))
+        ecycles[1:length(csimp)] = lapply(csimp, function(x) cbind(x, x))
+        ccns[1:length(csimp)] = diag(cn.adj)[csimp]
+        cn.adj[cbind(csimp, csimp)] = 0
+        adj[cbind(csimp, csimp)] = 0
+        i = length(csimp)
+        
+        for (j in 1:length(csimp))
+            adj.new[ecycles[[j]]] = adj.new[ecycles[[j]]] + ccns[j]
+    }
+    
+    ## sort shortest paths and find which connect a node to its ancestor (i.e. is a cycle)
+    .parents = function(adj)
+    {
+        tmp = apply(adj, 2, function(x) which(x!=0))
+        ix = which(sapply(tmp, length)>0)
+        if (length(ix)>0)
+        {
+            parents = rbindlist(lapply(ix, function(x) data.table(x, tmp[[x]])))
+            setnames(parents, c('node', 'parent'))
+            setkey(parents, node)
+        } else {
+            parents = data.table(node = 0, parent = NA)
+            setkey(parents, node)
+        }
+    }
+
+    parents = .parents(adj)
+    
+    #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+    #' this will be a path for whom col index is = parent(row) for one of the rows 
+    G = graph.adjacency(adj, weighted = 'weight')
+    D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+
+    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
+    ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+
+    ## now iterate from shortest to longest path
+    ## peel that path off and see if it is still there ..
+    ## and see if it is still there 
+
+    ## peel off top path and add to stack, then update cn.adj
+    while (nrow(ij)>0)
+    {
+        if (verbose)
+            message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+        i = i+1
+        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+        vcycles[[i]] = p
+        ecycles[[i]] = cbind(p, c(p[-1], p[1]))
+        ccns[i] = min(cn.adj[ecycles[[i]]])
+
+        rvcycle = rtile.map[list(tile.map[list(vcycles[[i]]), -rev(tile.id)]), id]
+        recycle = cbind(rvcycle[-length(rvcycle)], rvcycle[-1])
+        clen = length(rvcycle)
+        hclen = floor(length(rvcycle)/2)
+        ## ## (awkward) check for palindromicity for odd and even length palindromes
+        ## if (all((vcycles[[i]]==rvcycle)[c(1:hclen,(clen-hclen+1):clen)]))
+        ##         palindromic = TRUE         
+        ## else
+        ## {
+        ##     vcycles[[i+1]] = rvcycle
+        ##     ecycles[[i+1]] = recycle
+        ##     ccns[i+1] = ccns[i]
+        ##     palindromic = FALSE
+        ## }
+        palindromic = TRUE ## set to true while we "figure things out"
+        
+        #' so now we want to subtract that cn units of that path from the graph
+        #' so we want to update the current adjacency matrix to remove that path
+        #' while keeping track of of the cycles on the stack        
+        cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
+        if (!palindromic) ## update reverse complement unless palindromic
+            cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
+        
+        if (!all(cn.adj[ecycles[[i]]]>=0))
+            {
+                message('backtracking')
+                cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]+ccns[i]           
+                if (!palindromic) ## update reverse complement unless palindromic
+                    cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]+ccns[i+1]
+                i = i-1
+                ij = ij[-1, ]                
+            }
+        else
+        {
+            adj.new[ecycles[[i]]] = adj.new[ecycles[[i]]] + ccns[i]
+            
+            if (!palindromic)
+                adj.new[ecycles[[i+1]]] = adj.new[ecycles[[i+1]]] + ccns[i]
+
+            ## intermediate cross check
+            ## if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
+            ##     browser()
+            
+            to.rm = ecycles[[i]][which(cn.adj[ecycles[[i]]]==0), ,drop = FALSE]
+            
+            if (!palindromic) ## update reverse complement
+                to.rm = rbind(to.rm, ecycles[[i+1]][which(cn.adj[ecycles[[i+1]]]==0), ,drop = FALSE])
+            
+            if (nrow(to.rm)>0)
+            {
+                adj[to.rm] = 0
+                parents = .parents(adj)
+                G = graph.adjacency(adj, weighted = 'weight')
+                D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+                ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+            }
+            else
+                ij = ij[-1, ]
+
+            if (!palindromic) ## increase extra counter to account for reverse complement
+                i = i+1
+            }
+    }
+    if (verbose)
+        message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+
+   
+    if (i>0)
+        {
+            vcycles = vcycles[1:i]
+            ecycles = ecycles[1:i]
+            ccns = ccns[1:i]
+        }
+    else
+    {
+        vcycles = NULL
+        ecycles = NULL
+        ccns = NULL
+    }
+
+    vall = c(vpaths, vcycles)
+    eall = c(epaths, ecycles)
+    ecn = c(cns, ccns)
+
+    tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
+    ix = which(rowSums(is.na(tmp[, 1:2]))==0)
+
+    if (length(ix)>0)
+        adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
+    else
+        adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
+    vix = munlist(vall)    
+    paths = split(jab$segstats[vix[,3]], vix[,1])
+    values(paths)$ogid = 1:length(paths)
+    values(paths)$cn = ecn[as.numeric(names(paths))]
+    values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
+    values(paths)$is.cycle = !(as.numeric(names(paths)) %in% 1:length(vpaths))
+    values(paths)$numsegs = elementNROWS(paths)
+    values(paths)$wid = sapply(lapply(paths, width), sum)
+
+    check = which((adj.new - jab$adj) !=0, arr.ind = TRUE)
+    if (length(check)>0)
+        stop('Alleles do not add up to marginal copy number profile!')
+    else if (verbose)
+        message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+
+    ## match up paths and their reverse complements
+    psig = lapply(paths, function(x) ifelse(as.logical(strand(x)=='+'), 1, -1)*x$tile.id)
+    psig.flip = sapply(psig, function(x) -rev(x))
+
+    unmix = data.table(
+        ix = 1:length(paths),
+        mix = match(sapply(psig, paste, collapse = ','), sapply(psig.flip, paste, collapse = ',')))[, pos := 1:length(mix)<mix][order(!pos), ]
+    setkey(unmix, ix)
+    unmix[is.na(mix), pos := TRUE] ## if we have paths with no reverse complement i.e. NA mix, then call "+" for now
+
+    remix = rbind(
+        unmix[pos == TRUE, ][, id := 1:length(ix)],
+        unmix[list(unmix[pos == TRUE, mix]), ][, id := 1:length(ix)][!is.na(ix), ]
+    )
+    
+
+    paths = paths[remix$ix]
+    names(paths) = paste(remix$id, ifelse(remix$pos, '+', '-'), sep = '')
+    values(paths)$id = remix$id
+    values(paths)$str = ifelse(remix$pos, '+', '-')
+
+    if (length(setdiff(values(paths)$ogid, 1:length(paths))))
+        message('Warning!!! Some paths missing!')
+        
+    return(paths)
+}
+                        
 
 
 ####################################################
@@ -6358,7 +6717,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 #' #map = length n with indices 1 .. m
 #' 
 ###############################################
-collapse.paths = function(G, segstats, verbose = T)
+collapse.paths = function(G, verbose = T)
 {
   if (inherits(G, 'igraph'))
       G = G[,]
@@ -7170,18 +7529,18 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
        }, mc.cores = mc.cores)
 
     for (i in 1:length(tmp))
-      {
-          if (class(tmp[[i]]) != 'list')
-              warning(sprintf('Query %s failed', ix.query[i]))
-          else
-              {
-                  D.rel = D.rel + tmp[[i]]$D.rel
-                  D.ra = D.ra + tmp[[i]]$D.ra
-                  D.ref = D.ref + tmp[[i]]$D.ref
-                  D.which = D.which + tmp[[i]]$D.which
-              }
-      }
-
+    {
+        if (class(tmp[[i]]) != 'list')
+            warning(sprintf('Query %s failed', ix.query[i]))
+        else
+        {
+            D.rel = D.rel + tmp[[i]]$D.rel
+            D.ra = D.ra + tmp[[i]]$D.ra
+            D.ref = D.ref + tmp[[i]]$D.ref
+            D.which = D.which + tmp[[i]]$D.which
+        }
+    }
+    
     ## "full" size matrix
     rel = ra = ref = ra.which =
       Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
@@ -7214,8 +7573,10 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
     vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
 
-    sum.paths = mapply(function(x, y)
-      {                
+    sum.paths = mcmapply(function(x, y, i)
+    {
+        if (verbose)
+        message('path ', i, ' of ', nrow(sum), '\n')
         if ((ra.which[x, y]) == 1)
             get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
         else if ((ra.which[x, y]) == 2)
@@ -7224,7 +7585,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
             get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
         else if ((ra.which[x, y]) == 4)
             rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
-    }, sum$i, sum$j, SIMPLIFY = F)
+    }, sum$i, sum$j, 1:nrow(sum), SIMPLIFY = F, mc.cores = mc.cores)
 
 #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
     sum$paths = sum.paths
@@ -9949,13 +10310,17 @@ jgraph = function(jab, thresh_cl = 1e6, all = FALSE, thresh_r = 1e3, clusters = 
 
     if (clusters)
     {
-        out = split(1:nrow(out$Gr),
-                    igraph::clusters(igraph::graph.adjacency(out$Gg + out$Gr))$membership)
-        out = out[rev(order(sapply(out, length)))]
+        tmp.out = tryCatch(split(1:nrow(out$Gr),
+                             igraph::clusters(igraph::graph.adjacency(out$Gg + out$Gr))$membership), error = function(e) NULL)
+        if (is.null(tmp.out))
+            tmp.out = split(1:nrow(out$Gr),
+                                 igraph::clusters(igraph::graph.adjacency(as(out$Gg + out$Gr, 'matrix')))$membership)
+        out = tmp.out[rev(order(sapply(tmp.out, length)))]
         names(out) = 1:length(out)
     }
-    
+
     return(out)
+    
 }
 
 ######################## wrappers

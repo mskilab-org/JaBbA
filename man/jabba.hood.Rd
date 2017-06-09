@@ -27,4 +27,3 @@ Given JaBbA  object
 and seed window "win", outputs a reduced set of windows within neighborhoof of n coordinate (ork nodes)
 within the seed region(s) on the graph (only includes edges with weight !=0)
 }
-

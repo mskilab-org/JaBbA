@@ -16,4 +16,3 @@ and returns junctions in VCF format.
 \details{
 The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 }
-

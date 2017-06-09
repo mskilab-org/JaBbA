@@ -32,4 +32,3 @@ By default, output is normalized to 1 (i.e. assumes that the total relative copy
 \details{
 takes in gr with signal field "field"
 }
-

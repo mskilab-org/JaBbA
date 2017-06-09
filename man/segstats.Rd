@@ -44,4 +44,3 @@ Fields are specified by afields
 
 outputs target GRanges with "$mean" and "$sd" fields populated
 }
-

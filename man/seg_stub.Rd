@@ -11,4 +11,3 @@ seg_stub(cov.file, out.file, field = "ratio", mc.cores = 4)
 segment
    this.cov = seg2gr(read.delim(cov.file, strings = F), seqlengths = hg_seqlengths())
 }
-

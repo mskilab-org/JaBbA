@@ -12,4 +12,3 @@ ramip_stub(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200,
 \description{
 run ramip
 }
-

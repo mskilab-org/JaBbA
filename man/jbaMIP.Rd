@@ -82,4 +82,3 @@ Most important optional parameters include
 (4) edge.slack - logical variable to determine whether or not to allow penalized relaxation of edge conservation constraints
 (5) nsolutions - number of alternate solutions
 }
-

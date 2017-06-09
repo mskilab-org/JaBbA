@@ -11,4 +11,3 @@ given k1 x n matrix A and k2 x n matrix B
 returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
 a (+/- strict) subset of the nonzero components of row j of B
 }
-

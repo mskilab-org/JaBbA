@@ -24,4 +24,3 @@ overlapping that overlap that query (strand non-specific)
 Assumes that input query and subject have no gaps (including at end) or overlaps, i.e. ignores end()
 coordinates and only uses "starts"
 }
-

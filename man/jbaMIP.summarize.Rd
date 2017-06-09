@@ -10,4 +10,3 @@ jbaMIP.summarize(sol)
 summarizes miqp result (i.e. multiple solutions) outputting data frame
 with summary info
 }
-

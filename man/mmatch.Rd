@@ -9,4 +9,3 @@ mmatch(A, B, dir = 1)
 \description{
 Low level utility function to match rows of matrix A to matrix B
 }
-

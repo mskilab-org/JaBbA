@@ -27,4 +27,3 @@ processes JaBbA object
 
 TODO: replace with proper object instantiator
 }
-
