@@ -4814,11 +4814,11 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     c = edges$weight
 
     res = Rcplex(c, rbind(A[ix,], R), c(b[ix], Rb), sense = c(rep('E', length(ix)), rep('L', length(Rb))),
-                 lb = 0, 
+                 lb = 0, vtype = "B",
                  objsense = 'min')
 
 
-    if (res$status!=1)
+    if (res$status!=101)
     {
         if (verbose)
             message('No solution to MIP!')
@@ -4861,6 +4861,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
 #' @export
 #' @import igraph
+#' @export
 jabba.gwalk = function(jab, verbose = FALSE)
 {
     cn.adj = jab$adj
