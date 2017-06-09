@@ -4817,6 +4817,8 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                  lb = 0, vtype = "B",
                  objsense = 'min')
 
+    if (verbose)
+        message('YES WE ARE DOING PROPER MIP!!!!')
 
     if (res$status!=101)
     {
@@ -5352,11 +5354,20 @@ jabba.gwalk = function(jab, verbose = FALSE)
         adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
     vix = munlist(vall)    
     paths = split(jab$segstats[vix[,3]], vix[,1])
+
+    abjuncs =  as.data.table(rbind(this.jab$ab.edges[, 1:2, '+'], this.jab$ab.edges[, 1:2, '-']))[, 
+                                   id := rep(1:nrow(this.jab$ab.edges),2)*
+                                               rep(c(1, -1), each = nrow(this.jab$ab.edges))][!is.na(from), ]
+    abjuncs = abjuncs[, tag := structure(paste(from, to), names = id)]
+    setkey(abjuncs, tag)           
+    paths = do.call('GRangesList', lapply(paths, function(x) {x$ab.id = c(abjuncs[paste(x$tile.id[-length(x$tile.id)], x$tile.id[-1]), id], NA); return(x)}))
+    
     values(paths)$ogid = 1:length(paths)
     values(paths)$cn = ecn[as.numeric(names(paths))]
     values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
     values(paths)$is.cycle = !(as.numeric(names(paths)) %in% 1:length(vpaths))
     values(paths)$numsegs = elementNROWS(paths)
+    values(paths)$num.ab = sapply(paths, function(x) sum(!is.na(x$ab.id)))
     values(paths)$wid = sapply(lapply(paths, width), sum)
 
     check = which((adj.new - jab$adj) !=0, arr.ind = TRUE)
