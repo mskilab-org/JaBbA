@@ -4742,7 +4742,6 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                                          to,
                                          weight,
                                          edges,
-                                         max.dist = Inf,
                                          verbose = TRUE,
                                          mip = TRUE
                                          )
@@ -4766,6 +4765,11 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     tmp.eclass = edges[.(tmp.eid), eclass]
 
     edges[, rationed := cn<(tmp.pcn*2)]
+
+    D.totarget = allD[, as.numeric(to)]
+    edges[, distance_to_target :=  D.totarget[to]]
+    edges = edges[!is.infinite(distance_to_target) & cn>0, ]
+    
     rationed.edges = edges[rationed == TRUE, ]
 
     ## find overdrafted eclasses - meaning two instances in this path but only one remaining copy
@@ -4813,10 +4817,17 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                  lb = 0, 
                  objsense = 'min')
 
+
+    if (res$status!=1)
+    {
+        if (verbose)
+            message('No solution to MIP!')
+        return(NULL)
+    }
+    
     ## use igraph to sort these edges into a path, i.e. make simple graph with one path and extract it using igraph (lazy :)
-    tmp.p = as.numeric(get.shortest.paths(graph_from_edgelist(edges[res$xopt!=0, cbind(from, to)]), v, to)$vpath[[1]])
-
-
+    tmp.p = as.numeric(get.shortest.paths(graph_from_edgelist(edges[res$xopt!=0, cbind(from, to)]), v, to)$vpath[[1]])    
+    
     ## check if overdrafted
     if (verbose)
     {
@@ -4829,17 +4840,19 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         else
         {
             message('Still overdraft!')
-            browser()
+#            browser()
         }
     }
-    
+
+#    browser()
     return(tmp.p)
 }
 
 
+
 #' @name jabba.gwalk
 #' @title jabba.gwalk
-#' @descriptionk
+#' @description
 #'
 #' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
 #' 
@@ -4847,18 +4860,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' #
 #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
 #' @export
-###############################
-## solve the path without rev comp problem
-#' @name jabba.gwalk
-#' @title jabba.gwalk
-#' @descriptionk
-#'
-#' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
-#' 
-#' @param jab JaBbA object
-#' #
-#' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
-#' @export
+#' @import igraph
 jabba.gwalk = function(jab, verbose = FALSE)
 {
     cn.adj = jab$adj
@@ -5051,15 +5053,15 @@ jabba.gwalk = function(jab, verbose = FALSE)
                 ## if (!palindromic)
                 adj.new[epaths[[i+1]]] = adj.new[epaths[[i+1]]] + cns[i]
 
-                ## make sure I didn't overuse any edge
-                if (nrow(overdue <- which((as.matrix(jab$adj)-adj.new)<0, arr.ind=T))>0) {
-                    print("Edge copy deficit!")
-                    browser()
-                }
+                ## ## make sure I didn't overuse any edge
+                ## if (nrow(overdue <- which((as.matrix(jab$adj)-adj.new)<0, arr.ind=T))>0) {
+                ##     print("Edge copy deficit!")
+                ##     browser()
+                ## }
 
                 ## intermediate check
-                if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
-                    browser()
+                ## if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
+                ##     browser()
                 
                 to.rm = epaths[[i]][which(cn.adj[epaths[[i]]]==0), ,drop = FALSE]
                 ## if (!palindromic) ## update reverse complement
@@ -5126,14 +5128,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
     epaths = epaths[1:i]
     cns = cns[1:i]
     palindromic.path = palindromic.path[1:i]
-    browser()
 
-
-    
-
-
-    #' how to deal with cycles?
-    #' first peel off simple (ie one off) cycles
     vcycles = rep(list(NA), maxrow) 
     ecycles = rep(list(NA), maxrow)
     ccns = rep(NA, maxrow)
@@ -5199,8 +5194,6 @@ jabba.gwalk = function(jab, verbose = FALSE)
         i = i+1
                                         #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
         
-        if (cleanup_mode) 
-            browser()
         p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
         if (is.null(p)){
@@ -5333,7 +5326,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
         ecycles = NULL
         ccns = NULL
     }
-    browser()
+    
     vall = c(vpaths, vcycles)
     eall = c(epaths, ecycles)
     ecn = c(cns, ccns)
@@ -5347,10 +5340,6 @@ jabba.gwalk = function(jab, verbose = FALSE)
     if (length(remain.ends)>0){
         if (verbose)
             message(length(remain.ends), "ends were not properly assigned a path. Do them.")
-
-        last.ij = 
-        browser()
-
     }
     
     tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
@@ -5370,7 +5359,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
     values(paths)$wid = sapply(lapply(paths, width), sum)
 
     check = which((adj.new - jab$adj) !=0, arr.ind = TRUE)
-    browser()
+    
     if (length(check)>0)
         stop('Alleles do not add up to marginal copy number profile!')
     else if (verbose)
