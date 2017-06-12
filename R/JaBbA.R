@@ -4761,9 +4761,15 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     tmp.p = as.numeric(get.shortest.paths(G, from=v, to=to, "out", weights=weight)$vpath[[1]])
     tmp.e = cbind(tmp.p[-length(tmp.p)], tmp.p[-1])
     tmp.eid = paste(tmp.e[, 1], tmp.e[, 2])
-    tmp.pcn = edges[.(tmp.eid), min(cn)] ## the cn of this path
     tmp.eclass = edges[.(tmp.eid), eclass]
 
+
+    ## the cn of this path is the max number of copies that the network will allow
+    ## here we have to group by eclass, i.e. so if there are two edges from an eclass
+    ## in a given path then we need to halve the "remaining copies" constraint
+    tmp.pcn = edges[.(tmp.eid), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))]
+
+    
     edges[, rationed := cn<(tmp.pcn*2)]
 
     D.totarget = allD[, as.numeric(to)]
@@ -4778,7 +4784,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     first.overdraft = which(tmp.eclass %in% overdrafts.eclass & duplicated(tmp.eclass))[1]
 
     ## no overdrafts?, then return
-    if (is.na(first.overdraft))
+    if (is.na(first.overdraft) & tmp.pcn>0)
     {
         if (verbose)
             message('Shortest path is good enough!')
@@ -4792,7 +4798,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     ## use MIP to find constrained path
     edges[, enum := 1:length(eid)]
 
-    ## incidence matrix constraints
+    ## incidence matrix constraints + 1 for tmp.pcn
     A = sparseMatrix(edges$to, edges$enum, x = 1, dims = c(nrow(cn.adj), nrow(edges))) -
         sparseMatrix(edges$from, edges$enum, x = 1, dims = c(nrow(cn.adj), nrow(edges))) 
     b = rep(0, nrow(A))
@@ -4802,7 +4808,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     ix = which(rowSums(A!=0)!=0) ## remove zero constraints
 
     ## "ration" or reverse complementarity constraints
-    tmp.constraints = edges[, list(e1 = enum[1], e2 = enum[2], ub = (cn[1]/tmp.pcn)), by = eclass]
+    tmp.constraints = edges[, list(e1 = enum[1], e2 = enum[2], ub = cn[1]), by = eclass]
     tmp.constraints = tmp.constraints[!is.na(e1) & !is.na(e2), ]
 
     R = sparseMatrix(rep(1:nrow(tmp.constraints), 2),
@@ -4824,6 +4830,8 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     {
         if (verbose)
             message('No solution to MIP!')
+
+        browser()
         return(NULL)
     }
     
@@ -4836,13 +4844,14 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         tmp.e = cbind(tmp.p[-length(tmp.p)], tmp.p[-1])
         tmp.eid = paste(tmp.e[, 1], tmp.e[, 2])
         tmp.eclass = edges[.(tmp.eid), eclass]
+        tmp.pcn = edges[.(tmp.eid), if (length(cn)>1) cn/2 else cn, by = eclass][, min(V1)]
         overdrafts.eclass = intersect(names(which(table(tmp.eclass)==2)), rationed.edges$eclass)
         if (length(overdrafts.eclass)==0)
             message('No overdrafts after MIP')
         else
         {
             message('Still overdraft!')
-#            browser()
+            browser()
         }
     }
 
@@ -4972,7 +4981,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
     setkey(rtile.map, tile.id)
 
     ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
-    ed =data.table(jab$edges)[cn>0, .(from, to , cn)]
+    ed = data.table(jab$edges)[cn>0, .(from, to , cn)]
     ed[, ":="(fromss = tile.map[ .(from), tile.id],
               toss = tile.map[ .(to), tile.id]),
        by = 1:nrow(ed)]
@@ -4995,7 +5004,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
         i = i+1
         ## swap this
         ##        vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
-        
+
+
         p = get.constrained.shortest.path(cn.adj, G, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
          
         if (is.null(p)){
@@ -5005,13 +5015,14 @@ jabba.gwalk = function(jab, verbose = FALSE)
         }
         else
         {
-
             ## Don't forget to update ed here
+            ed$cn = cn.adj[cbind(ed$from, ed$to)]
+            
             vpaths[[i]] = p
-            epaths[[i]] = cbind(p[-length(p)], p[-1])
-            cns[i] = min(cn.adj[epaths[[i]]])
-
-            eids = paste(epaths[[i]][,1], epaths[[i]][,2])
+            epaths[[i]] = cbind(p[-length(p)], p[-1])                          
+            eids = paste(epaths[[i]][,1], epaths[[i]][,2])            
+            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
+            
             
             rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
             repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
@@ -5101,7 +5112,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
                     ##     browser()
                     
                     D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
-                    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+                    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]                    
                 }
                 else
                     ij = ij[-1, , drop = FALSE]
@@ -5111,6 +5122,11 @@ jabba.gwalk = function(jab, verbose = FALSE)
                 i = i+1            
             }
         }
+
+
+        ## DEBUG DEBUG DEBUG
+        seg.ix = which(strand(jab$segstats)=='+'); seg.rix = which(strand(jab$segstats)=='-');
+        
         
         if (nrow(ij)==0 & cleanup_mode == FALSE)
         {
@@ -5206,11 +5222,11 @@ jabba.gwalk = function(jab, verbose = FALSE)
         } else
         {        
 
+            ed$cn = cn.adj[cbind(ed$from, ed$to)]
             vcycles[[i]] = p
             ecycles[[i]] = cbind(p, c(p[-1], p[1]))
-            ccns[i] = min(cn.adj[ecycles[[i]]])
-
             eids = paste(ecycles[[i]][,1], ecycles[[i]][,2])
+            ccns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
             
             rvcycle = rtile.map[list(tile.map[list(vcycles[[i]]), -rev(tile.id)]), id]
             recycle = cbind(rvcycle, c(rvcycle[-1], rvcycle[1]))
