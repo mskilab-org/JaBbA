@@ -4073,12 +4073,15 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #########x############################################
 jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE, verbose = FALSE)
 {
+
+    if (!is(win, 'GRanges'))
+        win = dt2gr(gr2dt(win))
+        
     if (ignore.strand)
         win = gr.stripstrand(win)
     
     if (is.null(k)) ## use distance
-        {
-
+        {            
             ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
             
             if (is.null(ss))
@@ -4823,15 +4826,15 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                  lb = 0, vtype = "B",
                  objsense = 'min')
 
+
     if (verbose)
         message('YES WE ARE DOING PROPER MIP!!!!')
 
-    if (res$status!=101)
+    if (!(res$status %in% c(101, 102)))
     {
         if (verbose)
             message('No solution to MIP!')
 
-        browser()
         return(NULL)
     }
     
@@ -4850,8 +4853,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
             message('No overdrafts after MIP')
         else
         {
-            message('Still overdraft!')
-            browser()
+            stop('Still overdraft!')
         }
     }
 
@@ -4873,6 +4875,8 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' @export
 #' @import igraph
 #' @export
+#' @author Marcin Imielinski
+#' @author Xiaotong Yao
 jabba.gwalk = function(jab, verbose = FALSE)
 {
     cn.adj = jab$adj
@@ -4971,9 +4975,11 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## and see if it is still there 
     ## peel off top path and add to stack, then update cn.adj
 
+    jab$segstats$tile.id = jab$segstats$tile.id + as.numeric(jab$segstats$loose)*0.5
+    
     tile.map =
         gr2dt(jab$segstats)[, .(id = 1:length(tile.id),
-                                tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+                                tile.id = ifelse(strand == '+', 1, -1)*tile.id)]    
     rtile.map =
         gr2dt(jab$segstats)[, .(id = 1:length(tile.id),
                                 tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
@@ -4982,6 +4988,10 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
     ed = data.table(jab$edges)[cn>0, .(from, to , cn)]
+
+    if (nrow(ed)==0)
+        return(GRangesList())
+    
     ed[, ":="(fromss = tile.map[ .(from), tile.id],
               toss = tile.map[ .(to), tile.id]),
        by = 1:nrow(ed)]
@@ -4996,6 +5006,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
     eclass.cn = ed[!duplicated(eclass), setNames(cn, eclass)]
 
     cleanup_mode = FALSE
+
     
     while (nrow(ij)>0)
     {
@@ -5021,9 +5032,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
             vpaths[[i]] = p
             epaths[[i]] = cbind(p[-length(p)], p[-1])                          
             eids = paste(epaths[[i]][,1], epaths[[i]][,2])            
-            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
-            
-            
+            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palinrdomic edges by 1/2
+                        
             rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
             repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
             plen = length(rvpath)
@@ -5196,8 +5206,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## G = graph.adjacency(adjj, weighted = 'weight')
     D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
 
-    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
-    ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+    
 
     ## now iterate from shortest to longest path
     ## peel that path off and see if it is still there ..
@@ -5205,7 +5215,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     ## peel off top path and add to stack, then update cn.adj
 
-    cleanup_mode = FALSE    
+    cleanup_mode = FALSE
     while (nrow(ij)>0)
     {
         if (verbose)
@@ -5324,7 +5334,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
         {
             message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
-
+            
             cleanup_mode = TRUE
         }                        
     }
@@ -5368,16 +5378,20 @@ jabba.gwalk = function(jab, verbose = FALSE)
         adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
     else
         adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
-    vix = munlist(vall)    
-    paths = split(jab$segstats[vix[,3]], vix[,1])
+    vix = munlist(vall)
 
-    abjuncs =  as.data.table(rbind(this.jab$ab.edges[, 1:2, '+'], this.jab$ab.edges[, 1:2, '-']))[, 
-                                   id := rep(1:nrow(this.jab$ab.edges),2)*
-                                               rep(c(1, -1), each = nrow(this.jab$ab.edges))][!is.na(from), ]
+    jab$segstats$node.id = 1:length(jab$segstats)
+    pathsegs = jab$segstats[vix[,3]]
+    pathsegs$grl.ix = vix[,1]    
+    abjuncs =  as.data.table(rbind(jab$ab.edges[, 1:2, '+'], jab$ab.edges[, 1:2, '-']))[, 
+                                   id := rep(1:nrow(jab$ab.edges),2)*
+                                       rep(c(1, -1), each = nrow(jab$ab.edges))][!is.na(from), ]    
     abjuncs = abjuncs[, tag := structure(paste(from, to), names = id)]
     setkey(abjuncs, tag)           
-    paths = do.call('GRangesList', lapply(paths, function(x) {x$ab.id = c(abjuncs[paste(x$tile.id[-length(x$tile.id)], x$tile.id[-1]), id], NA); return(x)}))
-    
+
+    pathsegs$ab.id = gr2dt(pathsegs)[ , .(ab.id = c(abjuncs[paste(node.id[-length(node.id)], node.id[-1]), id], NA)), by = grl.ix][, ab.id]
+
+    paths = split(pathsegs, vix[,1])        
     values(paths)$ogid = 1:length(paths)
     values(paths)$cn = ecn[as.numeric(names(paths))]
     values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
@@ -5408,7 +5422,6 @@ jabba.gwalk = function(jab, verbose = FALSE)
         unmix[list(unmix[pos == TRUE, mix]), ][, id := 1:length(ix)][!is.na(ix), ]
     )
     
-
     paths = paths[remix$ix]
     names(paths) = paste(remix$id, ifelse(remix$pos, '+', '-'), sep = '')
     values(paths)$id = remix$id
@@ -5420,6 +5433,82 @@ jabba.gwalk = function(jab, verbose = FALSE)
     return(paths)
 }
 
+
+
+#' @name jabba.kid  
+#' @title jabba.kid
+#' @description
+#'
+#' Given a set of gwalks (grangeslist outputs of jabba.gwalk) identifies strings "kidnapped" fragments i.e.
+#' strings of tempaled insertions, which are outputted as a grangeslist
+#' 
+#' @export
+#' @param gwalks grangeslist of walks (e.g.outputted from jabba.gwalks)
+#' @param pad how much bp neighboring material around each kidnapped string to include in outputs
+#' @param min.ab minimal bp distance a junction needs to be considered aberrant (e.g. to exclude very local deletions)
+#' @param min.run how many aberrant junctions to  require in the outputted kidnapped fragments 
+#' @author Marcin Imielinski
+jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
+{
+    gw = gr2dt(grl.unlist(gwalks))    
+    gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
+    gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
+                          (strand[-1] != strand[-length(strand)]), Inf,
+                   ifelse(strand[-1]=='+',
+                          start[-1]-end[-length(end)],
+                          start[-length(end)]-end[-1]))
+                 , Inf), by = grl.ix]
+
+    gw[dist<min.ab & dist>0, ab.id := NA]
+
+    gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1],
+                           start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
+
+    .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA)    
+    
+    ## every run of "trues" i.e. wid<something is labeled
+    gwu[, runtag := as.numeric(.labrun(wid<pad)), by = grl.ix]
+    gwu = gwu[!is.na(runtag), ]
+    gwu[, runlab := paste(grl.ix, runtag), by = grl.ix]
+    gwu[, runlen := sum(!is.na(ab.id)), by = .(grl.ix, runlab)]
+    
+
+    ## choose only chunk s with min run of abs
+    kidnapped = gwu[!is.na(runlab) & runlen>=min.run, ]
+
+    if (nrow(kidnapped) == 0)
+        return(GRangesList())
+    
+    ## expand chunks back out
+    kidnapped[, first := (1:length(start))==1, by = .(runlab)]
+    kidnapped[, last := (1:length(start))==length(start), by = .(runlab)]
+    ix = kidnapped[, .(runlab, frag.id = paste(grl.ix, ab.chunk), 
+                       grl.iix = unique(c(start-first, start:end, end+last))), by = .(ab.chunk, grl.ix)]
+    setkeyv(ix, c('grl.ix', 'grl.iix'))
+    setkeyv(gw, c('grl.ix', 'grl.iix'))
+    
+    kidnapped = gw[ix, ][!is.na(start),]
+    kidnapped[, frag.iid := 1:length(grl.iix), by = frag.id]
+    kidnapped[, first := (1:length(grl.iix)) == 1, by = runlab]
+    kidnapped[, last := (1:length(grl.iix)) == length(grl.iix), by = runlab]
+    
+    gr.kn = dt2gr(kidnapped)
+
+    gr.kn$width = NULL
+    ## trim ends leading to and out of segment
+    gr.kn[gr.kn$first] = gr.end(gr.kn[gr.kn$first], pad, ignore.strand = FALSE)
+    gr.kn[gr.kn$last] = gr.start(gr.kn[gr.kn$last], pad, ignore.strand = FALSE)
+
+    setkey(kidnapped, frag.id)
+
+    walks.kn = split(gr.kn[, c('ab.id','grl.iix', 'cn', 'cn.1')], gr.kn$runlab)
+
+    kidnapped$runlab = as.character(kidnapped$runlab)
+    setkey(kidnapped, 'runlab')    
+    values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1], 
+                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])    
+    return(walks.kn)
+}
 
 ####################################################
 #' jabba.walk
@@ -7703,8 +7792,9 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
   )
   {
     if (!is.null(jab))
-      {
-        ix = which(jab$adj[jab$ab.edges[,1:2,1]]>0)
+    {
+        nnab = which(!ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0))
+        ix = nnab[which(jab$adj[jab$ab.edges[nnab,1:2,1]]>0)]
         if (length(ix)>0)
           {
             ra1 = gr.flipstrand(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
@@ -7759,10 +7849,23 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     ## start and end indices of nodes
     tip = which(strand(kg$tile)=='+')
     tin = which(strand(kg$tile)=='-')
-    gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
+    gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]        
     gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
     gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
     gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
+
+    if (any(nix <<- is.na(gr$node.start)))
+        gr$node.start[nix] = tip[nearest(gr.start(gr[nix],2), gr.start(kg$tile[tip]))]
+    
+    if (any(nix <<- is.na(gr$node.end)))
+        gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tip]))]
+    
+    if (any(nix <<- is.na(gr$node.end)))
+        gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tip]))]
+
+    if (any(nix <<- is.na(gr$node.start.n)))
+        gr$node.start.n[nix] = tin[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tin]))]
+        
     
 #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
 #    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(kg$tile)))
@@ -7897,6 +8000,10 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
     vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
 
+
+    if (nrow(sum)==0)
+        return(NULL)
+        
     sum.paths = mcmapply(function(x, y, i)
     {
         if (verbose)
@@ -9300,7 +9407,7 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
     w = width(gr)
     sw = sum(as.numeric(w))
 
-    ncn = rep(2, length(mu))
+    ncn = rep(2, length(gr))
     if (!is.null(field.ncn))
       if (field.ncn %in% names(values(gr)))
         ncn = values(gr)[, field.ncn]
