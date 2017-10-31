@@ -13,6 +13,7 @@ install:
   - ./travis-tool.sh install_bioc DNACopy
   - ./travis-tool.sh install_github mskilab/gUtils
   - ./travis-tool.sh install_github mskilab/gTrack
+  - ./travis-tool.sh install_r Rcplex
   - ./travis-tool.sh install_deps
 script: ./travis-tool.sh run_tests
 
