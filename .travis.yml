@@ -14,6 +14,9 @@ r_github_packages:
 
 install:
   - ./pkg-build.sh install_deps
+  - ./travis-tool.sh install_bioc_deps
+  - ./travis-tool.sh install_github mskilab/gUtils
+  - ./travis-tool.sh install_github mskilab/gTrack
 
 script:
   - ./pkg-build.sh run_tests
