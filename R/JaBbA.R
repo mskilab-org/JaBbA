@@ -455,12 +455,23 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
       require(Matrix)
       require(data.table)
       require(RColorBrewer)
-    
+
     if (length(junctions)>0)
       {
         bp.p = grl.pivot(junctions)        
         bp1 = gr.end(gr.fix(bp.p[[1]]), 1, ignore.strand = F)
         bp2 = gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F)
+
+
+        #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
+        #' fix added to handle strange [0 0] junctions outputted 
+        #' by Snowman ... which failed to match to any tile
+        #' todo: may want to also handle junctions that
+        #' fall off the other side of the chromosome
+        end(bp1) = pmax(1, end(bp1))
+        start(bp1) = pmax(1, start(bp1))        
+        end(bp1) = pmax(1, end(bp1))
+        start(bp1) = pmax(1, start(bp1))
     
         if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
           stop('bp1 and bp2 must be signed intervals (i.e. either + or -)')
@@ -549,7 +560,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     else
       g = gaps(gr.stripstrand(sort(tbp)));
 
-    g = g[strand(g)=='*'];
+    g = g[as.logical( strand(g)=='*' )];
     strand(g) = '+';
     
     values(g)$bp.id = NA
@@ -642,9 +653,11 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         # build "aberrant" adjacency matrix representing directed graph of edges connecting
         # <signed> nodes.
         # note: indices of matrix represent edge labels
-        adj.ab = Matrix(0, nrow = 2*length(tile), ncol = 2*length(tile),
-          dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
-        tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
+          adj.ab = Matrix( 0,
+                          nrow = 2*length(tile),
+                          ncol = 2*length(tile),
+                          dimnames = rep( list( as.character(c(1:length(tile), -(1:length(tile))))), 2))
+          tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
           match(as.character(ab.pairs[,2]), colnames(adj.ab)))        
         adj.ab[tmp.ix[!duplicated(tmp.ix), , drop = F]] = ab.pairs.bpid[!duplicated(tmp.ix)]
       }
@@ -689,8 +702,12 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ## apply ix to adj.ref and adj.ab, and create "adj" which has union of reference and aberrant junctions
     ## and adj.source which remembers whether edge ij was reference (value = 1) or aberrant (value = 2)
     adj.source = sign(adj.ref)+2*sign(adj.ab)
-    adj = sign(adj.ref)+sign(adj.ab)    
-    edges = which(adj!=0, arr.ind=T) ## num edge x 2 matrix of vertex pairs       
+    adj = sign(adj.ref)+sign(adj.ab)
+    tryres <- try( edges <- which(adj!=0, arr.ind=T), silent=T ) ## num edge x 2 matrix of vertex pairs  
+    if ( class( tryres ) == "try-error" ) {
+          relib( "Matrix" ); relib( "gUtils" )
+          edges <- which(adj!=0, arr.ind=T)
+    }
     adj[edges] = 1:nrow(edges) ## re number edges across edge set 
     rownames(adj) = colnames(adj) = 1:nrow(adj)
     G = graph.adjacency(adj ,weighted = 'edge.ix') ## edge.ix will allow us to match up edges in the adj matrix with edges in the igraph
@@ -800,7 +817,7 @@ karyotrack = function(kag, paths = NULL, col = 'red', pad = 0)
                 edges$dangle.w = 0.5
             }       
         
-        pos.ix = which(strand(kag$tile)=='+')
+        pos.ix = which( as.logical( strand(kag$tile)=='+') )
         kag$tile$tile.id = match(gr.stripstrand(kag$tile), gr.stripstrand(kag$tile[pos.ix]))
         ss = kag$tile
         ss$col = alpha('gray', 0.2)
@@ -1126,6 +1143,7 @@ jbaMIP = function(
   loose.ends = c(), ## integer vector specifies indices of "loose ends", slack won't be penalized at these vertices
   adj.lb = 0*adj, # lower bounds for adjacency matrix
   adj.nudge = 0*adj, # linear objective function coefficients for edges (only which(adj!=0) components considered)
+  na.node.nudge = TRUE, 
   ecn.out.ub = rep(NA, length(segstats)), ## upper bound for cn of edges leaving nodes
   ecn.in.ub = rep(NA, length(segstats)),  ## upper bound for cn of edges entering nodes  
   gurobi = F, # otherwise will use cplex
@@ -1144,7 +1162,7 @@ jbaMIP = function(
   if (is.null(adj.lb))
       adj.lb = 0*adj
   
-  message('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
+#  message('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
   
   #####
   # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
@@ -1234,8 +1252,8 @@ jbaMIP = function(
       ## will be part of the same component .. all other intervals will be separated from their
       ## reverse complement.  However, in the MIP we always optimize
       ## over both strands, and thus must merge components with their reverse complement
-      pos.ix = which(strand(segstats)=='+')
-      neg.ix = which(strand(segstats)=='-')
+      pos.ix = which( as.logical( strand(segstats)=='+') )
+      neg.ix = which( as.logical( strand(segstats)=='-') )
 
       ## maps segments and reverse complements
       seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
@@ -1286,6 +1304,7 @@ jbaMIP = function(
           
           args$adj = tmp.adj
           args$adj.nudge = adj.nudge[uix, uix, drop = F]
+          args$na.node.nudge = na.node.nudge
           args$adj.lb = adj.lb[uix, uix, drop = F]
           args$segstats = segstats[uix]
           args$cn.fix = cn.fix[uix]
@@ -1302,7 +1321,7 @@ jbaMIP = function(
                 'chromosomes, including', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
                      length(unique(seqnames((segstats[uix])))))]), collapse = ', '), '\n')
 
-
+          
           out = do.call('jbaMIP', args)
 
           gc() ## garbage collect .. not sure why this needs to be done
@@ -1386,8 +1405,8 @@ jbaMIP = function(
     }
         
   # map intervals to their reverse complement to couple their copy number (and edge variables)  
-  pos.ix = which(strand(segstats)=='+')
-  neg.ix = which(strand(segstats)=='-')
+  pos.ix = which( as.logical( strand(segstats)=='+') )
+  neg.ix = which( as.logical( strand(segstats)=='-') )
 
   ## "original vertices"
   og.ix = pos.ix 
@@ -1518,6 +1537,8 @@ jbaMIP = function(
   
   # vertices that will actually have constraints (i.e. those that have non NA segstats )
   v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
+
+  v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
   
   # weighted mean across vertices contributing to mean
   if (length(v.ix.c))
@@ -1797,7 +1818,16 @@ jbaMIP = function(
   Qobj = Zero;
 
   if (length(v.ix.c>0))
-    Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
+      Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
+
+  EPS = 0.000000000001
+  if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
+      if (length(v.ix.na)>0)
+      {
+          if (verbose)
+              message('NA nudging node!!')
+          Qobj[cbind(v.ix.na, v.ix.na)] = EPS
+      }
 
 #  if (!ignore.cons)
 #    Qobj[s.ix[length(s.ix)], s.ix[length(s.ix)]] = 1
@@ -1952,7 +1982,7 @@ jbaMIP = function(
          });
   
   sol.l = sol.l[order(sapply(sol.l, function(x) x$obj))]
-  
+
   if (length(sol.l)==1)
     sol.l = sol.l[[1]]
 
@@ -2254,7 +2284,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
           cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
         
         ## right side ends of '+' and left side ends of '-' are sinks
-        sink.ix = as.logical((lends$right & strand(lends)=='+') | (!lends$right & strand(lends)=='-'))
+        sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
         adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
         adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
         adj = adj.plus
@@ -2387,7 +2417,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     out$segstats$edges.out = sapply(1:length(out$segstats),
       function(x) {ix = which(out$adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
 
-    pos.ix = which(strand(out$segstats)=='+')
+    pos.ix = which( as.logical( strand(out$segstats)=='+') )
     out$segstats$tile.id = match(gr.stripstrand(out$segstats), gr.stripstrand(out$segstats[pos.ix]))
     
     ss = out$segstats
@@ -2599,8 +2629,8 @@ jbaMIP.allelic = function(
     ## this will map vertices to their (positive) duplicate
     ## doing this will help contain some of the dimensionality
     dup.vmap = 1:length(segstats)   
-    pos.ix = which(strand(segstats)=='+') # "neg vertices" duplicates of pos vertices
-    neg.ix = which(strand(segstats)=='-')
+    pos.ix = which(as.logical( strand(segstats)=='+') )# "neg vertices" duplicates of pos vertices
+    neg.ix = which( as.logical( strand(segstats)=='-') )
     dup.ix = suppressWarnings(neg.ix[gr.match(segstats[pos.ix], segstats[neg.ix])])
     dup.vmap[dup.ix] = pos.ix ## map neg vertices to their positive parent
 
@@ -3176,7 +3206,7 @@ jabba.alleles = function(
 
     het.sites = het.sites[!is.na(het.sites$low.count) & !is.na(het.sites$high.count)]
     
-    ss.p = jab$segstats[strand(jab$segstats)=='+']    
+    ss.p = jab$segstats[ as.logical( strand(jab$segstats)=='+' ) ] 
 
     ## find the reference junctions    
     ord.ix = order(jab$segstats)
@@ -3191,7 +3221,7 @@ jabba.alleles = function(
       {
         ab.adj = jab$adj
         ab.adj[ref.jun] = 0        
-        has.ab = as.numeric(Matrix::rowSums(ab.adj!=0)!=0 | Matrix::colSums(ab.adj!=0)!=0)[which(strand(jab$segstats)=='+')]
+        has.ab = as.numeric(Matrix::rowSums(ab.adj!=0)!=0 | Matrix::colSums(ab.adj!=0)!=0)[which( as.logical( strand(jab$segstats)=='+')) ]
         has.ab.rand = runif(length(ss.p)) * 1e-6 * has.ab
       }
 
@@ -3707,7 +3737,7 @@ loose.ends = function(sol, kag)
     ss$num = 1:length(ss)
     n = length(ss)
     ss$left.ab = ss$cn.diff = ss$right.ab = -1;
-    neg.ix = which(strand(ss)=='-')
+    neg.ix = which( as.logical( strand(ss)=='-') )
     adj.ab[neg.ix, ] = adj.ab[rev(neg.ix), ]
     adj.ab[ ,neg.ix] = adj.ab[, rev(neg.ix)]
     ix.right = 1:n %in% as.numeric(kag$ab.edges[,1,])
@@ -3715,7 +3745,7 @@ loose.ends = function(sol, kag)
     ix.right[neg.ix] = ix.right[rev(neg.ix)]
     ix.left[neg.ix] = ix.left[rev(neg.ix)]
     
-    ss[strand(ss)=='-'] = rev(ss[strand(ss)=='-'])
+    ss[ as.logical( strand(ss)=='-' )] = rev(ss[ as.logical( strand(ss)=='-' ) ])
     tmp.right = Matrix::rowSums(adj.ab)
     tmp.left = Matrix::colSums(adj.ab)
     mask = c(as.numeric(diff(as.numeric(as.factor(seqnames(ss))))==0 & diff(as.numeric(as.factor(strand(ss))))==0), 0)
@@ -3744,7 +3774,7 @@ loose.ends = function(sol, kag)
              rowSums(cbind(ss$right.ab>0, ss$left.ab[ix.next]>0))==0 &
              ss$cn.diff == 0) * mask
         
-    ss.p = ss[strand(ss)=='+']
+    ss.p = ss[ as.logical( strand(ss)=='+' ) ]
     win.size = 1
     
     ss.p$num = 1:length(ss.p)
@@ -3808,10 +3838,10 @@ slack.breaks = function(segstats)
     if (any(!(c('eslack.out', 'eslack.in') %in% names(values(segstats)))))
       stop('Input segstats should be $segstats field output of jbaMIP, i.e. be a GRAnges with fields eslack.out and eslack.in')
 
-    ix.pos.source = which(strand(segstats)== '+' & segstats$eslack.out>0)
-    ix.pos.target = which(strand(segstats)== '+' & segstats$eslack.in>0)
-    ix.neg.source = which(strand(segstats)== '-' & segstats$eslack.out>0)
-    ix.neg.target = which(strand(segstats)== '-' & segstats$eslack.in>0)
+    ix.pos.source = which(as.logical( strand(segstats)== '+' ) & segstats$eslack.out>0)
+    ix.pos.target = which( as.logical( strand(segstats)== '+' ) & segstats$eslack.in>0)
+    ix.neg.source = which( as.logical( strand(segstats)== '-' ) & segstats$eslack.out>0)
+    ix.neg.target = which( as.logical( strand(segstats)== '-' ) & segstats$eslack.in>0)
 
     if (length(ix.pos.source)>0)
       names(ix.pos.source) = paste('source.slack.', ix.pos.source, sep = '')
@@ -4158,6 +4188,7 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
             ## now for all "left close" starts we add whatever distance to that point + pad
             gr.start(ss)[s.close]
             
+
             out = GRanges()
             if (any(s.close))
                 out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
@@ -4233,13 +4264,13 @@ jabba.dist = function(jab, gr1, gr2,
     
     ## check for double stranded intervals
     ## add corresponding nodes if present
-    if (any(ix <- strand(gr1)=='*')) 
+    if (any(ix <- as.logical( strand(gr1)=='*')) )
     {
         strand(gr1)[ix] = '+'
         gr1 = c(gr1, gr.flipstrand(gr1[ix]))
     }
     
-    if (any(ix <- strand(gr2)=='*'))
+    if (any(ix <- as.logical( strand(gr2)=='*')))
     {
         strand(gr2)[ix] = '+'
         gr2 = c(gr2, gr.flipstrand(gr2[ix]))
@@ -4392,8 +4423,12 @@ jabba.dist = function(jab, gr1, gr2,
           {
             ## rix are present 
               rix = as.logical((
-                  (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
-                      (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
+                  (as.logical( strand(gr1)[ij[,'i']] == '+' ) &
+                   as.logical( strand(gr2)[ij[,'j']] == '+' ) &
+                   end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
+                  ( as.logical( strand(gr1)[ij[,'i']] == '-' ) &
+                    as.logical( strand(gr2)[ij[,'j']] == '-' ) &
+                    start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
 
               ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
             
@@ -6853,10 +6888,10 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
         else
             return(GRangesList())
 
-        pos.right = which(strand(cds.frag.right)=='+')
-        pos.left = which(strand(cds.frag.left)=='+')
-        neg.right = which(strand(cds.frag.right)=='-')
-        neg.left = which(strand(cds.frag.left)=='-')
+        pos.right = which( as.logical( strand(cds.frag.right)=='+'))
+        pos.left = which( as.logical( strand(cds.frag.left)=='+') )
+        neg.right = which(as.logical( strand(cds.frag.right)=='-') )
+        neg.left = which(as.logical( strand(cds.frag.left)=='-'))
         
         ## positive start fragments will be "right" fragments
         cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
@@ -8447,8 +8482,8 @@ karyoSim = function(junctions, # GRangesList specifying junctions, NOTE: current
       )
     
     ix = order(as.character(seqnames(kag$tile)), as.character(strand(kag$tile)))
-    ix.pos = ix[which(strand(kag$tile)[ix]=='+')]
-    ix.neg = ix[which(strand(kag$tile)[ix]=='-')]      
+    ix.pos = ix[which(as.logical( strand(kag$tile)[ix]=='+'))]
+    ix.neg = ix[which(as.logical( strand(kag$tile)[ix]=='-'))]      
     current.state$intervals = .munlist(mapply(function(x, y) cbind("+"=x, "-"=y),
       split(ix.pos, as.character(seqnames(kag$tile)[ix.pos])),
       split(ix.neg, as.character(seqnames(kag$tile)[ix.neg]))))      
@@ -9152,304 +9187,319 @@ ppgrid = function(
   if (verbose)
       cat('Setting up matrices .. \n')
 
-#  purity.guesses = seq(0, 1, purity.step)
-  purity.guesses = seq(pmax(0, purity.min), pmin(1.00, purity.max), purity.step)
-                                        #ploidy.guesses = seq(pmin(0.5, ploidy.min), pmax(10, ploidy.max), ploidy.step)
-  ploidy.guesses = seq(pmax(0.5, ploidy.min), pmax(0.5, ploidy.max), ploidy.step)
-  
-  if (allelic)
-      if (!all(c('mean_high', 'mean_low', 'sd_high', 'sd_low') %in% names(values(segstats))))
-          {              
-              warning('If allelic = TRUE then must have meta data fields mean_high, mean_low, sd_high, sd_low in input segstats')
-              allelic = FALSE
-          }
-  
-  if (is.null(segstats$mean))
-    stop('segstats must have field $mean')
-  
-  segstats = segstats[!is.na(segstats$mean) & !is.na(segstats$sd)]
+    if (is.na(ploidy.min)) ploidy.min = 1.2
+    if (is.na(ploidy.max)) ploidy.max = 6
+    if (is.na(purity.min)) purity.min = 0.01
+    if (is.na(purity.max)) purity.max = 1
+    
+    ##  purity.guesses = seq(0, 1, purity.step)
+    purity.guesses = seq(pmax(0, purity.min), pmin(1.00, purity.max), purity.step)
+    ## ploidy.guesses = seq(pmin(0.5, ploidy.min), pmax(10, ploidy.max), ploidy.step)
+    ploidy.guesses = seq(pmax(0.5, ploidy.min), pmax(0.5, ploidy.max), ploidy.step)
+    
+    if (allelic)
+        if (!all(c('mean_high', 'mean_low', 'sd_high', 'sd_low') %in% names(values(segstats))))
+        {              
+            warning('If allelic = TRUE then must have meta data fields mean_high, mean_low, sd_high, sd_low in input segstats')
+            allelic = FALSE
+        }
+    
+    if (is.null(segstats$mean))
+        stop('segstats must have field $mean')
+    
+    segstats = segstats[!is.na(segstats$mean) & !is.na(segstats$sd)]
 
-  if (!is.null(segstats$ncn))
-      segstats = segstats[segstats$ncn==2, ]
-  
-  ## if (is.null(segstats$ncn))
-  ##     ncn = rep(2, length(mu))
-  ## else
-  ##     ncn = segstats$ncn
-  
-  mu = segstats$mean
-  w = as.numeric(width(segstats))
-  Sw = sum(as.numeric(width(segstats)))
-  sd = segstats$sd
-  m0 = sum(as.numeric(mu*w))/Sw
-  
-  if (verbose)
-    cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
-  
-  NLL = matrix(unlist(mclapply(1:length(purity.guesses), function(i)
+    if (!is.null(segstats$ncn))
+        segstats = segstats[segstats$ncn==2, ]
+    
+    ## if (is.null(segstats$ncn))
+    ##     ncn = rep(2, length(mu))
+    ## else
+    ##     ncn = segstats$ncn
+    
+    mu = segstats$mean
+    w = as.numeric(width(segstats))
+    Sw = sum(as.numeric(width(segstats)))
+    sd = segstats$sd
+    m0 = sum(as.numeric(mu*w))/Sw
+    
+    if (verbose)
+        cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
+    
+    NLL = matrix(unlist(mclapply(1:length(purity.guesses), function(i)
     {
-      if (verbose)
-        cat('.')
-      nll = rep(NA, length(ploidy.guesses))
-      for (j in 1:length(ploidy.guesses))
+        if (verbose)
+            cat('.')
+        nll = rep(NA, length(ploidy.guesses))
+        for (j in 1:length(ploidy.guesses))
         {
-          alpha = purity.guesses[i]
-          tau = ploidy.guesses[j]
-          gamma = 2/alpha - 2
-          beta = (tau + gamma)/m0 ## replaced with below 9/10/14
-#          beta = ( tau + tau_normal * gamma /2 ) / m0
-#          v = pmax(0, round(beta*mu-ncn*gamma/2))
-           v = pmax(0, round(beta*mu-gamma))
-          
-           ## using normal cn
-#          nll[j] = sum((v-beta*mu+ncn*gamma/2)^2/((sd)^2))
+            alpha = purity.guesses[i]
+            tau = ploidy.guesses[j]
+            gamma = 2/alpha - 2
+            beta = (tau + gamma)/m0 ## replaced with below 9/10/14
+                                        #          beta = ( tau + tau_normal * gamma /2 ) / m0
+                                        #          v = pmax(0, round(beta*mu-ncn*gamma/2))
+            v = pmax(0, round(beta*mu-gamma))
+            
+            ## using normal cn
+                                        #          nll[j] = sum((v-beta*mu+ncn*gamma/2)^2/((sd)^2))
 
-           # REVERT
+                                        # REVERT
             nll[j] = sum((v-beta*mu+gamma)^2/((sd)^2))
 
-          #  mv = pmax(20, pmin(20, max(v, na.rm = TRUE)))
-          #  mv = 2
-          # log likelihood matrix across approximately "all" integer copy states
-          # we are obviously ignoring very high states in this estimate
-          # but they are likely to have high sd and thus contribute less to the overall log likelihood
-          ##           ll = -sapply(0:mv, function(x) (x-beta*mu+gamma)^2/((sd)^2)) ## OG VERSION
-          #    ll = -sapply(0:mv, function(x) ((x+gamma)/beta-mu)^2 / sd^2)  ## NEWFANGLED VERSION
-          ##        ml = apply(ll, 1, max) ##  get maximum likelihood
-           ##       probs  = 1/rowSums(exp(ll-ml)) ## normalize to get posterior probabilities (assuming uniform prior)
-          ##      nll[j] = sum(-log(probs))
+                                        #  mv = pmax(20, pmin(20, max(v, na.rm = TRUE)))
+                                        #  mv = 2
+                                        # log likelihood matrix across approximately "all" integer copy states
+                                        # we are obviously ignoring very high states in this estimate
+                                        # but they are likely to have high sd and thus contribute less to the overall log likelihood
+            ##           ll = -sapply(0:mv, function(x) (x-beta*mu+gamma)^2/((sd)^2)) ## OG VERSION
+                                        #    ll = -sapply(0:mv, function(x) ((x+gamma)/beta-mu)^2 / sd^2)  ## NEWFANGLED VERSION
+            ##        ml = apply(ll, 1, max) ##  get maximum likelihood
+            ##       probs  = 1/rowSums(exp(ll-ml)) ## normalize to get posterior probabilities (assuming uniform prior)
+            ##      nll[j] = sum(-log(probs))
         }
-      return(nll)
+        return(nll)
     }, mc.cores = mc.cores)), nrow = length(purity.guesses), byrow = T)
-  
-  dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
-
-  cat('\n')
-
-  ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
-  ## cix = as.numeric(colnames(NLL))>=ploidy.min & as.numeric(colnames(NLL))<=ploidy.max  
-  ## NLL = NLL[rix, cix, drop = FALSE]
-  
-  a = rep(NA, nrow(NLL));
-  b = rep(NA, ncol(NLL)+2)
-  b.inf = rep(Inf, ncol(NLL)+2)
-#'  a = rep(Inf, nrow(NLL));
-#'  b = rep(Inf, ncol(NLL)+2)
-  NLLc = rbind(b, cbind(a, NLL, a), b) ## padded NLL and all of its shifts
-  NLLul = rbind(cbind(NLL, a, a), b.inf, b)
-  NLLuc = rbind(cbind(a, NLL, a), b.inf, b)
-  NLLur = rbind(cbind(a, a, NLL), b.inf, b)
-  NLLcl = rbind(b, cbind(NLL, a, a), b)
-  NLLcr = rbind(b, cbind(a, a, NLL), b)
-  NLLll = rbind(b, b, cbind(NLL, a, a))
-  NLLlc = rbind(b, b, cbind(a, NLL, a))
-  NLLlr = rbind(b, b, cbind(a, a, NLL))
-
-  if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
-      M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
-  else if (ncol(NLL)==1) ## one column, only go up and down
-      M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
-  else ## only row, only go left right
-      M = (NLLc < NLLcl & NLLc < NLLcr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
-
-  if (length(M)>1)
-      {
-          ix = which(M, arr.ind= T);
-          if (nrow(ix)>1)
-              {
-                  C = hclust(d = dist(ix), method = 'single')
-                  cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
-                  minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
-              }
-          else
-              minima = ix[1,, drop = FALSE]
-      }
-  else
-      minima = cbind(1,1)
-
-  out = data.frame(purity = as.numeric(rownames(NLL)[minima[,1]]), ploidy = as.numeric(colnames(NLL)[minima[,2]]), NLL = NLL[minima],
-      i = minima[,1], j = minima[,2])
-
-  out = out[order(out$NLL), , drop = FALSE]
-  rownames(out) = 1:nrow(out)
-  out = out[out$purity>=purity.min & out$purity<=purity.max & out$ploidy>=ploidy.min & out$ploidy<=ploidy.max, ]
-  out$gamma = 2/out$purity -2
-  out$beta = (out$ploidy + out$gamma)/m0
-  out$mincn = mapply(function(gamma, beta) min(round(beta*mu-gamma)), out$gamma, out$beta)
-  out$maxcn = mapply(function(gamma, beta) max(round(beta*mu-gamma)), out$gamma, out$beta)
     
-  ## group solutions with (nearly the same) slope (i.e. 1/beta), these should have almost identical
-  ## NLL (also take into account in-list distance just be safe)
-  if (nrow(out)>1)
-      out$group = cutree(hclust(d = dist(cbind(100/out$beta, 1:nrow(out)), method = 'manhattan'), method = 'single'), h = 2)
-  else
-      out$group = 1
-  out = out[out$group<=3, ,drop = FALSE] ## only pick top 3 groups
+    dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
 
-  if (allelic) ## if allelic then use allelic distance to rank best solution in group
-      {          
-          ## remove all NA allelic samples
-          segstats = segstats[!is.na(segstats$mean_high) & !is.na(segstats$sd_high) & !is.na(segstats$mean_low) & !is.na(segstats$sd_low)]
-          out$NLL.allelic = NA          
-          mu = cbind(segstats$mean_high, segstats$mean_low)
-          w = matrix(rep(as.numeric(width(segstats)), 2), ncol = 2, byrow = TRUE)
-          Sw = sum(as.numeric(width(segstats)))*2
-          sd = cbind(segstats$sd_high, segstats$sd_low)
-          m0 = sum(as.numeric(mu*w))/Sw
-          
-          if (verbose)
-              cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
-          
-          for (i in 1:nrow(out))
-              {
-                  cat(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
-                  alpha = out$purity[i]
-                  tau = out$ploidy[i]
-#                  gamma = 2/alpha - 2
-                  gamma = 1/alpha - 1 ## 1 since we are looking at hets
-                  beta = (tau + gamma)/m0 ## replaced with below 9/10/14
-                  
-                  vtot = round(out$beta[i]*segstats$mean-out$gamma[i])
-                  vlow.mle = rep(NA, length(vtot))
+    cat('\n')
 
-                  for (j in 1:length(vlow.mle))
-                      {
-                          if (vtot[j]==0)
-                              vlow.mle[j] = 0
-                          else
-                              {
-                                  vlow = 0:floor(vtot[j]/2)
-                                  vhigh = vtot[j]-vlow
-                                  tmp.nll = cbind((vlow-beta*mu[j,2]+gamma)^2/(sd[j,2])^2, (vhigh-beta*mu[j, 1]+gamma)^2/((sd[j,1])^2))
-                                  vlow.mle[j] = vlow[which.min(rowSums(tmp.nll))]
-                              }
-                      }
-                  
-                  vlow.mle = apply(cbind(mu, sd, vtot), 1, function(x) {
-                      tot = x[5]
-                      if (tot == 0)
-                          return(0)
-                      else
-                          {
-                              vlow = 0:floor(tot/2)
-                              vhigh = tot-vlow
-                              muh = x[1]
-                              mul = x[2]
-                              sdh = x[3]
-                              sdl = x[4]
-                              tmp.nll = cbind((vlow-beta*mul+gamma)^2/(sdl)^2, (vhigh-beta*muh+gamma)^2/((sdh)^2))
-                              return(vlow[which.min(rowSums(tmp.nll))])
-                          }                      
-                  })                  
-                  
-                  out$NLL.allelic[i] = sum((cbind(vtot-vlow.mle, vlow.mle)-beta*mu+gamma)^2/sd^2)
-              }
-          
-          out$NLL.tot = out$NLL
-          out$NLL = out$NLL.tot + out$NLL.allelic
-          out.all = out
-          ix = vaggregate(1:nrow(out), by = list(out$group), FUN = function(x) x[order(abs(out$NLL[x]))][1])
-      }
-  else ## otherwise choose the one that gives the lowest magnitude copy number
-      {
-          out.all = out
-          ix = vaggregate(1:nrow(out), by = list(out$group), FUN = function(x) x[order(abs(out$mincn[x]), out$mincn[x]<0)][1])
-      }
-  
-  out = out[ix, , drop = FALSE]
-  out$NLL = vaggregate(out$NLL, by = list(out$group), FUN = min)
-  
-  out.all$keep = 1:nrow(out.all) %in% ix ## keep track of other ploidy group peaks for drawing purposes
-  out.all = out.all[out.all$group %in% out$group, ] ## only draw the groups in the top solution
-  
-  if (plot)
-      {
-          library(ellipse)
-          library(numDeriv)
+    ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
+    ## cix = as.numeric(colnames(NLL))>=ploidy.min & as.numeric(colnames(NLL))<=ploidy.max  
+    ## NLL = NLL[rix, cix, drop = FALSE]
+    
+    a = rep(NA, nrow(NLL));
+    b = rep(NA, ncol(NLL)+2)
+    b.inf = rep(Inf, ncol(NLL)+2)
+    #'  a = rep(Inf, nrow(NLL));
+    #'  b = rep(Inf, ncol(NLL)+2)
+    NLLc = rbind(b, cbind(a, NLL, a), b) ## padded NLL and all of its shifts
+    NLLul = rbind(cbind(NLL, a, a), b.inf, b)
+    NLLuc = rbind(cbind(a, NLL, a), b.inf, b)
+    NLLur = rbind(cbind(a, a, NLL), b.inf, b)
+    NLLcl = rbind(b, cbind(NLL, a, a), b)
+    NLLcr = rbind(b, cbind(a, a, NLL), b)
+    NLLll = rbind(b, b, cbind(NLL, a, a))
+    NLLlc = rbind(b, b, cbind(a, NLL, a))
+    NLLlr = rbind(b, b, cbind(a, a, NLL))
 
-          ## xval = as.numeric(rownames(NLL))
-          ## yval = as.numeric(colnames(NLL))
-          ## f = function(x) {              
-          ##     i = x[1]; ## interpolate between closest values of NLL
-          ##     im = which(i<=xval)[1]
-          ##     ip = (i-xval[im-1])/diff(xval[c(im-1, im)]);  ## proportion of lower value to consider
-          ##     j = x[2];
-          ##     jm = which(j<=yval)[1]
-          ##     jp = (j-yval[jm-1])/diff(yval[c(jm-1, jm)]);  ## proportion of lower value to consider
-          ##     nllm = NLL[c(im-1, im), c(jm-1, jm)] ## piece of NLL matrix containing the low and high i and j matches
-          ##     nllp = cbind(c(ip, 1-ip)) %*% rbind(c(jp, 1-jp)) ## proportion of values to input into interpolation
-          ##     return(sum(-nllm*nllp))
-          ## }
-          
-          plot(out.all$purity, out.all$ploidy, pch = 19,
-               xlim = c(purity.min, purity.max), ylim = c(ploidy.min, ploidy.max), xlab = 'purity', ylab = 'ploidy', cex = 0.2, col = alpha('white', out.all$intensity))
-       
-          
-          f = function(x) -NLL[((x[1]-1) %% nrow(NLL))+1, ((x[2]-1) %% ncol(NLL))+1]
+    if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
+        M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+    else if (ncol(NLL)==1) ## one column, only go up and down
+        M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+    else ## only row, only go left right
+        M = (NLLc < NLLcl & NLLc < NLLcr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+
+    if (length(M)>1)
+    {
+        ix = which(M, arr.ind= T);
+        if (nrow(ix)>1)
+        {
+            C = hclust(d = dist(ix), method = 'single')
+            cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
+            minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
+        }
+        else
+            minima = ix[1,, drop = FALSE]
+    }
+    else
+        minima = cbind(1,1)
+
+    out = data.frame(purity = as.numeric(rownames(NLL)[minima[,1]]), ploidy = as.numeric(colnames(NLL)[minima[,2]]), NLL = NLL[minima],
+                     i = minima[,1], j = minima[,2])
+
+    out = out[order(out$NLL), , drop = FALSE]
+    rownames(out) = 1:nrow(out)
+    ## Saturday, Sep 02, 2017 10:33:26 PM
+    ## Noted floating point error, use the epsilon trick to replace '>='
+    ## out = out[out$purity>=purity.min & out$purity<=purity.max & out$ploidy>=ploidy.min & out$ploidy<=ploidy.max, ]
+    eps = 1e9
+    out = out[out$purity - purity.min >= -eps &
+              out$purity - purity.max <= eps &
+              out$ploidy - ploidy.min >= -eps &
+              out$ploidy - ploidy.max <= eps, ]
+    out$gamma = 2/out$purity -2
+    out$beta = (out$ploidy + out$gamma)/m0
+    out$mincn = mapply(function(gamma, beta) min(round(beta*mu-gamma)), out$gamma, out$beta)
+    out$maxcn = mapply(function(gamma, beta) max(round(beta*mu-gamma)), out$gamma, out$beta)
+    
+    ## group solutions with (nearly the same) slope (i.e. 1/beta), these should have almost identical
+    ## NLL (also take into account in-list distance just be safe)
+    if (nrow(out)>1)
+        out$group = cutree(hclust(d = dist(cbind(100/out$beta, 1:nrow(out)), method = 'manhattan'), method = 'single'), h = 2)
+    else
+        out$group = 1
+    out = out[out$group<=3, ,drop = FALSE] ## only pick top 3 groups
+
+    if (allelic) ## if allelic then use allelic distance to rank best solution in group
+    {          
+        ## remove all NA allelic samples
+        segstats = segstats[!is.na(segstats$mean_high) & !is.na(segstats$sd_high) & !is.na(segstats$mean_low) & !is.na(segstats$sd_low)]
+        out$NLL.allelic = NA          
+        mu = cbind(segstats$mean_high, segstats$mean_low)
+        w = matrix(rep(as.numeric(width(segstats)), 2), ncol = 2, byrow = TRUE)
+        Sw = sum(as.numeric(width(segstats)))*2
+        sd = cbind(segstats$sd_high, segstats$sd_low)
+        m0 = sum(as.numeric(mu*w))/Sw
+        
+        if (verbose)
+            cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
+        
+        for (i in 1:nrow(out))
+        {
+            cat(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
+            alpha = out$purity[i]
+            tau = out$ploidy[i]
+                                        #                  gamma = 2/alpha - 2
+            gamma = 1/alpha - 1 ## 1 since we are looking at hets
+            beta = (tau + gamma)/m0 ## replaced with below 9/10/14
+                                        #          beta = ( tau + tau_normal * gamma /2 ) / m0
+                                        #          v = pmax(0, round(beta*mu-ncn*gamma/2))
+            v = pmax(0, round(beta*mu-gamma))
+            
+            vtot = round(out$beta[i]*segstats$mean-out$gamma[i])
+            vlow.mle = rep(NA, length(vtot))
+
+            for (j in 1:length(vlow.mle))
+            {
+                if (vtot[j]==0)
+                    vlow.mle[j] = 0
+                else
+                {
+                    vlow = 0:floor(vtot[j]/2)
+                    vhigh = vtot[j]-vlow
+                    tmp.nll = cbind((vlow-beta*mu[j,2]+gamma)^2/(sd[j,2])^2, (vhigh-beta*mu[j, 1]+gamma)^2/((sd[j,1])^2))
+                    vlow.mle[j] = vlow[which.min(rowSums(tmp.nll))]
+                }
+            }
+            
+            vlow.mle = apply(cbind(mu, sd, vtot), 1, function(x) {
+                tot = x[5]
+                if (tot == 0)
+                    return(0)
+                else
+                {
+                    vlow = 0:floor(tot/2)
+                    vhigh = tot-vlow
+                    muh = x[1]
+                    mul = x[2]
+                    sdh = x[3]
+                    sdl = x[4]
+                    tmp.nll = cbind((vlow-beta*mul+gamma)^2/(sdl)^2, (vhigh-beta*muh+gamma)^2/((sdh)^2))
+                    return(vlow[which.min(rowSums(tmp.nll))])
+                }                      
+            })                  
+            
+            out$NLL.allelic[i] = sum((cbind(vtot-vlow.mle, vlow.mle)-beta*mu+gamma)^2/sd^2)
+        }
+        
+        out$NLL.tot = out$NLL
+        out$NLL = out$NLL.tot + out$NLL.allelic
+        out.all = out
+        ix = vaggregate(1:nrow(out), by = list(out$group), FUN = function(x) x[order(abs(out$NLL[x]))][1])
+    }
+    else ## otherwise choose the one that gives the lowest magnitude copy number
+    {
+        out.all = out
+        ix = vaggregate(1:nrow(out), by = list(out$group), FUN = function(x) x[order(abs(out$mincn[x]), out$mincn[x]<0)][1])
+    }
+    
+    out = out[ix, , drop = FALSE]
+    out$NLL = vaggregate(out$NLL, by = list(out$group), FUN = min)
+    
+    out.all$keep = 1:nrow(out.all) %in% ix ## keep track of other ploidy group peaks for drawing purposes
+    out.all = out.all[out.all$group %in% out$group, ] ## only draw the groups in the top solution
+    
+    if (plot)
+    {
+        library(ellipse)
+        library(numDeriv)
+
+        ## xval = as.numeric(rownames(NLL))
+        ## yval = as.numeric(colnames(NLL))
+        ## f = function(x) {              
+        ##     i = x[1]; ## interpolate between closest values of NLL
+        ##     im = which(i<=xval)[1]
+        ##     ip = (i-xval[im-1])/diff(xval[c(im-1, im)]);  ## proportion of lower value to consider
+        ##     j = x[2];
+        ##     jm = which(j<=yval)[1]
+        ##     jp = (j-yval[jm-1])/diff(yval[c(jm-1, jm)]);  ## proportion of lower value to consider
+        ##     nllm = NLL[c(im-1, im), c(jm-1, jm)] ## piece of NLL matrix containing the low and high i and j matches
+        ##     nllp = cbind(c(ip, 1-ip)) %*% rbind(c(jp, 1-jp)) ## proportion of values to input into interpolation
+        ##     return(sum(-nllm*nllp))
+        ## }
+        
+        plot(out.all$purity, out.all$ploidy, pch = 19,
+             xlim = c(purity.min, purity.max), ylim = c(ploidy.min, ploidy.max), xlab = 'purity', ylab = 'ploidy', cex = 0.2, col = alpha('white', out.all$intensity))
+        
+        
+        f = function(x) -NLL[((x[1]-1) %% nrow(NLL))+1, ((x[2]-1) %% ncol(NLL))+1]
           ir = range(as.numeric(rownames(NLL)))
           jr = range(as.numeric(colnames(NLL)))
           txf = function(z) cbind(affine.map(z[,1], ir, c(1, nrow(NLL))), affine.map(z[,2], jr, c(1, ncol(NLL))))
 
           levs = c(0.95, 0.99)
-#          levs = c(1-1e-7) 
+                                        #          levs = c(1-1e-7) 
           tmp.out = out.all
           tmp.out$NLL = as.data.table(tmp.out)[, NLL := min(NLL), by = group][, NLL]
           tmp.out$intensity = affine.map(tmp.out$NLL, c(1, 0.1))
           tmp.out = tmp.out[rev(1:nrow(tmp.out)), ]
-#          tmp.out$col = brewer.master(length(levels(tmp.out$group)), 'PuRd')[as.integer(tmp.out$group)]
+                                        #          tmp.out$col = brewer.master(length(levels(tmp.out$group)), 'PuRd')[as.integer(tmp.out$group)]
           tmp.out$col = brewer.pal(length(unique(out$group))+2, 'PuRd')[match(tmp.out$group, unique(tmp.out$group))]
           tmp.out$rank = ''; ## hacky stuff to just plot ranks for the top per group solutions
           tmp.out$rank[tmp.out$keep] = match(tmp.out$group[tmp.out$keep], out$group)
 
           require(DiceKriging)
           bla = mapply(function(x, y, c, a)
+          {
+              ## grab k square from computed NLL values to krig around
+              k = 4
+              ir = pmin(nrow(NLL), pmax(1, (x-k):(x+k)))
+              jr = pmin(ncol(NLL), pmax(1, (y-k):(y+k)))
+              ij = expand.grid(ir, jr)
+              xy = expand.grid(purity.guesses[ir], ploidy.guesses[jr])
+              m = tryCatch(km(design = xy[, 1:2], response = -NLL[as.matrix(ij)]), error = function(e) NULL)                     
+              ## custom function gives best krigged interpolation in
+              ## region will be used for hessian computaiton
+              f = function(x) predict(m, newdata = data.frame(Var1 = x[1], Var2 = x[2]), type = 'UK')$mean                                          
+              for (lev in levs) ## TOFIX: MESS
               {
-                  ## grab k square from computed NLL values to krig around
-                  k = 4
-                  ir = pmin(nrow(NLL), pmax(1, (x-k):(x+k)))
-                  jr = pmin(ncol(NLL), pmax(1, (y-k):(y+k)))
-                  ij = expand.grid(ir, jr)
-                  xy = expand.grid(purity.guesses[ir], ploidy.guesses[jr])
-                  m = tryCatch(km(design = xy[, 1:2], response = -NLL[as.matrix(ij)]), error = function(e) NULL)                     
-                  ## custom function gives best krigged interpolation in
-                  ## region will be used for hessian computaiton
-                  f = function(x) predict(m, newdata = data.frame(Var1 = x[1], Var2 = x[2]), type = 'UK')$mean                                          
-                  for (lev in levs) ## TOFIX: MESS
-                      {
-                          if (!is.null(m))
-                              F = tryCatch(-hessian(f, c(purity.guesses[x], ploidy.guesses[y])), error = function(e) matrix(NA, ncol = 2, nrow = 2))
-                          else
-                              F = NA
-                          
-                          if (all(!is.na(F)))
-                              V = solve(F)
-                          else
-                              V = NA                          
-                          if (any(is.na(V)))
-                              V = diag(rep(1,2))
-                          M = cov2cor(V)
-                          XY = ellipse(M, scale = .01*c(diff(par('usr')[1:2]),diff(par('usr')[3:4])), centre = c(purity.guesses[x], ploidy.guesses[y]), level = lev)
-                          polygon(XY[,1], XY[,2], border = NA, col = alpha(c, a*affine.map(lev, c(1, 0.3))));
-                      }                                                                  
-              }, tmp.out$i, tmp.out$j, tmp.out$col, tmp.out$intensity, SIMPLIFY = FALSE)
+                  if (!is.null(m))
+                      F = tryCatch(-hessian(f, c(purity.guesses[x], ploidy.guesses[y])), error = function(e) matrix(NA, ncol = 2, nrow = 2))
+                  else
+                      F = NA
+                  
+                  if (all(!is.na(F)))
+                      V = solve(F)
+                  else
+                      V = NA                          
+                  if (any(is.na(V)))
+                      V = diag(rep(1,2))
+                  M = cov2cor(V)
+                  XY = ellipse(M, scale = .01*c(diff(par('usr')[1:2]),diff(par('usr')[3:4])), centre = c(purity.guesses[x], ploidy.guesses[y]), level = lev)
+                  polygon(XY[,1], XY[,2], border = NA, col = alpha(c, a*affine.map(lev, c(1, 0.3))));
+              }                                                                  
+          }, tmp.out$i, tmp.out$j, tmp.out$col, tmp.out$intensity, SIMPLIFY = FALSE)
           
           tmp.out = tmp.out[tmp.out$keep, ]
           text(tmp.out$purity, tmp.out$ploidy, tmp.out$rank, col = alpha('black', 0.5))
           
           tmp.out = tmp.out[rev(1:nrow(tmp.out)), ]
           legend(0, par('usr')[4]*0.98, legend = paste(tmp.out$rank, ') ', sapply(tmp.out$purity, function(x) sprintf('%0.2f',x)), ', ',
-                                            sapply(tmp.out$ploidy, function(x) sprintf('%0.2f',x)),
-                                            ' (gamma = ',sapply(tmp.out$gamma, function(x) sprintf('%0.3f',x)),
-                                            ', beta = ',sapply(tmp.out$beta, function(x) sprintf('%0.3f',x)),
-                                            ')', sep = ''), fill = tmp.out$col, cex = 0.8, yjust = 1, ncol = 1)
+                                                       sapply(tmp.out$ploidy, function(x) sprintf('%0.2f',x)),
+                                                       ' (gamma = ',sapply(tmp.out$gamma, function(x) sprintf('%0.3f',x)),
+                                                       ', beta = ',sapply(tmp.out$beta, function(x) sprintf('%0.3f',x)),
+                                                       ')', sep = ''), fill = tmp.out$col, cex = 0.8, yjust = 1, ncol = 1)
       }
 
-  out = out.all;
-  out = out[order(out$group, !out$keep, out$NLL), ]
-  out$rank = NA
-  out$rank[out$keep] = 1:sum(out$keep)
-  out$keep = out$i = out$j = NULL
-  rownames(out) = NULL
-  return(out)
+    out = out.all;
+    out = out[order(out$group, !out$keep, out$NLL), ]
+    out$rank = NA
+    out$rank[out$keep] = 1:sum(out$keep)
+    out$keep = out$i = out$j = NULL
+    rownames(out) = NULL
+    return(out)
 }
 
 ############################
@@ -9471,7 +9521,7 @@ ppgrid = function(
 #' @export
 ############################################
 rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
-  {        
+{        
     mu = values(gr)[, field]
     mu[is.infinite(mu)] = NA
     w = as.numeric(width(gr))
@@ -9481,22 +9531,22 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
     ncn = rep(2, length(mu))
     if (!is.null(field.ncn))
-      if (field.ncn %in% names(values(gr)))
-          ncn = values(gr)[, field.ncn]
+        if (field.ncn %in% names(values(gr)))
+            ncn = values(gr)[, field.ncn]
 
     ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
     
     if (is.na(gamma))
-      gamma = 2*(1-purity)/purity
+        gamma = 2*(1-purity)/purity
 
     if (is.na(beta))
-      beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-#      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
+        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+                                        #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
     
 
-   # return(beta * mu - gamma)
+                                        # return(beta * mu - gamma)
     return(beta * mu - ncn * gamma / 2)
-  }
+}
 
 
 ############################
@@ -9517,36 +9567,36 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 #' @export
 ############################
 pp2gb = function(purity = NA, ploidy = NA, mu = NA, w = NA, gamma = NA, beta = NA)
-    {                
-        if (all(is.na(mu)) & all(is.na(w)))
-            stop('mu and w should be non-empty')
-        
-        if (length(mu) != length(w))
-            stop('mu and w should match up in length')
+{                
+    if (all(is.na(mu)) & all(is.na(w)))
+        stop('mu and w should be non-empty')
+    
+    if (length(mu) != length(w))
+        stop('mu and w should match up in length')
 
-        w = as.numeric(w)
-        mu[is.infinite(mu)] = NA
-        w[is.na(mu)] = NA
-        sw = sum(w, na.rm = T)
-        mutl = sum(mu * w, na.rm = T)                
-        ncn = rep(2, length(mu))
-        ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2                
-        
-        if (is.na(gamma) & is.na(beta) & !is.na(purity) & !is.na(ploidy))
-            {
-                gamma = 2*(1-purity)/purity
-                beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-            }
-        else if (!is.na(gamma) & !is.na(beta) & is.na(purity) & is.na(ploidy))
-            {
-                purity = 2/(gamma+2)
-                v = beta * mu - ncn * gamma / 2
-                ploidy = sum(v*w, na.rm = TRUE)/sum(w, na.rm = TRUE)
-            }
-        else
-            stop('Either gamma and beta are empty OR purity and ploidy are empty')
-        return(list(purity = purity, ploidy = ploidy, gamma = gamma, beta = beta))
-  }
+    w = as.numeric(w)
+    mu[is.infinite(mu)] = NA
+    w[is.na(mu)] = NA
+    sw = sum(w, na.rm = T)
+    mutl = sum(mu * w, na.rm = T)                
+    ncn = rep(2, length(mu))
+    ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2                
+    
+    if (is.na(gamma) & is.na(beta) & !is.na(purity) & !is.na(ploidy))
+    {
+        gamma = 2*(1-purity)/purity
+        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+    }
+    else if (!is.na(gamma) & !is.na(beta) & is.na(purity) & is.na(ploidy))
+    {
+        purity = 2/(gamma+2)
+        v = beta * mu - ncn * gamma / 2
+        ploidy = sum(v*w, na.rm = TRUE)/sum(w, na.rm = TRUE)
+    }
+    else
+        stop('Either gamma and beta are empty OR purity and ploidy are empty')
+    return(list(purity = purity, ploidy = ploidy, gamma = gamma, beta = beta))
+}
 
 
 ############################
@@ -9568,28 +9618,28 @@ pp2gb = function(purity = NA, ploidy = NA, mu = NA, w = NA, gamma = NA, beta = N
 #' @export
 ############################
 abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'cn', field.ncn = 'ncn', total = 1)
-  {        
+{        
     abs = values(gr)[, field]
     w = width(gr)
     sw = sum(as.numeric(w))
 
     ncn = rep(2, length(gr))
     if (!is.null(field.ncn))
-      if (field.ncn %in% names(values(gr)))
-        ncn = values(gr)[, field.ncn]
+        if (field.ncn %in% names(values(gr)))
+            ncn = values(gr)[, field.ncn]
     
     if (is.na(gamma))
-      gamma = 2*(1-purity)/purity
+        gamma = 2*(1-purity)/purity
 
     ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
     
     if (is.na(beta))
-      beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-    #  beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * total)    
+        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+                                        #  beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * total)    
     
-#    return((abs + gamma) / beta)
+                                        #    return((abs + gamma) / beta)
     return((abs + ncn*gamma/2) / beta)
-  }
+}
 
 
 ##############################
@@ -9611,7 +9661,7 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 #' @export
 ##############################
 pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'mean', field.ncn = 'ncn', v = NULL)
-  {
+{
     mu = segstats$mean
     w = width(segstats)
     Sw = sum(as.numeric(width(segstats)))
@@ -9622,24 +9672,24 @@ pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, fie
     ncn = rep(2, length(mu))
     
     if (!is.null(field.ncn))
-      if (field.ncn %in% names(values(segstats)))
-        ncn = values(segstats)[, field.ncn]
+        if (field.ncn %in% names(values(segstats)))
+            ncn = values(segstats)[, field.ncn]
 
     ploidy_normal = sum(w * ncn, na.rm = T) / Sw  ## this will be = 2 if ncn is trivially 2
     
     if (is.na(gamma))
-      gamma = 2/alpha - 2
+        gamma = 2/alpha - 2
     
     if (is.na(beta))
-      beta = ( tau + ploidy_normal * gamma / 2 ) / m0
-      # beta = (tau + gamma)/m0
+        beta = ( tau + ploidy_normal * gamma / 2 ) / m0
+                                        # beta = (tau + gamma)/m0
 
     if (is.null(v))
-      v = round(beta*mu-gamma)
+        v = round(beta*mu-gamma)
 
     return(list(NLL = sum((v-beta*mu+ncn*gamma/2)^2/((sd)^2)), v = v))
-#    return(list(NLL = sum((v-beta*mu+gamma)^2/sd^2), v = v))
-  }
+                                        #    return(list(NLL = sum((v-beta*mu+gamma)^2/sd^2), v = v))
+}
 
 
 
@@ -9659,37 +9709,37 @@ pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, fie
 #' force.rbind = T will force concatenation via 'rbind'
 #############################################################
 munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
-  {
+{
     x = x[!sapply(x, is.null)]
     
     if (length(x)==0)
-      return(NULL)
+        return(NULL)
     
     if (!any(c(force.list, force.cbind, force.rbind)))
-      {
+    {
         if (any(sapply(x, function(y) is.null(dim(y)))))
-          force.list = T
+            force.list = T
         if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
-          force.rbind = T
+            force.rbind = T
         if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
-          force.cbind = T
-      }        
+            force.cbind = T
+    }        
     else
-      force.list = T    
-      
+        force.list = T    
+    
     if (force.list)
-      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
-                   iix = unlist(lapply(1:length(x), function(y) 1:length(x[[y]]))), 
-                   unlist(x)))
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) 1:length(x[[y]]))), 
+                     unlist(x)))
     else if (force.rbind)
-      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))), 
-                   iix = unlist(lapply(1:length(x), function(y) 1:nrow(x[[y]]))),
-                   do.call('rbind', x)))
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))), 
+                     iix = unlist(lapply(1:length(x), function(y) 1:nrow(x[[y]]))),
+                     do.call('rbind', x)))
     else if (force.cbind)
-      return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
-                     iix = unlist(lapply(1:length(x), function(y) 1:ncol(x[[y]]))),
-                   do.call('cbind', x))))
-  }
+        return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                       iix = unlist(lapply(1:length(x), function(y) 1:ncol(x[[y]]))),
+                       do.call('cbind', x))))
+}
 
 
 ############################
@@ -10967,191 +11017,211 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     {
         loose.ends = GRanges()
 
+    if (!is.null(ra))
+        this.ra = ra
+    else
+    {
         
-        if (!is.null(ra))
-            this.ra = ra
-        else
+        if (!is.null(dranger.file))
         {
+            this.dranger = read.delim(dranger.file, strings = F)
             
-                if (!is.null(dranger.file))
-                {
-                    this.dranger = read.delim(dranger.file, strings = F)
-                    
-                    if (ncol(this.dranger)<=1) ## wrong separator
-                        this.dranger = read.delim(dranger.file, sep = ',', strings = F)
-                    
-                    if (!is.null(this.dranger$strand1) & !is.null(this.dranger$strand2)) 
-                    {
-                        ## looks like snowman input flip breaks so that they are pointing away from junction
-                        this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
-                        this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
-                    }
-                    
-                    this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
-                    this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
-                    this.ra = ra_breaks(this.dranger, seqlengths = hg_seqlengths())
-                }        
-                else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
-                {        
-                    tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)              
-                    this.ra = tmp.ra$junctions
-                    loose.ends = tmp.ra$loose.ends
-                }
-                else
-                    this.ra = readRDS(ra.file)
-                }
-        ## if we don't have normal segments then coverage file will be our bible for seqlengths
-
-
-        if (is.character(cov.file))
-        {
-            if (grepl('\\.rds$', cov.file))        
-                this.cov = readRDS(cov.file)
-            else
+            if (ncol(this.dranger)<=1) ## wrong separator
+                this.dranger = read.delim(dranger.file, sep = ',', strings = F)
+            
+            if (!is.null(this.dranger$strand1) & !is.null(this.dranger$strand2)) 
             {
-                this.cov = import.ucsc(cov.file)
-                field = 'score';
+                ## looks like snowman input flip breaks so that they are pointing away from junction
+                this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
+                this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
+            }
+            
+            this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
+            this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
+            this.ra = ra_breaks(this.dranger, seqlengths = hg_seqlengths())
+        }        
+        else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
+        {        
+            tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)
+            if (length(tmp.ra)==0){
+                this.ra = gr.fix(GRangesList(), hg_seqlengths())
+                loose.ends = GRanges(seqlengths = hg_seqlengths())
+            } else {
+                this.ra = tmp.ra$junctions
+                loose.ends = tmp.ra$loose.ends
             }
         }
         else
-            this.cov = cov.file
-              
-      ## now make sure we have the "best" seqlengths
-      .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
+            this.ra = readRDS(ra.file)
+    }
+    ## if we don't have normal segments then coverage file will be our bible for seqlengths
 
-      
-      if (is.null(force.seqlengths))
-          sl = .fixsl(seqlengths(this.ra), this.cov)
-      else
-          sl = .fixsl(force.seqlengths, this.cov)
-#      sl = .fixsl(seqlengths(this.ra), this.cov)
 
-      if (!is.null(nseg.file))
-      {
-          if (is.character(nseg.file))              
-              nseg = readRDS(nseg.file)
-          else
-              nseg = nseg.file          
-          sl = .fixsl(sl, nseg)
-      }
-      
-        ## make sure all sl's are equiv
-        if (is.character(seg.file))
-            this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+    if (is.character(cov.file))
+    {
+        if (grepl('\\.rds$', cov.file))        
+            this.cov = readRDS(cov.file)
         else
-            this.seg = seg.file
+        {
+            this.cov = import.ucsc(cov.file)
+            field = 'score';
+        }
+    }
+    else
+        this.cov = cov.file
+    
+    ## now make sure we have the "best" seqlengths
+    .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
+
+    if (is.null(force.seqlengths))
+        sl = .fixsl(seqlengths(this.ra), this.cov)
+    else
+        sl = .fixsl(force.seqlengths, this.cov)
+                                        #      sl = .fixsl(seqlengths(this.ra), this.cov)
+
+    if (!is.null(nseg.file))
+    {
+        if (is.character(nseg.file))              
+            nseg = readRDS(nseg.file)
+        else
+            nseg = nseg.file          
+        sl = .fixsl(sl, nseg)
+    }
+    
+    ## make sure all sl's are equiv
+    if (is.character(seg.file))
+        this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+    else
+        this.seg = seg.file
+    
+    if (length(loose.ends>0))
+    {
+        cat('Adding loose ends from vcf file to seg file')
+        this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))              
+    }
+    
+    this.ra = gr.fix(this.ra, sl, drop = T)
+
+    this.kag = karyograph(this.ra, this.seg)
+
+    if (is.null(nseg.file))
+        this.kag$segstats$ncn = 2
+    
+    cat('Computing segstats\n')
+    hets.gr = NULL
+
+    if (!is.null(het.file))
+    {
+        hets = fread(het.file)
+        cat('loaded hets\n')
+        hets.gr = seg2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
+    }
+
+
+
+
+
+
+
+    if (length(hets.gr)>0){
+        ## pretend we don't have hets at all
         
-      if (length(loose.ends>0))
-          {
-              cat('Adding loose ends from vcf file to seg file')
-              this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))              
-          }
-      
-      this.ra = gr.fix(this.ra, sl, drop = T)
-      this.kag = karyograph(this.ra, this.seg)
-
-      if (is.null(nseg.file))
-          this.kag$segstats$ncn = 2
-      
-      cat('Computing segstats\n')
-
-      if (!is.null(het.file))
-          {
-              hets = fread(het.file)
-              cat('loaded hets\n')
-              hets.gr = seg2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
-              this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'), mc.cores = mc.cores)
-          }
-      else
-          this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
-      
-      this.kag$segstats$ncn = 2
-            
-      if (!is.null(nseg.file))
-          if (is.null(nseg$cn))        
-              stop('Normal seg file does not have "cn" met data field')
-          else
-              {
-                  this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
-                  this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
-              }
-          
-      
-      ## 6/15 temp fix for sd on short segments, which we overestimate for now
-      cov.thresh = pmin(1e5, median(width(this.cov)))
-      cat('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
-      fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'), mc.cores = mc.cores)
+    }
+    else
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
+    
+    this.kag$segstats$ncn = 2
+    
+    if (!is.null(nseg.file))
+        if (is.null(nseg$cn))        
+            stop('Normal seg file does not have "cn" met data field')
+        else
+        {
+            this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
+            this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
+        }
+    
+    
+    ## 6/15 temp fix for sd on short segments, which we overestimate for now
+    cov.thresh = pmin(1e5, median(width(this.cov)))
+    cat('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
+    fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
                                         #    this.kag$segstats$mean[make.na] = NA
-      this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
-      
-#'      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
+    this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
+    
+    #'      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
 
-      ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
-      pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
-      if (!is.null(het.file))
-          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores,
-              purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-              ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
-      else
-          pp = ppgrid(ss.tmp, verbose = T, plot = T, mc.cores = mc.cores,
-              purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-              ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
-      
-      dev.off()
-      
-      saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
-      
-      this.kag$purity = pp[1,]$purity
-      this.kag$ploidy = pp[1,]$ploidy
-      this.kag$beta = pp[1,]$beta
-      this.kag$gamma = pp[1,]$gamma
-      this.kag$segstats$cn = rel2abs(this.kag$segstats, beta = this.kag$beta, gamma = this.kag$gamma, field = 'mean')
-      
-      if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
-          pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
-      tmp.kag = this.kag
-      tmp.kag$segstats = tmp.kag$segstats[which(tmp.kag$segstats$ncn == 2 & !fix.sd & strand(tmp.kag$segstats)=='+')]
-      if (length(tmp.kag$segstats)<10)
-          warning('number of segments used for purity ploidy extremely low .. check coverage data')
-      .plot_ppfit(tmp.kag)            
-      dev.off()
+    ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
+    pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
 
-      y1 = 10
+    if (!is.null(het.file))
+        pp = ppgrid(ss.tmp, verbose = T, plot = F, mc.cores = mc.cores,
+                    purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+                    ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
+    else
+        pp = ppgrid(ss.tmp, verbose = T, plot = F, mc.cores = mc.cores,
+                    purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+                    ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
+    
+    dev.off()
+    
+    saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
+    
+    this.kag$purity = pp[1,]$purity
+    this.kag$ploidy = pp[1,]$ploidy
+    this.kag$beta = pp[1,]$beta
+    this.kag$gamma = pp[1,]$gamma
+    this.kag$segstats$cn = rel2abs(this.kag$segstats, beta = this.kag$beta, gamma = this.kag$gamma, field = 'mean')
+    
+    if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+        pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
+    tmp.kag = this.kag
 
-      if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
-          pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
-      
-      plot(c(gTrack(gr.fix(sample(this.cov, 5e4), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
-             gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
-      dev.off()
+    tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] ) 
+    if ( class( tryres ) == "try-error" ) browser()
+    
+    if (length(tmp.kag$segstats)<10)
+        warning('number of segments used for purity ploidy extremely low .. check coverage data')
+    .plot_ppfit(tmp.kag)            
+    dev.off()
 
-      saveRDS(this.kag, out.file)
-  }
+    y1 = 10
+
+    if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+        pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
+    
+    plot(c(gTrack(gr.fix(sample(this.cov, 5e4), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
+           gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
+    dev.off()
+
+    saveRDS(this.kag, out.file)
+}
 
 ## diagnostic function used by karyograph_stub
 .plot_ppfit = function(kag, xlim = c(-Inf, Inf))
-    {
-        tmp = kag$segstats  ## only plot seg that we haven't fixed SD for and that have normal cn 1, to minimize confusion
-        dupval = sort(table(tmp$mean), decreasing = TRUE)[1]
-        if (!is.na(dupval))
-            if (dupval>5)
-                tmp = tmp[-which(as.character(tmp$mean) == names(dupval))]
+{
+    tmp = kag$segstats  ## only plot seg that we haven't fixed SD for and that have normal cn 1, to minimize confusion
+    dupval = sort(table(tmp$mean), decreasing = TRUE)[1]
+    if (!is.na(dupval))
+        if (dupval>5)
+            tmp = tmp[-which(as.character(tmp$mean) == names(dupval))]
 
-        if (length(tmp)==0)
-            return()
-        segsamp = pmin(sample(tmp$mean, 1e6, replace = T, prob = width(tmp)), xlim[2])
-        hist(pmax(xlim[1], pmin(xlim[2], segsamp)), 1000, xlab = 'Segment intensity', main = sprintf('Purity: %s Ploidy: %s Beta: %s Gamma: %s', kag$purity, kag$ploidy, round(kag$beta,2), round(kag$gamma,2)), xlim = c(pmax(0, xlim[1]), pmin(xlim[2], max(segsamp, na.rm = T))))
-        abline(v = 1/kag$beta*(0:1000) + kag$gamma/kag$beta, col = alpha('red', 0.3), lty = c(4, rep(2, 1000)))
-    }
+    if (length(tmp)==0)
+        return()
+    segsamp = pmin(sample(tmp$mean, 1e6, replace = T, prob = width(tmp)), xlim[2])
+    hist(pmax(xlim[1], pmin(xlim[2], segsamp)), 1000, xlab = 'Segment intensity', main = sprintf('Purity: %s Ploidy: %s Beta: %s Gamma: %s', kag$purity, kag$ploidy, round(kag$beta,2), round(kag$gamma,2)), xlim = c(pmax(0, xlim[1]), pmin(xlim[2], max(segsamp, na.rm = T))))
+    abline(v = 1/kag$beta*(0:1000) + kag$gamma/kag$beta, col = alpha('red', 0.3), lty = c(4, rep(2, 1000)))
+}
 
 #' run cbs
 cbs_stub = function(cov.file, out.file, field = 'ratio', alpha = 1e-5)
-  {
+{
     require(DNAcopy)
     ## resegment from scratch, using cbs, and recompute karyoMIP w out edge cons,
 
     cat('reading', cov.file, '\n')
- #   this.cov = seg2gr(read.delim(cov.file, strings = F), seqlengths = hg_seqlengths())
+                                        #   this.cov = seg2gr(read.delim(cov.file, strings = F), seqlengths = hg_seqlengths())
     this.cov = readRDS(cov.file)
     ix = which(!is.na(values(this.cov)[, field]))
     cat('sending ', length(ix), ' segments\n')
@@ -11162,112 +11232,112 @@ cbs_stub = function(cov.file, out.file, field = 'ratio', alpha = 1e-5)
     out = seg2gr(print(seg))
     cat(length(out), ' segments produced\n')
     saveRDS(out, out.file)    
-  }
+}
 
 #' run ramip
 ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
-    purity.min = NA, purity.max = NA,
-    ploidy.min = NA, ploidy.max = NA, 
-  edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
-  ab.force = NULL ## indices of aberrant junctions to force include into the solution
-  )
-  {
+                      purity.min = NA, purity.max = NA,
+                      ploidy.min = NA, ploidy.max = NA, 
+                      edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
+                      ab.force = NULL ## indices of aberrant junctions to force include into the solution
+                      )
+{
     cat('Starting', kag.file, '\n')
 
     this.kag = readRDS(kag.file)    
 
     if (is.null(this.kag$gamma) | is.null(this.kag$beta))
-      {
+    {
         pp = ppgrid(this.kag$segstats, verbose = T, plot = T, purity.min = purity.min, purity.max = purity.max, ploidy.min = ploidy.min, ploidy.max = ploidy.max)
         this.kag$beta = pp[1,]$beta
         this.kag$gamma = pp[1,]$gamma
     }
 
     if (!is.na(gamma))
-        {
-            cat(sprintf('Overriding gamma with %s\n', gamma))
-            this.kag$gamma = gamma
-        }
+    {
+        cat(sprintf('Overriding gamma with %s\n', gamma))
+        this.kag$gamma = gamma
+    }
 
     if (!is.na(beta))
-        {
-            cat(sprintf('Overriding beta with %s\n', beta))
-            this.kag$beta = beta
-        }
+    {
+        cat(sprintf('Overriding beta with %s\n', beta))
+        this.kag$beta = beta
+    }
     
     if (customparams)
-      {
+    {
         max.threads = Sys.getenv("LSB_DJOB_NUMPROC")
         if (nchar(max.threads) == 0)
-          max.threads = Inf
+            max.threads = Inf
         else
-          max.threads = as.numeric(max.threads)
+            max.threads = as.numeric(max.threads)
         max.threads = min(max.threads, mc.cores)
         if (is.infinite(max.threads))
-          max.threads = 0 
+            max.threads = 0 
 
         param.file = paste(out.file, '.prm', sep = '')
         .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
         print(Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
-      }
+    }
     
     adj.nudge = this.kag$adj*0;
     adj.nudge[this.kag$ab.edges[,1:2,1]] = 1*edge.nudge ## if edge.nudge is length ab.edges, then corresponding edges will be nudged
 
     adj.lb = NULL
     if (!is.null(ab.force))
-      {
-          print(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
-          adj.lb = this.kag$adj*0
-          adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
-          adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
-      }
-    
+    {
+        print(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
+        adj.lb = this.kag$adj*0
+        adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
+        adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
+    }
+
     ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.lb = adj.lb , adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = T)
     saveRDS(ra.sol, out.file)
 
     if (customparams)
-      {
+    {
         system(paste('rm', param.file))
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')    
         cat('Finished', kag.file, '\n')
-      }
-  }
+    }
+}
 
 #' run super-enhancer analysis
 #' 
 superenhancer_stub = function(rg.span.file, se.bed.file, this.ra.file, out.file, verbose = T, max.dist = 1e6)  
-  {
+{
     library(RColorBrewer)
     rg.span = readRDS(rg.span.file)
     se.bed = readRDS(se.bed.file)
     this.ra = ra_breaks(read.delim(this.ra.file, strings = F))
     px = proximity(rg.span, se.bed, this.ra, verbose = T, max.dist=1e6)
     saveRDS(px, out.file)
-  }
+}
 
 #' run gene-gene px analysis
 #' 
 genepx_stub = function(rg.span.file, this.ra.file, out.file, verbose = T, max.dist = 1e6)  
-  {
+{
     rg.span = readRDS(rg.span.file)
     this.ra = ra_breaks(read.delim(this.ra.file, strings = F))
     px = proximity(rg.span, rg.span, this.ra, verbose = T, max.dist=1e6)
     saveRDS(px, out.file)
-  }
+}
 
 #' run gene-chromhmm px analysis
 #' 
 chromhmmpx_stub = function(rg.span.file, chromhmm.file, this.ra.file, out.file, verbose = T, max.dist = 1e6)
-  {
+{
     rg.span = readRDS(rg.span.file)
     chromhmm = readRDS(chromhmm.file)
     this.ra = ra_breaks(read.delim(this.ra.file, strings = F))
     px = proximity(rg.span, chromhmm, this.ra, verbose = T, max.dist=1e6)
     saveRDS(px, out.file)
-  }
+}
 
 
 #' gr.tile.map
@@ -11285,9 +11355,9 @@ chromhmmpx_stub = function(rg.span.file, chromhmm.file, this.ra.file, out.file, 
 #' @export
 ############################################
 gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
-    {
-        ix.q = order(query)
-        ix.s = order(subject)
+{
+    ix.q = order(query)
+    ix.s = order(subject)
 
         q.chr = as.character(seqnames(query))[ix.q]
         s.chr = as.character(seqnames(subject))[ix.s]
