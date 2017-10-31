@@ -4,30 +4,16 @@ language: r
 sudo: required 
 
 before_install:
-  - curl -OL https://raw.githubusercontent.com/metacran/r-builder/master/pkg-build.sh
-  - chmod 755 pkg-build.sh
-  - ./pkg-build.sh bootstrap
-  - ./install_bioc.sh 
-
-r_github_packages:
-  - jimhester/covr 
-
+  - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+  - chmod 755 ./travis-tool.sh
+  - ./travis-tool.sh bootstrap
 install:
-  - ./pkg-build.sh install_deps
-  - ./travis-tool.sh install_bioc GenomicRanges
-  - ./travis-tool.sh install_bioc DNACopy
-  - ./travis-tool.sh install_bioc rtracklayer
-  - ./travis-tool.sh install_github mskilab/gUtils
-  - ./travis-tool.sh install_github mskilab/gTrack
-
-script:
-  - ./pkg-build.sh run_tests
+  - ./travis-tool.sh install_bioc_deps
+  - ./travis-tool.sh install_deps
+script: ./travis-tool.sh run_tests
 
 after_failure:
-  - ./pkg-build.sh dump_logs
-
-after_success:
-  - Rscript -e 'covr::coveralls()'
+  - ./travis-tool.sh dump_logs
 
 notifications:
   email:
