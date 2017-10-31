@@ -2469,7 +2469,7 @@ jbaMIP.process = function(
 
     if (is.null(sol$segstats$eslack.out))
       sol$segstats$eslack.out = sol$segstats$slack.out
-    
+
     ed.ij = which(sol$adj!=0, arr.ind = T)
 
     ## B is vertices x edges (i.e. signed incidence matrix)
@@ -2513,7 +2513,7 @@ jbaMIP.process = function(
       nrow(B) + length(ix.eslack.out) +  match(recip.ix[ix.eslack.out], ix.eslack.in),
       nrow(B) + match(recip.ix[ix.eslack.in], ix.eslack.out)
       )
-      
+
     ## match matrix against its reverse complement (i.e. rotation) to find reciprocal edges
     erecip.ix = mmatch(t(Bs), t(-Bs[recip.ix, ])) ## maps edges to their reciprocals
 
@@ -2522,7 +2522,9 @@ jbaMIP.process = function(
       erecip.ix[tmp.na] = tmp.na[mmatch(t(Bs[1:nrow(Bs), tmp.na]), t(Bs[recip.ix,tmp.na, drop = F]))]
     
     ## now use this mapping to define edge equivalence classes
-    rmat = t(apply(cbind(erecip.ix, erecip.ix[erecip.ix]), 1, sort)) ## length(erecip.ix) x 2 matrix of edge ids and their reciprocal, sorted
+##    rmat = t(apply(cbind(erecip.ix, erecip.ix[erecip.ix]), 1, sort)) ## length(erecip.ix) x 2 matrix of edge ids and their reciprocal, sorted
+
+    rmat = cbind(pmin(erecip.ix, erecip.ix[erecip.ix]), pmax(erecip.ix, erecip.ix[erecip.ix]))
     
     ## eclass will map length(erecip.ix) edges to length(erecip.ix)/2 edge equivalence class ids
     eclass = mmatch(rmat, rmat[!duplicated(rmat), ])
@@ -3869,7 +3871,9 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
   eclass = 1:length(e), # edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together,
                         # each class can have at most 2 members
   kclass = NULL,
-  prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype 
+  prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype
+  mprior = NULL, # matrix prior which should be a binary matrix of m x k, eg mapping contigs to their read / barcode support
+                 # will result in the addition of a quadratic objective in addition to the complexity penalty 
   cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
                 # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
                 # otherwise complex karyotypes may be favored
@@ -3889,12 +3893,12 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     n = max(M.ix);
     
     # add big M constraints
-    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is infinity if indicator is positive 
+    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is "infinity" if indicator is positive 
     Amub = Zero[1:length(M.ix), ]
     Amub[cbind(1:length(M.ix), v.ix)] = 1
     Amub[cbind(1:length(M.ix), M.ix)] = -M
     
-    Amlb = Zero[1:length(M.ix), ] # lower bound > 0 if indicator is positive 
+    Amlb = Zero[1:length(M.ix), ] # lower bound a little > 0 if indicator is positive 
     Amlb[cbind(1:length(M.ix), v.ix)] = 1
     Amlb[cbind(1:length(M.ix), M.ix)] = -0.1
 
@@ -3918,10 +3922,58 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     b = c(e, rep(0, nrow(Amlb)*2), rep(0, nrow(Ac)));
     sense = c(rep('E', nrow(K)), rep('L', nrow(Amlb)), rep('G', nrow(Amlb)), rep('E', nrow(Ac)))
     vtype = c(rep('I', length(v.ix)), rep('B', length(M.ix)))
-
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
-    
-    sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+
+    if (is.null(mprior))
+       sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+    else
+    {
+      if (!is.matrix(mprior))
+        stop('mprior must be matrix')
+
+      if (ncol(mprior) != ncol(K))
+        stop('mprior must be matrix with as many columns as there are walks')
+
+      m = nrow(mprior)
+      message('Adding mprior to karyoMIP')
+
+      ## column cat matrices with blank Zero matrix on left, with
+      ## constraints acting on binary variables, then identity matrix on right to capture
+      ## the new "barcode residual" variables and their associated indicator variables
+
+      ## barcode constraints + 2*m additional variabes
+      Ap = cbind(Zero[rep(1, nrow(mprior)), rep(1, length(M.ix))], sign(mprior), -diag(rep(1, nrow(mprior))), 0*diag(rep(1, nrow(mprior))))
+      prix = n + 1:m ## indices of prior residuals
+      iprix = n + m + 1:m ## indices of indicators of prior residuals
+      pb = rep(0, nrow(mprior))
+      psense = rep('E', nrow(mprior))
+
+      Mplb = Mpub = 0*Ap ## upper and lower bounds for indictors
+      Mpub[cbind(1:length(prix), prix)] = 1
+      Mpub[cbind(1:length(prix), iprix)] = -M
+      Mplb[cbind(1:length(prix), prix)] = 1
+      Mplb[cbind(1:length(prix), iprix)] = -0.1
+      pmb = rep(0, 2*nrow(Mpub))
+      pmsense = c(rep('L', nrow(Mpub)), rep('G', nrow(Mplb)))
+      
+      ## define additional variables
+      pvtype = c(rep('C', nrow(mprior)), rep('B', nrow(mprior)))
+
+      ## objective function weighs the rows of mprior (barcodes) according to their max weight
+      ## so user can weigh importance of individual barcodes
+      ## or tune the overall importance of barcodes vs parsimony
+      pcvec = c(rep(0, m), apply(mprior, 1, max)) 
+
+      A = rBind(cBind(A, sparseMatrix(1, 1, x = 0, dims = c(nrow(A), 2*m))), Ap, Mpub, Mplb)
+      b = c(b, pb, pmb)
+      sense = c(sense, psense, pmsense)
+      vtype = c(vtype, pvtype)
+      cvec = c(cvec, pcvec)      
+      
+      message('Solving optimization with additional ', m, ' matrix prior terms')      
+
+      sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+    }
     
     if (!is.null(sol$xopt))
       sol = list(sol)
@@ -3968,7 +4020,7 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
   contigs = which(sol$kcn!=0)
   c1 =  contigs[!duplicated(sol$kclass[contigs])]
   c2 = setdiff(contigs, c1)
-  c2 = c2[match(sol$kclass[c2], sol$kclass[c1])]
+  c2 = c2[match(sol$kclass[c1], sol$kclass[c2])]
   contigs = c1
   contigs2 = c2
   
@@ -5446,7 +5498,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
 #' @param gwalks grangeslist of walks (e.g.outputted from jabba.gwalks)
 #' @param pad how much bp neighboring material around each kidnapped string to include in outputs
 #' @param min.ab minimal bp distance a junction needs to be considered aberrant (e.g. to exclude very local deletions)
-#' @param min.run how many aberrant junctions to  require in the outputted kidnapped fragments 
+#' @param min.run how many aberrant junctions to  require in the outputted kidnapped fragments
+#' @export
 #' @author Marcin Imielinski
 jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 {
@@ -5458,8 +5511,19 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
                           start[-1]-end[-length(end)],
                           start[-length(end)]-end[-1]))
                  , Inf), by = grl.ix]
+    gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
+                   ifelse(strand[-1]=='+',
+                          start[-1]-end[-length(end)],
+                          start[-length(end)]-end[-1]))
+                 , Inf), by = grl.ix]
+    
+    
+    gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
+    gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
+       by = grl.ix]
 
-    gw[dist<min.ab & dist>0, ab.id := NA]
+    ## get rid of little dels
+    gw[which(dist<min.ab & dist>0), ab.id := NA]
 
     gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1],
                            start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
@@ -5478,7 +5542,8 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 
     if (nrow(kidnapped) == 0)
         return(GRangesList())
-    
+
+
     ## expand chunks back out
     kidnapped[, first := (1:length(start))==1, by = .(runlab)]
     kidnapped[, last := (1:length(start))==length(start), by = .(runlab)]
@@ -5489,6 +5554,8 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
     
     kidnapped = gw[ix, ][!is.na(start),]
     kidnapped[, frag.iid := 1:length(grl.iix), by = frag.id]
+    kidnapped[, frag.pos := cumsum(width), by = frag.id]
+
     kidnapped[, first := (1:length(grl.iix)) == 1, by = runlab]
     kidnapped[, last := (1:length(grl.iix)) == length(grl.iix), by = runlab]
     
@@ -5501,13 +5568,65 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 
     setkey(kidnapped, frag.id)
 
-    walks.kn = split(gr.kn[, c('ab.id','grl.iix', 'cn', 'cn.1')], gr.kn$runlab)
+    walks.kn = split(gr.kn[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.kn$runlab)
 
     kidnapped$runlab = as.character(kidnapped$runlab)
     setkey(kidnapped, 'runlab')    
     values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1], 
-                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])    
+                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])
     return(walks.kn)
+}
+
+
+#' @name anno.hops
+#' @title anno.hops
+#' @description
+#'
+#' Adds simple annotations to GRangesList of walks including
+#' distance along each reference fragment and distance
+#' between "hops"
+#' 
+#' @export
+#' @param walks walks to annotate
+#' 
+#' @author Marcin Imielinski
+anno.hop = function(walks)
+{
+  gw = gr2dt(grl.unlist(walks))
+  gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
+  gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
+                        (strand[-1] != strand[-length(strand)]), Inf,
+                 ifelse(strand[-1]=='+',
+                        start[-1]-end[-length(end)],
+                        start[-length(end)]-end[-1]))
+               , Inf), by = grl.ix]
+
+  gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
+                          ifelse(strand[-1]=='+',
+                                 start[-1]-end[-length(end)],
+                                 start[-length(end)]-end[-1]))
+                        , Inf), by = grl.ix]
+
+  gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
+  gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
+     by = grl.ix]
+
+  gw[, ":="(frag.id = paste(grl.ix, ab.chunk), 
+            frag.iid = 1:length(grl.ix),
+            frag.pos = cumsum(width)
+            ), by = .(ab.chunk, grl.ix)]
+
+  gr.out = dt2gr(gw)
+  gr.out$width = NULL
+
+  setkey(gw, frag.id)
+
+  grl.out = split(gr.out[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.out$grl.ix)[as.character(1:length(walks))]
+
+  names(grl.out) = names(walks)
+  values(grl.out) = values(walks)
+
+    return(grl.out)
 }
 
 ####################################################
@@ -5610,11 +5729,11 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
       G = graph.adjacency(tmp.adj!=0)      
     }
 
+  if (verbose)
+    message(paste('Processing JaBbA'))
+
   h = jbaMIP.process(sol)
   
-  if (verbose)
-    cat(paste('Finished processing JaBbA, getting ready to construct walks\n'))
-    
   if (!is.null(genes))
     td.rg = track.gencode(genes = genes, height = 3)
 
@@ -5678,7 +5797,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
       out = mclapply(1:length(loci), function(i)
           {
-              label = lnames[i]
+            label = lnames[i]
+            mprior = NULL
               outfile.rds = sprintf('%s/%s.rds', outdir, label)
               outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
               outfile.txt = sprintf('%s/%s.txt', outdir, label)
@@ -5702,14 +5822,35 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                       Bc = loci[[i]]$Bc
                       vix = loci[[i]]$vix
                       prior = rep(1, ncol(K))
+
+                      if (is.matrix(loci[[i]]$mprior))
+                      {
+                        if (verbose)
+                          cat(paste('Adding a matrix prior!!!!!!\n'))
+
+                        ## initialize matrix 
+                        mprior = array(0, dim = c(nrow(loci[[i]]$mprior), ncol(K)))
+                        loci
+                        mprior[, values(loci[[i]]$allpaths.og)$kix] = loci[[i]]$mprior
+                        mprior[, values(loci[[i]]$allpaths.og)$kix2] = loci[[i]]$mprior
+                        colnames(mprior) = 1:ncol(mprior)
+                        colnames(mprior)[values(loci[[i]]$allpaths.og)$kix] = as.character(1:ncol(mprior))
+                        colnames(mprior)[values(loci[[i]]$allpaths.og)$kix2] = as.character(-(1:ncol(mprior)))
+                      }
+
                       if (!is.null(loci[[i]]$prior))
-                          prior[c(values(loci[[i]]$allpaths.og)$kix,values(loci[[i]]$allpaths.og)$kix2)]  = loci[[i]]$prior
+                      {
+                        if (verbose)
+                          cat(paste('Adding a prior!!!!!!\n'))
+                        prior[c(values(loci[[i]]$allpaths.og)$kix,values(loci[[i]]$allpaths.og)$kix2)]  = loci[[i]]$prior
+                      }
                       loci[[i]] = loci[[i]]$win
                   }
-          
-          is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
-          karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior)
-          kag.sol = karyo.sol[[1]]
+              
+              is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
+              
+              karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior, mprior = mprior)
+              kag.sol = karyo.sol[[1]]
           p = karyoMIP.to.path(kag.sol, K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores))
           values(p$grl)$cn = p$cn
           values(p$grl)$is.cyc = p$is.cyc
@@ -7313,7 +7454,28 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #' Low level utility function to match rows of matrix A to matrix B
 #'
 ######################################################
-mmatch = function(A, B, dir = 1)
+mmatch = function(A, B, dir = 1, default.value = 0)
+{
+  nzix = which(A!=default.value, arr.ind = TRUE)
+  Adt = as.data.table(nzix)[, v := A[nzix]]
+  if (dir == 2)
+    setnames(Adt, c('row', 'col'), c('col', 'row'))
+  sA = Adt[, paste(col, v, collapse = ' '), by = row]
+  setkey(sA, row)
+  
+  nzix = which(B!=default.value, arr.ind = TRUE)
+  Bdt = as.data.table(nzix)[, v := B[nzix]]
+  if (dir == 2)
+    setnames(Bdt, c('row', 'col'), c('col', 'row'))
+  sB = Bdt[, paste(col, v, collapse = ' '), by = row]      
+  setkey(sB, V1)
+
+  ix = sB[.(sA[.(1:nrow(A)), ]$V1), unname(row)]
+
+  return(ix)
+}
+
+mmatch.og = function(A, B, dir = 1)
   {
     SEP = '|';
 
@@ -7372,6 +7534,7 @@ mmatch = function(A, B, dir = 1)
         
     return(match(Atxt, Btxt))
   }
+
 
 #################################################
 #' adj2inc
@@ -7860,8 +8023,8 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     if (any(nix <<- is.na(gr$node.end)))
         gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tip]))]
     
-    if (any(nix <<- is.na(gr$node.end)))
-        gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tip]))]
+    if (any(nix <<- is.na(gr$node.end.n)))
+      gr$node.end.n[nix] = tin[nearest(gr.start(gr[nix],2), gr.start(kg$tile[tin]))]
 
     if (any(nix <<- is.na(gr$node.start.n)))
         gr$node.start.n[nix] = tin[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tin]))]
@@ -8019,11 +8182,14 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     }, sum$i, sum$j, 1:nrow(sum), SIMPLIFY = F, mc.cores = mc.cores)
 
 #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
-    sum$paths = sum.paths
+    sum$paths = lapply(sum$paths, as.numeric)
     sum$ab.edges = lapply(sum.paths, function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
     
-    return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
+    return(list(sum = as.data.table(sum), rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
   }
+
+
+
 
 
 ########################################
@@ -10281,14 +10447,24 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                   }
               else if (grepl('(vcf$)|(vcf.gz$)', rafile))
                   {
-                      library(VariantAnnotation)
-                      
-                      vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
-                      if (!('SVTYPE' %in% names(info(vcf)))) {
-                        warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-                          return(GRangesList());
+                    library(VariantAnnotation)
+
+                    if (grepl('gz$', rafile))
+                      p = pipe(paste('zcat', rafile, ' | grep -P "\\#\\#contig"'))
+                    else
+                      p = pipe(paste('grep -P "\\#\\#contig"', rafile))
+                    header = readLines(p)
+                    vcf_sl= fread(paste(gsub("[<>]", "", gsub("\\,length\\=", " ", gsub('.*contig=<ID=', '', header))), collapse = '\n'))[ , V2 := max(V2), by = V1][, structure(V2, names = V1)]
+                    vcf = readVcf(rafile, Seqinfo(seqnames = names(vcf_sl), seqlengths = vcf_sl))
+                    
+                    #if (!is.null(seqlengths))
+                    #  vcf = gr.fix(vcf, seqlengths, drop = TRUE)
+                    
+                    if (!('SVTYPE' %in% names(info(vcf)))) {
+                      warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+                      return(GRangesList());
                     }
-                      
+                    
                       ## vgr = rowData(vcf) ## parse BND format                      
                       vgr = read_vcf(rafile, swap.header = swap.header)
                       
@@ -10365,11 +10541,15 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                       vgr.pair = vgr[pix]
 
                       if (length(vgr.pair)==0)
-                          stop('No mates found despite nonzero number of BND rows in VCF')
+                        stop('No mates found despite nonzero number of BND rows in VCF')
+
                       vgr.pair$mix = match(vgr.pair$mix, pix)
                       vix = which(1:length(vgr.pair)<vgr.pair$mix )
                       vgr.pair1 = vgr.pair[vix]
                       vgr.pair2 = vgr.pair[vgr.pair1$mix]
+
+                      if (length(vgr.pair1)==0 | length(vgr.pair2)==0)
+                        stop('No mates found despite nonzero number of BND rows in VCF')
 
                       ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
                       
