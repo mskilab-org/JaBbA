@@ -9,6 +9,10 @@ before_install:
   - ./travis-tool.sh bootstrap
 install:
   - ./travis-tool.sh install_bioc_deps
+  - ./travis-tool.sh install_bioc VariantAnnotation
+  - ./travis-tool.sh install_bioc DNACopy
+  - ./travis-tool.sh install_github mskilab/gUtils
+  - ./travis-tool.sh install_github mskilab/gTrack
   - ./travis-tool.sh install_deps
 script: ./travis-tool.sh run_tests
 
