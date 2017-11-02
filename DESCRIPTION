@@ -2,7 +2,8 @@ Package: JaBbA
 Title: Resconstruct Rearrangment Graphs from Cancer Whole Genome Sequencing
 Version: 0.0.0.9000
 Authors@R: person("Marcin", "Imielinski", , "mimielinski@nygenome.org", role = c("aut", "cre"))
-Description: Reconstruct rearrangement graphs from cancer whole genome sequencing
+Description:
+JaBbA simultaneously infers integer copy numbers for genomic segments and their connections based on the read depth and the graph structure defined by the structural variations identified from WGS data. Two essential inputs are 1) a high-density read depth ratio between tumor and normal samples (we also have guidelines for the cases lacking paired normal sequencing) and 2) the putative somatic structural variations. The output is a somatic rearrangement graph representing the integer copy numbers of DNA segments and their connections.
 Depends:
     R (>= 3.1.1),
     Matrix,
