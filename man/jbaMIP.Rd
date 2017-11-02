@@ -13,10 +13,10 @@ jbaMIP(adj, segstats, beta = NA, gamma = NA, field.ncn = "ncn",
   purity.prior.strength = 1, purity.prior = c(purity.prior.mean,
   purity.prior.sd), cn.fix = rep(NA, length(segstats)), cn.lb = cn.fix,
   cn.ub = cn.fix, loose.ends = c(), adj.lb = 0 * adj, adj.nudge = 0 *
-  adj, ecn.out.ub = rep(NA, length(segstats)), ecn.in.ub = rep(NA,
-  length(segstats)), gurobi = F, nsolutions = 1, verbose = F, debug = F,
-  mc.cores = 1, ignore.edge = FALSE, ignore.cons = TRUE,
-  edge.slack = TRUE, slack.prior = 1, ...)
+  adj, na.node.nudge = TRUE, ecn.out.ub = rep(NA, length(segstats)),
+  ecn.in.ub = rep(NA, length(segstats)), gurobi = F, nsolutions = 1,
+  verbose = F, debug = F, mc.cores = 1, ignore.edge = FALSE,
+  ignore.cons = TRUE, edge.slack = TRUE, slack.prior = 1, ...)
 }
 \arguments{
 \item{adj}{n x n adjacency matrix interpreted as binary (this is the $adj output of karyograph)}
