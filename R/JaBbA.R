@@ -1897,8 +1897,14 @@ jbaMIP = function(
           model$start[gamma.ix] = gamma;
           model$start[is.infinite(model$start)] = NA;
         }
+    
+      ## gurobi R API:
+      ## gurobi(model, params=NULL)
+      ## both `model` and `params` are list variables
+      ## -- model:  the optimization model to be solved
+      ## -- params: set of Gurobi parameters to be modified during the solution process
       
-      sol = gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
+      sol = gurobi::gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
       sol$xopt = sol$x;
     }
   else
