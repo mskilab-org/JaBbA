@@ -3905,7 +3905,9 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
   eclass = 1:length(e), # edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together,
                         # each class can have at most 2 members
   kclass = NULL,
-  prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype 
+  prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype
+  mprior = NULL, # matrix prior which should be a binary matrix of m x k, eg mapping contigs to their read / barcode support
+                 # will result in the addition of a quadratic objective in addition to the complexity penalty 
   cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
                 # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
                 # otherwise complex karyotypes may be favored
@@ -3925,12 +3927,12 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     n = max(M.ix);
     
     # add big M constraints
-    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is infinity if indicator is positive 
+    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is "infinity" if indicator is positive 
     Amub = Zero[1:length(M.ix), ]
     Amub[cbind(1:length(M.ix), v.ix)] = 1
     Amub[cbind(1:length(M.ix), M.ix)] = -M
     
-    Amlb = Zero[1:length(M.ix), ] # lower bound > 0 if indicator is positive 
+    Amlb = Zero[1:length(M.ix), ] # lower bound a little > 0 if indicator is positive 
     Amlb[cbind(1:length(M.ix), v.ix)] = 1
     Amlb[cbind(1:length(M.ix), M.ix)] = -0.1
 
@@ -3954,10 +3956,58 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     b = c(e, rep(0, nrow(Amlb)*2), rep(0, nrow(Ac)));
     sense = c(rep('E', nrow(K)), rep('L', nrow(Amlb)), rep('G', nrow(Amlb)), rep('E', nrow(Ac)))
     vtype = c(rep('I', length(v.ix)), rep('B', length(M.ix)))
-
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
-    
-    sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+
+    if (is.null(mprior))
+       sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+    else
+    {
+      if (!is.matrix(mprior))
+        stop('mprior must be matrix')
+
+      if (ncol(mprior) != ncol(K))
+        stop('mprior must be matrix with as many columns as there are walks')
+
+      m = nrow(mprior)
+      message('Adding mprior to karyoMIP')
+
+      ## column cat matrices with blank Zero matrix on left, with
+      ## constraints acting on binary variables, then identity matrix on right to capture
+      ## the new "barcode residual" variables and their associated indicator variables
+
+      ## barcode constraints + 2*m additional variabes
+      Ap = cbind(Zero[rep(1, nrow(mprior)), rep(1, length(M.ix))], sign(mprior), -diag(rep(1, nrow(mprior))), 0*diag(rep(1, nrow(mprior))))
+      prix = n + 1:m ## indices of prior residuals
+      iprix = n + m + 1:m ## indices of indicators of prior residuals
+      pb = rep(0, nrow(mprior))
+      psense = rep('E', nrow(mprior))
+
+      Mplb = Mpub = 0*Ap ## upper and lower bounds for indictors
+      Mpub[cbind(1:length(prix), prix)] = 1
+      Mpub[cbind(1:length(prix), iprix)] = -M
+      Mplb[cbind(1:length(prix), prix)] = 1
+      Mplb[cbind(1:length(prix), iprix)] = -0.1
+      pmb = rep(0, 2*nrow(Mpub))
+      pmsense = c(rep('L', nrow(Mpub)), rep('G', nrow(Mplb)))
+      
+      ## define additional variables
+      pvtype = c(rep('C', nrow(mprior)), rep('B', nrow(mprior)))
+
+      ## objective function weighs the rows of mprior (barcodes) according to their max weight
+      ## so user can weigh importance of individual barcodes
+      ## or tune the overall importance of barcodes vs parsimony
+      pcvec = c(rep(0, m), apply(mprior, 1, max)) 
+
+      A = rBind(cBind(A, sparseMatrix(1, 1, x = 0, dims = c(nrow(A), 2*m))), Ap, Mpub, Mplb)
+      b = c(b, pb, pmb)
+      sense = c(sense, psense, pmsense)
+      vtype = c(vtype, pvtype)
+      cvec = c(cvec, pcvec)      
+      
+      message('Solving optimization with additional ', m, ' matrix prior terms')      
+
+      sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+    }
     
     if (!is.null(sol$xopt))
       sol = list(sol)
@@ -3969,8 +4019,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
         x$mval= round(x$xopt[M.ix])
         return(x)
       })
-
-    browser()
+        
     return(sol)
   }
 
@@ -4005,7 +4054,7 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
   contigs = which(sol$kcn!=0)
   c1 =  contigs[!duplicated(sol$kclass[contigs])]
   c2 = setdiff(contigs, c1)
-  c2 = c2[match(sol$kclass[c2], sol$kclass[c1])]
+  c2 = c2[match(sol$kclass[c1], sol$kclass[c2])]
   contigs = c1
   contigs2 = c2
   
@@ -4090,7 +4139,6 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
    
   return(out)
 }
-
 
 ####################################################
 #' jabba.hood
@@ -5463,6 +5511,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
 }
 
 
+
 ####################################################
 #' jabba.walk
 #'
@@ -5563,11 +5612,11 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
       G = graph.adjacency(tmp.adj!=0)      
     }
 
+  if (verbose)
+    message(paste('Processing JaBbA'))
+
   h = jbaMIP.process(sol)
   
-  if (verbose)
-    cat(paste('Finished processing JaBbA, getting ready to construct walks\n'))
-    
   if (!is.null(genes))
     td.rg = track.gencode(genes = genes, height = 3)
 
@@ -5631,7 +5680,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
       out = mclapply(1:length(loci), function(i)
           {
-              label = lnames[i]
+            label = lnames[i]
+            mprior = NULL
               outfile.rds = sprintf('%s/%s.rds', outdir, label)
               outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
               outfile.txt = sprintf('%s/%s.txt', outdir, label)
@@ -5655,14 +5705,35 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                       Bc = loci[[i]]$Bc
                       vix = loci[[i]]$vix
                       prior = rep(1, ncol(K))
+
+                      if (is.matrix(loci[[i]]$mprior))
+                      {
+                        if (verbose)
+                          cat(paste('Adding a matrix prior!!!!!!\n'))
+
+                        ## initialize matrix 
+                        mprior = array(0, dim = c(nrow(loci[[i]]$mprior), ncol(K)))
+                        loci
+                        mprior[, values(loci[[i]]$allpaths.og)$kix] = loci[[i]]$mprior
+                        mprior[, values(loci[[i]]$allpaths.og)$kix2] = loci[[i]]$mprior
+                        colnames(mprior) = 1:ncol(mprior)
+                        colnames(mprior)[values(loci[[i]]$allpaths.og)$kix] = as.character(1:ncol(mprior))
+                        colnames(mprior)[values(loci[[i]]$allpaths.og)$kix2] = as.character(-(1:ncol(mprior)))
+                      }
+
                       if (!is.null(loci[[i]]$prior))
-                          prior[c(values(loci[[i]]$allpaths.og)$kix,values(loci[[i]]$allpaths.og)$kix2)]  = loci[[i]]$prior
+                      {
+                        if (verbose)
+                          cat(paste('Adding a prior!!!!!!\n'))
+                        prior[c(values(loci[[i]]$allpaths.og)$kix,values(loci[[i]]$allpaths.og)$kix2)]  = loci[[i]]$prior
+                      }
                       loci[[i]] = loci[[i]]$win
                   }
-          
-          is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
-          karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior)
-          kag.sol = karyo.sol[[1]]
+              
+              is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
+              
+              karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior, mprior = mprior)
+              kag.sol = karyo.sol[[1]]
           p = karyoMIP.to.path(kag.sol, K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores))
           values(p$grl)$cn = p$cn
           values(p$grl)$is.cyc = p$is.cyc
@@ -5961,6 +6032,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
   
   return(out)
 }
+
 
 
 ##############################################
