@@ -3963,7 +3963,8 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
         x$mval= round(x$xopt[M.ix])
         return(x)
       })
-        
+
+    browser()
     return(sol)
   }
 
