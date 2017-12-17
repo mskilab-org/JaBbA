@@ -1,7 +1,5 @@
 #############################################################################
 ## Marcin Imielinski
-## The Broad Institute of MIT and Harvard / Cancer program.
-## marcin@broadinstitute.org
 ##
 ## Weill-Cornell Medical College
 ## mai9037@med.cornell.edu
@@ -56,7 +54,7 @@
 
 #' @name JaBbA
 #' @title JaBbA
-#' @details
+#' @description
 #' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.
 #' 
 #' Generates the following files in the output directory:
@@ -501,8 +499,8 @@ ppgrid = function(
     a = rep(NA, nrow(NLL));
     b = rep(NA, ncol(NLL)+2)
     b.inf = rep(Inf, ncol(NLL)+2)
-    #'  a = rep(Inf, nrow(NLL));
-    #'  b = rep(Inf, ncol(NLL)+2)
+    #  a = rep(Inf, nrow(NLL));
+    #  b = rep(Inf, ncol(NLL)+2)
     NLLc = rbind(b, cbind(a, NLL, a), b) ## padded NLL and all of its shifts
     NLLul = rbind(cbind(NLL, a, a), b.inf, b)
     NLLuc = rbind(cbind(a, NLL, a), b.inf, b)
@@ -875,7 +873,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                         #    this.kag$segstats$mean[make.na] = NA
     this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
     
-    #'      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
+    #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
 
     ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
     pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
@@ -3831,7 +3829,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
   
   if (!is.na(treememlim))
     {
-#'      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+#      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
       param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
     }
   
@@ -4476,7 +4474,6 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 
 
 
-####################################
 #' .e2class
 #' 
 #' edge to contig class conversion
@@ -8944,8 +8941,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
     G0 = G
     D0 = D
 
-    #' first peel off "simple" paths i.e. zero degree
-    #' ends with >0 copy number
+    # first peel off "simple" paths i.e. zero degree
+    # ends with >0 copy number
     psimp =  which(degree(G, mode = 'out')==0 & degree(G, mode = 'in')==0 & jab$segstats$cn>0)
     i = 0
     if (length(psimp)>0)
@@ -9033,9 +9030,9 @@ jabba.gwalk = function(jab, verbose = FALSE)
             ##        palindromic = TRUE ## set to true while we "figure things out"
 
 
-            #' so now we want to subtract that cn units of that path from the graph
-            #' so we want to update the current adjacency matrix to remove that path
-            #' while keeping track of of the paths on the stack
+            # so now we want to subtract that cn units of that path from the graph
+            # so we want to update the current adjacency matrix to remove that path
+            # while keeping track of of the paths on the stack
             cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
             
             ## if (!palindromic) ## update reverse complement unless palindromic
@@ -9176,8 +9173,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     parents = .parents(adj)
     
-    #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
-    #' this will be a path for whom col index is = parent(row) for one of the rows
+    # then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+    # this will be a path for whom col index is = parent(row) for one of the rows
     ## ALERT!!! major change
     ## adjj = adj/as.matrix(cn.adj)
     ## adjj[which(is.nan(adjj))] = 0
@@ -9237,9 +9234,9 @@ jabba.gwalk = function(jab, verbose = FALSE)
             ## }
             ##        palindromic = TRUE ## set to true while we "figure things out"
             
-            #' so now we want to subtract that cn units of that path from the graph
-            #' so we want to update the current adjacency matrix to remove that path
-            #' while keeping track of of the cycles on the stack        
+            # so now we want to subtract that cn units of that path from the graph
+            # so we want to update the current adjacency matrix to remove that path
+            # while keeping track of of the cycles on the stack        
             cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
             ## if (!palindromic) ## update reverse complement unless palindromic
             cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]

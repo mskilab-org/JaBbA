@@ -2,8 +2,7 @@
 % Please edit documentation in R/JaBbA.R
 \name{karyograph_stub}
 \alias{karyograph_stub}
-\title{karyograph
-     if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))}
+\title{karyograph}
 \usage{
 karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
   ra = NULL, dranger.file = NULL, out.file, ra.file = NULL,
@@ -12,5 +11,4 @@ karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
 }
 \description{
 karyograph
-     if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
 }

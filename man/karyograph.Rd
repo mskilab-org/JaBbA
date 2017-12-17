@@ -23,6 +23,11 @@ $adj = 2n x 2n adjacency matrix whose nonzero entries ij show the edge.id in $G
 $ab.adj = 2n x 2n binary matrix specifying aberrant edges
 $ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
             in both orientations
+mimielinski Sunday, Aug 06, 2017 06:46:15 PM
+fix added to handle strange [0 0] junctions outputted 
+by Snowman ... which failed to match to any tile
+todo: may want to also handle junctions that
+fall off the other side of the chromosome
 }
 \description{
 karyograph

@@ -2,16 +2,15 @@
 % Please edit documentation in R/JaBbA.R
 \name{convex.basis}
 \alias{convex.basis}
-\title{karyoMIP utility functions}
+\title{convex.basis}
 \usage{
 convex.basis(A, interval = 80, chunksize = 100, exclude.basis = NULL,
   exclude.range = NULL, maxchunks = Inf, verbose = F)
 }
-\details{
-convex.basis
-
+\description{
 Outputs a matrix K of the convex basis of matrix A
-
+}
+\details{
 i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to 
 Ax = 0, x>=0
 

@@ -16,7 +16,7 @@ ppgrid(segstats, allelic = FALSE, purity.min = 0.01, purity.max = 1,
 \item{mc.cores}{integer number of cores to use (default 1)}
 }
 \value{
-data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMIP
+data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
 }
 \description{
 least squares grid search for purity and ploidy modes
