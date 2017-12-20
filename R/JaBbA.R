@@ -2017,7 +2017,7 @@ jbaMIP = function(
   
   if (verbose)
     cat('Beginning optimization .. \n')
-  
+
   # setup MIP
   if (gurobi) # translate into gurobi
     {
@@ -8868,11 +8868,11 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## ALERT!!! see beloWd
     adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
     ## adj[which(0!=Adjd, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
-    if (ALERT){
-        ## I!!! verbose'm gonna switch to source node width for default weight of edges
-        message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
-        ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
-    }
+    ## if (ALERT){
+    ##     ## I!!! verbose'm gonna switch to source node width for default weight of edges
+    ##     message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+    ##     ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
+    ## }
     
     ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
     ab.edges = ab.edges[rowSums(is.na(ab.edges))==0, ]
