@@ -4720,6 +4720,95 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 ## 
 ############################################################################################################################
 
+#' @name jabba.kid  
+#' @title jabba.kid
+#' @description
+#'
+#' Given a set of gwalks (grangeslist outputs of jabba.gwalk) identifies strings "kidnapped" fragments i.e.
+#' strings of tempaled insertions, which are outputted as a grangeslist
+#' 
+#' @param gwalks grangeslist of walks (e.g.outputted from jabba.gwalks)
+#' @param pad how much bp neighboring material around each kidnapped string to include in outputs
+#' @param min.ab minimal bp distance a junction needs to be considered aberrant (e.g. to exclude very local deletions)
+#' @param min.run how many aberrant junctions to  require in the outputted kidnapped fragments
+#' @author Marcin Imielinski
+jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
+{
+    gw = gr2dt(grl.unlist(gwalks))    
+    gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
+    gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
+                          (strand[-1] != strand[-length(strand)]), Inf,
+                   ifelse(strand[-1]=='+',
+                          start[-1]-end[-length(end)],
+                          start[-length(end)]-end[-1]))
+                 , Inf), by = grl.ix]
+    gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
+                   ifelse(strand[-1]=='+',
+                          start[-1]-end[-length(end)],
+                          start[-length(end)]-end[-1]))
+                 , Inf), by = grl.ix]
+    
+    
+    gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
+    gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
+       by = grl.ix]
+
+    ## get rid of little dels
+    gw[which(dist<min.ab & dist>0), ab.id := NA]
+
+    gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1],
+                           start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
+
+    .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA)    
+    
+    ## every run of "trues" i.e. wid<something is labeled
+    gwu[, runtag := as.numeric(.labrun(wid<pad)), by = grl.ix]
+    gwu = gwu[!is.na(runtag), ]
+    gwu[, runlab := paste(grl.ix, runtag), by = grl.ix]
+    gwu[, runlen := sum(!is.na(ab.id)), by = .(grl.ix, runlab)]
+    
+
+    ## choose only chunk s with min run of abs
+    kidnapped = gwu[!is.na(runlab) & runlen>=min.run, ]
+
+    if (nrow(kidnapped) == 0)
+        return(GRangesList())
+
+
+    ## expand chunks back out
+    kidnapped[, first := (1:length(start))==1, by = .(runlab)]
+    kidnapped[, last := (1:length(start))==length(start), by = .(runlab)]
+    ix = kidnapped[, .(runlab, frag.id = paste(grl.ix, ab.chunk), 
+                       grl.iix = unique(c(start-first, start:end, end+last))), by = .(ab.chunk, grl.ix)]
+    setkeyv(ix, c('grl.ix', 'grl.iix'))
+    setkeyv(gw, c('grl.ix', 'grl.iix'))
+    
+    kidnapped = gw[ix, ][!is.na(start),]
+    kidnapped[, frag.iid := 1:length(grl.iix), by = frag.id]
+    kidnapped[, frag.pos := cumsum(width), by = frag.id]
+
+    kidnapped[, first := (1:length(grl.iix)) == 1, by = runlab]
+    kidnapped[, last := (1:length(grl.iix)) == length(grl.iix), by = runlab]
+    
+    gr.kn = dt2gr(kidnapped)
+
+    gr.kn$width = NULL
+    ## trim ends leading to and out of segment
+    gr.kn[gr.kn$first] = gr.end(gr.kn[gr.kn$first], pad, ignore.strand = FALSE)
+    gr.kn[gr.kn$last] = gr.start(gr.kn[gr.kn$last], pad, ignore.strand = FALSE)
+
+    setkey(kidnapped, frag.id)
+
+    walks.kn = split(gr.kn[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.kn$runlab)
+
+    kidnapped$runlab = as.character(kidnapped$runlab)
+    setkey(kidnapped, 'runlab')    
+    values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1], 
+                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])
+    return(walks.kn)
+}
+
+
 ###############################################
 #' annotate.walks
 #'
@@ -8537,7 +8626,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                           ## check for any quasi-palindromic walks that contain both orientations of a junction
                           ## split each of these into two so we can maintain the width limit
                           pal.wix = which(values(allps)$allps.win.firstix != values(allps)$allps.win.lastix)
-                          if (length(pal.wix)>0)
+                          if (length(pal.wix)>0)C
                             {                              
                               allps.dup = allps[pal.wix]
                               values(allps.dup)$allps.junc.first = values(allps)$allps.junc.last
