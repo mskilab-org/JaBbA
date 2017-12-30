@@ -1766,20 +1766,10 @@ jbaMIP = function(
   Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
   Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
   dcn = rep(0, nrow(Dcn))
-  sensedcn = rep("E", nrow(Dcn))  
+  sensedcn = rep("E", nrow(Dcn))
+  
   consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))  
-
-
-  # dup constraints on junctions
-  # constrain every junction to get the same copy number as its reverse complement
-  Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
-  Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
-  Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
-  dcn = rep(0, nrow(Dcn))
-  sensedcn = rep("E", nrow(Dcn))  
-  consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))  
-
-
+  
   if (edge.slack)
     {
       if (verbose)
@@ -2150,1063 +2140,6 @@ jbaMIP = function(
 
   return(sol.l)
 }
-
-
-####################################################################
-#' jbaMIP
-#'
-#' @details
-#' primary "heavy" lifting task of JaBbA.  Sets up optimization problem given an input graph and segstats input
-#' and sends to CPLEX via RCplex
-#'
-#' combines edge-conservation constraints from karyograph (n x n adjacency matrix connecting n genomic intervals) with segment abundance data
-#' (segstats - length n GRanges object with mean and sd fields corresponding to posterior means and sd's on the
-#' the relative "concentration" of each interval) to infer
-#' 
-#' (1) interval and edge absolute copy numbers on the karyograph
-#' (2) purity and ploidy
-#' (3) slack edges (if any needed)
-#' 
-#' basically solves ABSOLUTE problem (fitting integer grid to continuous segment intensities)
-#' while enforcing edge-conservation constraints. 
-#' 
-#' Most important optional parameters include
-#' (1) cn.sd (expected deviation of absolute copy number from ploidy)
-#' (2) ploidy.min and ploidy.max --> useful for probing alternate solutions, but can be generously set
-#' (3) adj.lb --> enforces minimal edge absolute copy number, eg to force aberrant adjacency use
-#' (4) edge.slack - logical variable to determine whether or not to allow penalized relaxation of edge conservation constraints
-#' (5) nsolutions - number of alternate solutions
-#'
-#' @param adj n x n adjacency matrix interpreted as binary (this is the $adj output of karyograph)
-#' @param segstats n x 1 GRanges object with "mean" and "sd" value fields
-#' @param beta numeric guess for beta (i.e. from ppgrid)
-#' @param gamma numeric guess for gamma (i.e. from ppgrid)
-#' @param slack.prior 1/slack.prior = penalty for each additional copy number of each slack edge, the higher slack.prior the more slack we allow in the reconstruction, should be intuitively calibrated to the expected "incompleteness" of the reconstruction, 1/slack.prior should be calibrated with respect to 1/(k*sd)^2 for each segment, so that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
-#' @param field.ncn this field takes into account normal copy number in relative to absolute conversion
-#' @param adj.lb nxn matrix of lower bounds on particular copy numbers - this is used to force certain junctions into the graph
-#' @param adj.nudge nxn adjacency matrix of "nudge" rewards on individual junctions, NOTE: maximum value in this matrix
-#' 
-#' @return
-#' output is a Rcplex solution or list of Rcplex solution with additional fields, each Rcplex solution is a list and the additional fields
-#' added by jbaMIP are
-#' $adj input n x n adjacency matrix populated with integer copy numbers
-#' $segstats input segstats vector populated with meta data fields $cn, $ecn.in, $ecn.out, $edges.out, $eslack.in, $eslack.out
-#' $purity purity value associated with relative-absolute affine copy number conversion for this solution
-#' $ploidy purity value associated with relative-absolute affine copy number conversion for this solution
-#' $
-#' 
-#' 
-#' Additional fields for qc / technical debugging:
-#' $nll.cn negative log likelihood corresponding to the CN fit in this solution
-#' $nll.opt negative log likelihood correpsonding to the MLE CN without junction constraints
-#' $residual = value of residual between copy solution and MLE fit without junction constraints
-#' $beta beta value associated with relative-absolute affine copy number conversion for this solution
-#' $gamma gamma value associated with relative-absolute affine copy number conversion for this solution
-#' $gap.cn total gap between MLE fit without junction constraints and JaBbA fit
-#' $ploidy.constraints input ploidy constraints
-#' $beta.constraints input beta constrinats
-#' $cn.prior input cn.prior
-#' $slack.prior input slack.prior
-#' @export
-############################################
-jbaMIP.mipstart = function(
-  adj, # binary n x n adjacency matrix ($adj output of karyograph)
-  segstats, # n x 1 GRanges object with "mean" and "sd" value fields
-  ########### optional args
-  beta = NA, # beta guess (optional)  
-  gamma = NA, # gamma guess (optional)
-  field.ncn = 'ncn', # will use this field to take into account normal copy number in transformation of relative to integer copy number
-  tilim = 20, mipemphasis = 0, epgap = 0.01, # MIP params
-  ploidy.min = 0.1, # ploidy bounds (can be generous)
-  ploidy.max = 20,
-#  purity.guess = NA,
-#  ploidy.guess = NA,
-  beta.guess = beta, 
-  beta.min = beta.guess,
-  beta.max = beta.guess,
-  gamma.guess = NA, 
-  gamma.min = gamma.guess,
-  gamma.max = gamma.guess,
-  cn.sd = 1, # sd of cn prior (mean is ploidy) - i.e. sd of local copy number from ploidy
-  cn.prior = cn.sd,
-  partition = T, ## whether to partition the problem into MIP subproblems depending on the relationships of the segment standard deviation and the value of the slack.prior (only works if gamma.guess, beta.guess are specified)
-  purity.prior.mean = NA,
-  purity.prior.sd = 0.3,
-  purity.prior.strength = 1,
-  purity.prior = c(purity.prior.mean, purity.prior.sd),
-  cn.fix = rep(NA, length(segstats)), ## vector of NA's and (integer) values to which to "fix" copy states, only non NA's are incorporated
-  cn.lb = cn.fix,  
-  cn.ub = cn.fix,
-  loose.ends = c(), ## integer vector specifies indices of "loose ends", slack won't be penalized at these vertices
-  adj.lb = 0*adj, # lower bounds for adjacency matrix
-  adj.nudge = 0*adj, # linear objective function coefficients for edges (only which(adj!=0) components considered)
-  na.node.nudge = TRUE, 
-  ecn.out.ub = rep(NA, length(segstats)), ## upper bound for cn of edges leaving nodes
-  ecn.in.ub = rep(NA, length(segstats)),  ## upper bound for cn of edges entering nodes  
-  gurobi = F, # otherwise will use cplex
-  nsolutions = 1,
-  verbose = F,
-  debug = F,
-  mc.cores = 1, ## only matters if partition = T
-  ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE, slack.prior = 1, 
-  ... # passed to optimizer
-  )
-{
-  require(Rcplex)
-  if (length(segstats) != nrow(adj))
-    stop('length(segstats) !=  nrow(adj)')
-
-  if (is.null(adj.lb))
-      adj.lb = 0*adj
-  
-#  message('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
-  
-  #####
-  # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
-  #####
-  if (partition & !is.na(gamma.guess) & !is.na(beta.guess))
-    {
-      require(igraph)
-      
-#      m = segstats$mean*beta.guess - gamma.guess 
-      m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
-      cnmle = round(m) ## MLE estimate for CN
-
-      residual.min = ((m-cnmle)/(segstats$sd))^2
-      residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
-      residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
-      
-      ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
-      ## is greater than k / slack.prior penalty (where k is some copy difference
-      ## that we would never imagine a "reasonable" slack to have to over-rule      
-      fix = as.integer(which(residual.diff>(8/slack.prior))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-      
-      if (verbose)
-        cat('Fixing', length(fix), 'nodes that are unmovable by slack\n')
-
-      ##
-      ## now we will create a graph of unfixed nodes and fixed node "halves"
-      ## i.e. we split each fixed node to a node that is receiving edges
-      ## and a node that is sending edges
-      ## 
-      unfix = as.numeric(setdiff(1:length(segstats), fix))
-      G = graph(as.numeric(t(which(adj!=0, arr.ind = T))), n = length(segstats), directed = T)
-      V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
-
-      if (length(fix)>0)
-          G.unfix = induced.subgraph(G, unfix) + vertices(c(paste('from', fix), paste('to', fix)))
-      else
-          G.unfix = induced.subgraph(G, unfix)
-
-      if (length(fix)>0 & length(unfix)>0)
-        node.map = structure(c(unfix, fix, fix), names = c(as.character(unfix), paste('from', fix), paste('to', fix)))
-      else if (length(fix)>0)
-        node.map = structure(c(fix, fix), names = c(paste('from', fix), paste('to', fix)))
-      else
-        node.map = structure(c(unfix), names = c(as.character(unfix)))
-      
-      ## add nodes representing the "receiving" and "sending" side of fixed nodes
-      if (length(fix)>0 & length(unfix)>0)
-        {
-          tofix = which(adj[unfix, fix]!=0, arr.ind = T)
-          fromfix = which(adj[fix, unfix]!=0, arr.ind = T)
-        }
-      else
-        {
-          tofix = c()
-          fromfix = c()            
-        }
-
-      if (length(fix)>0)
-        fixtofix = which(adj[fix, fix]!=0, arr.ind = T)
-      else
-        fixtofix = c()
-      
-      if (length(tofix)>0)
-        e.tofix = edges(as.vector(rbind(unfix[tofix[,1]], paste('to', fix[tofix[,2]]))))
-      else
-        e.tofix = edges()
-
-      if (length(fromfix)>0)        
-        e.fromfix = edges(rbind(paste('from', fix[fromfix[,1]]), unfix[fromfix[,2]]))
-      else
-        e.fromfix = edges()
-
-      if (length(fixtofix)>0)
-        e.fixtofix = edges(rbind(paste('from', fix[fixtofix[,1]]), paste('to', fix[fixtofix[,2]])))
-      else
-        e.fixtofix = edges()
-      
-      ## add edges to graph from fixed to unfixed, unfixed to fix, and fixed to fixed node sides
-      G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix      
-
-      ## find connected components in these graphs
-      cl = clusters(G.unfix, 'weak')  
-      cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
-      
-      ## combine components with their reverse complement components
-      ## (only intervals that have a (fixed node free) path from their positive to their negative strand
-      ## will be part of the same component .. all other intervals will be separated from their
-      ## reverse complement.  However, in the MIP we always optimize
-      ## over both strands, and thus must merge components with their reverse complement
-      pos.ix = which( as.logical( strand(segstats)=='+') )
-      neg.ix = which( as.logical( strand(segstats)=='-') )
-
-      ## maps segments and reverse complements
-      seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
-      
-      cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
-      dup.ix = match(cll.m, unique(cll.m))
-#      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) sort(unique(do.call('c', cll[x]))))
-      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
-      
-      ord.ix = order(-sapply(cll, length))
-      cll = cll[ord.ix]
-      
-      if (verbose)
-        cat('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
-            paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '\n')
-      
-      cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
-
-      ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
-      args = as.list(match.call())[-1]
-      args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))      
-
-      browser()
-      sols = mclapply(1:length(cll), function(k, args)
-        {
-          if (debug)
-            browser()
-          
-          ix = node.map[cll[[k]]] ## indices in the original graph
-          uix = unique(ix)
-          fr.ix = grepl('from', cll[[k]])
-          to.ix = grepl('to', cll[[k]])
-
-          ## we want to make sure that fixed nodes that straddle
-          ## two clusters will only have the "correct"
-          ## half included in this run          
-          fronly.ix = setdiff(ix[fr.ix], ix[to.ix])
-          toonly.ix = setdiff(ix[to.ix], ix[fr.ix])
-
-          ## now we want to make sure that fronly.ix don't have incoming edges
-          tmp.adj = adj[uix, uix, drop = F]
-
-          if (length(fronly.ix)>0)
-            tmp.adj[, as.character(as.integer(fronly.ix))] = 0
-
-          ## and toonly.ix don't have outgoing edges
-          if (length(toonly.ix)>0)
-            tmp.adj[as.character(as.integer(toonly.ix)), ] = 0
-          
-          args$adj = tmp.adj
-          args$adj.nudge = adj.nudge[uix, uix, drop = F]
-          args$na.node.nudge = na.node.nudge
-          args$adj.lb = adj.lb[uix, uix, drop = F]
-          args$segstats = segstats[uix]
-          args$cn.fix = cn.fix[uix]
-          args$cn.lb = cn.lb[uix]
-          args$cn.ub = cn.ub[uix]
-          args$partition = F
-          args$nsolutions = 1 
-          args$ploidy.min = 0 ## no ploidy constraints          
-          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5          
-          
-          if (verbose)
-            cat('Starting cluster ', k, 'of', length(cll), 'which has', length(uix), 'nodes comprising',
-                sum(as.numeric(width(segstats[uix])))/2/1e6, 'MB and', length(unique(seqnames((segstats[uix])))),
-                'chromosomes, including', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
-                     length(unique(seqnames((segstats[uix])))))]), collapse = ', '), '\n')
-
-          
-          out = do.call('jbaMIP', args)
-
-          gc() ## garbage collect .. not sure why this needs to be done
-          
-          return(out)
-        }, args, mc.cores = mc.cores)
-
-      out = list()
-      for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'cn.prior', 'slack.prior')) ## scalar fields --> length(cluster) vector
-        out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
-      
-      for (f in c('ploidy.constraints', 'beta.constraints')) ## length 2 fields --> length(cluster) x 2 matrix
-        out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
-            
-      ## adjacency matrix
-      out$adj = 0 * adj      
-      for (i in 1:length(sols))
-        {
-          ix1 = as.numeric(rownames(sols[[i]]$adj))
-          out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
-        }
-
-      ## segstats
-      sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
-      out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
-
-      ## annotate segstats keep to keep track and "fixed nodes"
-      out$segstats$fixed = 1:length(out$segstats) %in% fix
-      out$segstats$cn.fix = cn.fix
-      out$segstats$cl  = NA
-      out$segstats$id = 1:length(out$segstats)
-      
-      ## keep track of which clusters segments originated
-      sol.ixul = munlist(sol.ix)
-      tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
-      out$segstats$cl = NA
-      out$segstats$cl[as.numeric(names(tmp))] = tmp
-
-      out$purity = 2/(2+gamma.guess)
-      v = out$segstats$cn; w = as.numeric(width(out$segstats))
-      out$ploidy = sum((v*w)[!is.na(v)]) / sum(w[!is.na(v)])
-      out$beta = beta.guess;
-      out$gamma = gamma.guess;
-      
-      target.less = Matrix::rowSums(adj, na.rm = T)==0
-      source.less = Matrix::colSums(adj, na.rm = T)==0
-      out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
-      out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
-
-      out$segstats$ecn.out =  Matrix::rowSums(out$adj)
-      out$segstats$ecn.in =  Matrix::colSums(out$adj)
-
-      out$segstats$edges.in = sapply(1:length(out$segstats),
-        function(x) {ix = which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-      out$segstats$edges.out = sapply(1:length(out$segstats),
-        function(x) {ix = which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
-
-      ###
-      ###
-      ncn = rep(2, length(segstats))
-      if (!is.null(field.ncn))
-        if (field.ncn %in% names(values(segstats)))
-          ncn = values(segstats)[, field.ncn]
-            
-      
-      nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
-
-      ##       out$obj = 1/4*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) + 
-#        1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only      
-      ##
-
-      ### new obj allowing variable normal copy number
-      out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) + 
-        1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only      
-      out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-      out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-      out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
-      out$sols = sols
-      
-      return(out)
-    }
-        
-  # map intervals to their reverse complement to couple their copy number (and edge variables)  
-  pos.ix = which( as.logical( strand(segstats)=='+') )
-  neg.ix = which( as.logical( strand(segstats)=='-') )
-
-  ## "original vertices"
-  og.ix = pos.ix
-
-  ## map flipping positive to negative vertices
-  rev.ix = match(segstats, gr.flipstrand(segstats))
-
-  ## "duplicates" of og.ix i.e. revcomp vertices
-  dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
-
-  if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
-    stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
-  
-  edges = which(adj!=0, arr.ind = T)
-
-  if (verbose)
-    cat('Setting up matrices .. \n')
-
-  varmeta = data.frame() ## store meta data about variables to keep track
-  consmeta = data.frame() ## store meta data about constraints to keep track
-  n = 2*nrow(adj) + nrow(edges) + 2;  # number of vertices + slack variables, number of edges, and beta, gamma parameters.
-  v.ix = 1:nrow(adj)
-  s.ix = length(v.ix) + v.ix
-
-  varmeta = data.frame(id = v.ix, subid = 1:length(v.ix), label = paste('interval', 1:length(v.ix), sep = ''), type = 'interval',
-    stringsAsFactors = F)
-  varmeta = rbind(varmeta, data.frame(id = s.ix, subid = 1:length(s.ix), label = paste('residual', 1:length(s.ix), sep = ''),
-    type = 'residual', stringsAsFactors = F))
-  
-#  s.ix = length(v.ix) + v.ix + 1
-  if (nrow(edges)>0)
-    {
-      e.ix = max(s.ix) + (1:nrow(edges))
-      varmeta = rbind(varmeta, data.frame(id = e.ix, subid = 1:length(e.ix), label = paste('edge', 1:length(e.ix), sep = ''),
-        type = 'edge', stringsAsFactors = F))
-    }
-  else
-    e.ix = integer();
-  
-  gamma.ix = max(c(s.ix, e.ix))+1;
-  beta.ix = max(c(s.ix, e.ix))+2;
-  varmeta = rbind(varmeta, data.frame(id = c(gamma.ix, beta.ix), subid = rep(1, 2), label = c('gamma', 'beta'), type = 'global', stringsAsFactors = F))
-  
-  ## add cn prior variables
-  if (!is.na(cn.prior))
-    {
-      d.ix = v.ix + n;
-      varmeta = rbind(varmeta, data.frame(id = d.ix, subid = 1:length(d.ix), label = paste('cn.prior', 1:length(d.ix), sep = ''), type = 'cn.prior', stringsAsFactors = F))      
-      ploidy.ix = max(d.ix)+1;
-      n = length(v.ix)+n+1;
-      varmeta = rbind(varmeta, data.frame(id = ploidy.ix, subid = 1, label = c('ploidy.prior'), type = 'global', stringsAsFactors = F))     
-    }
-  
-  if (!any(is.na(purity.prior)))
-    {
-      pd.ix = n + 1; ## measure our deviation from the purity prior target
-      n = n + 1
-      varmeta = rbind(varmeta, data.frame(id = pd.ix, subid = 1, label = c('purity.prior'), type = 'global', stringsAsFactors = F))
-    }
-
-  if (edge.slack) # slack on edge consistency constraints
-    {
-      es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
-      varmeta = rbind(varmeta, data.frame(id = es.s.ix, subid = 1:length(es.s.ix), label = paste('source.slack', 1:length(es.s.ix), sep = ''), type = 'source.slack', stringsAsFactors = F))      
-      es.t.ix = n+(length(v.ix) + 1:length(v.ix))
-      varmeta = rbind(varmeta, data.frame(id = es.t.ix, subid = 1:length(es.t.ix), label = paste('target.slack', 1:length(es.t.ix), sep = ''), type = 'target.slack', stringsAsFactors = F))
-      n = n+2*length(v.ix);
-    }
-
-  vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I'
-  lb = rep(0, n); lb[s.ix] = -Inf;
-
-  if (nrow(edges)>0)
-    lb[e.ix] = adj.lb[edges]
-
-  if (any(ix <<- !is.na(cn.fix)))
-    cat('Fixing copy states on', sum(ix), 'vertices\n')
-  
-### implement lower bounds and fixes
-  if (any(!is.na(cn.lb)))
-    lb[v.ix[!is.na(cn.lb)]] = cn.lb[!is.na(cn.lb)]
-
-  ub = rep(Inf, n);
-
-  if (any(!is.na(cn.ub)))
-    ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
-
-  ## add these vars to varmeta TODO: convert everything to data frame
-  varmeta$vtype = vtype
-  varmeta$lb = vtype
-  varmeta$ub = ub
-  
-##   if (!is.na(purity.guess))
-##     {
-##       cat('applying purity guess .. ', purity.guess, ' \n')
-##       gamma.guess = 2 * (1-purity.guess) / purity.guess
-##       ub[gamma.ix] = lb[gamma.ix] = gamma.guess
-##     }
-
-##   if (!is.na(ploidy.guess))
-##     {
-##       cat('applying ploidy guess .. ', ploidy.guess, ' \n')
-
-##       ## if we have ploidy and purity, then let's solve the problem, i.e. compute beta
-##       ## (unless we have already, i.e. doing local analysis)
-##       if (!is.na(purity.guess) & is.na(beta.guess)) 
-##         {
-##           mu = segstats$mean
-##           w = as.numeric(width(segstats))
-##           nna = !is.na(mu)
-##           beta.guess = (2*(1-purity.guess) + purity.guess * ploidy.guess)/((purity.guess * sum(w[nna] * mu[nna]))/sum(w[nna]))
-##         }
-##       else ## otherwise we can only explicitly constrain ploidy, and implicitly constrain beta (beware on subgraphs)
-##         ploidy.min = ploidy.max = ploidy.guess
-
-##       ploidy.min = ploidy.max = ploidy.guess
-
-##       ## override ignore.cons
-## #      ignore.cons = T
-
-## #      print(ignore.cons)
-##     }
-  
-  if (!is.na(gamma.guess) & !is.na(beta.guess))
-    cn.prior = cn.sd = NA    
-  
-  if (edge.slack)
-    vtype[c(es.s.ix, es.t.ix)] = 'I'
-  
-  Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
-  
-  # vertices that will actually have constraints (i.e. those that have non NA segstats )
-  v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
-
-  v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
-  
-  # weighted mean across vertices contributing to mean
-  if (length(v.ix.c))
-    mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) / sum(as.numeric(width(segstats)[v.ix.c]))
-  else
-    mu.all = NA
-
-  if (verbose)
-    cat('cn constraints .. \n')
-
-  if (length(v.ix.c)>0)
-    {
-      ## take into account (variable) normal cn 
-      ncn = rep(2, length(segstats)) 
-      if (!is.null(field.ncn))
-        if (field.ncn %in% names(values(segstats)))
-          ncn = values(segstats)[, field.ncn]
-
-      normal_ploidy = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
-      
-      ## copy number constraints  
-      Acn = Zero[rep(1, length(v.ix.c)+1), ]
-      Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
-      Acn[cbind(1:length(v.ix.c), s.ix[v.ix.c])] = 1
-##      Acn[cbind(1:length(v.ix.c), gamma.ix)] = 1  ## replacing with below
-      Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
-      Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
-
-      ## final "conservation" constraint
-      Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
-                                        #  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
-##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
-      Acn[length(v.ix.c)+1, gamma.ix] = normal_ploidy/2; ## taking into account (normal) variable cn
-      Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
-      bcn = rep(0, nrow(Acn))
-      sensecn = rep("E", length(bcn))
-
-      consmeta = rbind(consmeta, data.frame(type = 'Copy', label = paste('Copy', 1:nrow(Acn)), sense = 'E', b = bcn, stringsAsFactors = F)) 
-      
-      if (ignore.cons | T)
-        {
-          Acn[nrow(Acn), ] = 0
-          bcn[length(bcn)] = 0
-        }      
-    }
-  else
-    { ## abort abort!
-      sol = list()
-      sol$residual = NA
-      sol$beta = beta.guess
-      sol$gamma = gamma.guess
-      sol$purity = NA
-      sol$ploidy = NA
-      sol$adj = adj*NA
-      sol$nll.cn = NA           
-      sol$nll.opt = NA           
-      sol$gap.cn = NA
-      sol$segstats = segstats[, c('mean', 'sd')]
-      sol$segstats$cn = NA
-      sol$segstats$ecn.in = NA
-      sol$segstats$ecn.out = NA
-      segstats$ncn = NA
-      sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats))           
-      if (edge.slack)
-        {
-          sol$segstats$eslack.in = NA
-          sol$segstats$eslack.out = NA          
-        }           
-      sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-      sol$beta.constraints = c(beta.min, beta.max)
-      sol$cn.prior = cn.prior
-      sol$slack.prior = slack.prior
-      return(sol)
-    }
-    
-  # dup constraints on vertices
-  # constrain every vertex to get the same copy number as its reverse complement
-  Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
-  Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
-  Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
-  dcn = rep(0, nrow(Dcn))
-  sensedcn = rep("E", nrow(Dcn))
-  
-  consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))  
-  
-  if (edge.slack)
-    {
-      if (verbose)
-        cat('edge slack .. \n')
-      
-      # dup constraints on (reverse complement) edge.slack
-      # (these make sure that reverse complement edge.slacks are
-      # given the same solution as their reverse complement)
-      Ecn = Zero[rep(1, length(dup.ix)*2),, drop = F];
-      Ecn[cbind(1:nrow(Ecn), c(es.s.ix[dup.ix], es.t.ix[dup.ix]))] = 1
-      Ecn[cbind(1:nrow(Ecn), c(es.t.ix[og.ix], es.s.ix[og.ix]))] = -1
-      ecn = rep(0, nrow(Ecn))
-      Dcn = rBind(Dcn, Ecn)
-      dcn = c(dcn, ecn);
-      sensedcn = c(sensedcn, rep("E", nrow(Ecn)))
-
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeSlack', label = paste('EdgeSlack', 1:nrow(Ecn)), sense = 'E', b = ecn, stringsAsFactors = F)) 
-    }
-  
-  Acn = rBind(Acn, Dcn)
-  bcn = c(bcn, dcn)
-  sensecn = c(sensecn, sensedcn)
-  
-  if (!is.na(cn.prior))
-    {
-      if (verbose)
-        cat('cn prior .. \n')            
-      Pcn = Zero[rep(1, length(v.ix)+1), ]
-      Pcn[cbind(v.ix, v.ix)] = 1
-      Pcn[v.ix, ploidy.ix] = -1
-      Pcn[cbind(v.ix, d.ix)] = -1
-      Pcn[length(v.ix)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)))
-      Pcn[length(v.ix)+1, ploidy.ix] = -1;
-      bpcn = rep(0, nrow(Pcn))
-      Acn = rBind(Acn, Pcn)
-      bcn = c(bcn, bpcn)
-      sensecn = c(sensecn, rep("E", length(bpcn)))
-      lb[d.ix] = -Inf;
-
-      consmeta = rbind(consmeta, data.frame(type = 'CNPrior', label = paste('CNPrior', 1:nrow(Pcn)), sense = 'E', b = bpcn, stringsAsFactors = F)) 
-    }
-  
-  if (!any(is.na(purity.prior)))
-    {
-      if (verbose)
-        cat('purity prior .. \n')
-      
-      Ppd = Zero[1, , drop = FALSE]
-      Ppd[1, gamma.ix] = 1
-      Ppd[1, pd.ix] = -1
-      bpd = 2/purity.prior[1] - 2
-      Acn = rBind(Acn, Ppd)
-      bcn = c(bcn, bpd)
-      sensecn = c(sensecn, 'E')
-      lb[pd.ix] = -Inf;
-      ub[pd.ix] = -Inf;
-
-      consmeta = rbind(consmeta, data.frame(type = 'PurityPrior', label = paste('PurityPrior', 1:nrow(Ppd)), sense = 'E', b = bpd, stringsAsFactors = F)) 
-    }
-  
-  # ploidy constraints
-  Aineq = Zero[rep(1, 2), , drop = F];
-  Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
-  bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
-  senseineq = c("G", "L")
-
-      
-  # override gamma 
-  if (!is.na(gamma))
-    lb[gamma.ix] = ub[gamma.ix] = gamma;
-
-  # override beta
-  if (!is.na(beta))
-    lb[beta.ix] = ub[beta.ix] = beta.guess;
-
-  # beta.max
-  if (!is.na(beta.max))
-    ub[beta.ix] = beta.max 
-
-  # beta.max
-  if (!is.na(beta.min))
-    lb[beta.ix] = beta.min
-
-  # gamma.max
-  if (!is.na(gamma.min))
-    lb[gamma.ix] = gamma.min
-
-  # gamma.max
-  if (!is.na(gamma.max))
-    ub[gamma.ix] = gamma.max 
-  
-  if (!ignore.edge)
-    {
-      if (verbose)
-        cat('edge consistency matrix .. \n')
-      
-      ## add edge consistency criteria
-      ## for every node that is source of an edge
-      ## ensure that sum of weights on outgoing edges
-      ## = node weight
-      ## do the same for nodes that are targets of edges
-
-      v.ix.s = unique(edges[,1])
-      v.ix.t = unique(edges[,2])
-      Bs = Zero[v.ix.s, , drop = F]
-      Bt = Zero[v.ix.t, , drop = F]
-
-      if (nrow(edges)>0)
-        {
-          Bs[cbind(1:nrow(Bs), v.ix.s)] = 1
-          Bt[cbind(1:nrow(Bt), v.ix.t)] = 1
-          Bs[cbind(match(edges[,1], v.ix.s), e.ix)] = -1
-          Bt[cbind(match(edges[,2], v.ix.t), e.ix)] = -1
-          
-          if (edge.slack)
-            {
-              Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1  # provide "fake" edges bringing flux into and out of vertex
-              Bt[cbind(1:nrow(Bt), es.t.ix[v.ix.t])] = -1
-            }
-        }
-      # B = rbind(as.matrix(Bs), as.matrix(Bt))
-      B = rBind(Bs, Bt)
-      
-      if (verbose)
-        cat('populating linear constraints .. \n')
-
-      consmeta = rbind(consmeta,
-        data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)), sense = 'E', b = 0, stringsAsFactors = F),
-        data.frame(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)), sense = 'E', b = 0, stringsAsFactors = F)
-        )
-      
-      ## populate linear constraints
-      Aed = B;
-      bed = rep(0, nrow(B))
-      senseed = rep("E", length(bed))      
-      
-#      Amat = rbind(as.matrix(Acn), as.matrix(Aed), as.matrix(Aineq));
-      Amat = rBind(Acn, Aed, Aineq);
-      b = c(bcn, bed, bineq);
-      sense = c(sensecn, senseed, senseineq);
-    }
-  else
-    {
-      Amat = rBind(Acn, Aineq);
-      b = c(bcn, bineq);
-      sense = c(sensecn, senseineq);
-    }
-
-  consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F)) 
-
-  ## ecn.out.ub constraints (if any)
-  if (any(!is.na(ecn.out.ub)))
-    {
-      ix = which(!is.na(ecn.out.ub))
-      
-      Aineq_eout = Zero[ix, , drop = F]
-      bineq_eout = ecn.out.ub[ix]
-      senseineq_eout = rep('L', length(ix))
-      
-      for (i in 1:length(ix))
-        if (any(iy <<- edges[,1] %in% ix[i]))
-          Aineq_eout[i, e.ix[iy]] = 1 ## constrain the sum of edges exiting this vertex
-      
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeOutUB', label = paste('EdgeOutUB', ix), sense = 'L', b = bineq_eout, stringsAsFactors = F))
-
-      Amat = rBind(Amat, Aineq_eout)
-      b = c(b, bineq_eout)
-      sense = c(sense, senseineq_eout)
-    }
-
-  ## ecn.in.ub constraints (if any)
-  if (any(!is.na(ecn.in.ub)))
-    {
-      ix = which(!is.na(ecn.in.ub))
-      
-      Aineq_ein = Zero[ix, , drop = F]
-      bineq_ein = ecn.in.ub[ix]
-      senseineq_ein = rep('L', length(ix))
-      
-      for (i in 1:length(ix))
-        if (any(iy <<- edges[,2] %in% ix[i]))
-          Aineq_ein[i, e.ix[iy]] = 1  ## constrain the sum of edges entering this vertex
-
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeInUB', label = paste('EdgeInUB', ix), sense = 'L', b = bineq_ein, stringsAsFactors = F))
-      
-      Amat = rBind(Amat, Aineq_ein)
-      b = c(b, bineq_ein)
-      sense = c(sense, senseineq_ein)
-    }
-  
-  # quadratic portion of objective function
-  Qobj = Zero;
-
-  if (length(v.ix.c>0))
-      Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
-
-  EPS = 0.000000000001
-  if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
-      if (length(v.ix.na)>0)
-      {
-          if (verbose)
-              message('NA nudging node!!')
-          Qobj[cbind(v.ix.na, v.ix.na)] = EPS
-      }
-
-#  if (!ignore.cons)
-#    Qobj[s.ix[length(s.ix)], s.ix[length(s.ix)]] = 1
-
-  # linear portion of objective function
-  cvec = Zero[,1]
-
-  if (nrow(edges)>0)
-    {
-      if (verbose)
-        cat('Adding ', sum(adj.nudge[edges]), "of edge nudge across", sum(adj.nudge[edges]!=0), "edges\n")
-
-      cvec[e.ix] = -adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
-    }
-
-  if (!is.na(cn.prior))
-    Qobj[cbind(d.ix, d.ix)] = 1/cn.prior^2 
-
-  ## the slack prior will determine the degree of "coupling" enforced between neighboring copy states
-  ## this should be high if we think that our rearrangement annotation is quite complete
-  ## in the end, there will be tension between enforcing edge consistency and consistency with means / sd
-  ## abundances at intervals
-  if (edge.slack)
-    {      
-      cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
-
-      ## let any specified "loose ends" have unpenalized slack
-      if (length(loose.ends)>0)
-        {
-          cat('Relaxing slack penalty on', length(loose.ends), 'loose ends\n')
-          cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
-        }
-      
-      cat(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s\n', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
-
-      
-    }
-  
-  if (!any(is.na(purity.prior)))
-    Qobj[cbind(pd.ix, pd.ix)] = 1/purity.prior[2]^2
-  
-  if (verbose)
-    cat('Beginning optimization .. \n')
-
-  ## guess mipstart if gamma.guess and beta.guess are non NA
-  if (!is.na(gamma.guess) & !is.na(beta.guess))
-  {
-    ## convert everything to data.tables 
-    varmeta = as.data.table(varmeta)
-    consmeta = as.data.table(consmeta)
-    consmeta[, id := 1:.N]
-    varmeta[, id := 1:.N] 
-    varmeta[, guess := as.numeric(0)]
-
-    ## first guess the node copy number n_hat by rounding
-    mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
-    ix = varmeta[type == 'interval', id]
-    n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
-    varmeta[type == 'interval', guess := n_hat]
-
-    ## guess each edge copy number by iterating through edges and peeling off the min copy number of source
-    ## and sink
-    e_hat = lb[varmeta[type == 'edge', id]]
-    e_done = rep(FALSE, length(e_hat))
-    rev.eix = mmatch(edges, cbind(rev.ix[edges[,2]], rev.ix[edges[,1]])) ## match edges to their reverse complements
-    message('Computing initial guess on edge weight')
-    for (i in 1:nrow(edges))
-    {
-      if (!e_done[i]) ## specify both edge and its reverse complement (so if e_hat[i] is non NA, it has already been filled)
-      {
-        if (edges[i, 1] == edges[i, 2]) ## be careful overdrawing fold back edges, otherwise can generate strand imbalance 
-          e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], floor(min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE)/2))
-        else
-          e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE))
-        ## make sure to also change reverse complement 
-        n_hat[rev.ix[edges[i,1]]] = n_hat[edges[i,1]] = n_hat[edges[i,1]] - e_hat[i]
-        n_hat[rev.ix[edges[i,2]]] = n_hat[edges[i,2]] = n_hat[edges[i,2]] - e_hat[i]
-        e_done[i] = e_done[rev.eix[i]] = TRUE
-      }
-    }
-    message('Finished computing initial guess on edge weight')
-    varmeta[type == 'edge', guess := e_hat]
-
-    ## now guess each target and source slack
-    ## which is just the difference between the copy number at
-    ## c_i and the incoming / outgoing edges
-
-    n_hat = varmeta[type == 'interval', guess]
-    ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
-    Bs = Amat[consmeta[type == 'EdgeSource', id],]
-    six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-    s_slack_hat = rep(0, length(n_hat))
-    s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
-    s_slack_hat[is.na(s_slack_hat)] = 0
-    varmeta[type == 'source.slack', guess := s_slack_hat]
-
-    ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
-    Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-    tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-    t_slack_hat = rep(0, length(n_hat))
-    t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
-    t_slack_hat[is.na(t_slack_hat)] = 0
-    varmeta[type == 'target.slack', guess := t_slack_hat]
-    varmeta[label == 'beta', guess := beta.guess]
-    varmeta[label == 'gamma', guess := gamma.guess]
-
-    ## fix negative loose ends, by adding copy number to the node and then slack at the other end
-    ## (these occur from nonzero lower bounds on junctions)
-    ## i.e. for negative source slack add copy number to node, and positive target slack 
-    if (any(neg.source <- varmeta[type == 'source.slack', which(guess<0)]))
-    {
-      tmp = varmeta[type == 'source.slack', guess[neg.source]]
-      varmeta[type == 'source.slack' & subid %in% neg.source, guess := 0]
-      varmeta[type == 'interval' & subid %in% neg.source, guess := guess - tmp]
-      varmeta[type == 'target.slack' & subid %in% neg.source , guess := guess - tmp]
-    }
-
-    if (any(neg.target <- varmeta[type == 'target.slack', which(guess<0)]))
-    {
-      tmp = varmeta[type == 'target.slack', guess[neg.target]]
-      varmeta[type == 'target.slack' & subid %in% neg.target, guess := 0]
-      varmeta[type == 'interval' & subid %in% neg.target, guess := guess - tmp]
-      varmeta[type == 'source.slack' & subid %in% neg.target , guess := guess - tmp]
-   }
-
-    ############################
-    ## now we have a lot of slacks
-    ## so we need to "straighten" out all high variance nodes
-    ## with respect to their nearest low variance node
-    ## we draw an arbitrary distinction between low and high variance using
-    ## a (quasi arbitrary threshold) based on (a lower) slack.prio 
-    ############################
-    browser()
-    m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
-    cnmle = round(m) ## MLE estimate for CN    
-    residual.min = ((m-cnmle)/(segstats$sd))^2
-    residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
-    residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state    
-    fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-    branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
-
-
-    ## path endpoints are either fix or branch
-    endpoints = union(fix, branch)
-
-
-    ## compute residual as difference between rounded and "mean" value
-    n_hat = varmeta[type == 'interval', guess]
-    eps_hat = mu_hat - n_hat
-    varmeta[type == 'residual', guess := eps_hat]
-
-    mipstart = varmeta$guess
-
-    
-
-    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(mipstart = mipstart), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
-
-    }
-
-  browser()
-  # setup MIP
-  if (gurobi) # translate into gurobi
-    {
-      print('Running gurobi!')
-
-      model = list()
-      model$A = Amat
-      model$rhs = b;
-      model$sense = c('E'='=', 'G'='>=', 'L'='<=')[sense]
-      model$Q = Qobj;
-      model$obj = cvec;
-      model$lb = lb;
-      model$ub = ub;
-      model$vtype = vtype;      
-      model$modelsense = 'min';
-
-      if (!is.na(gamma))
-        {
-          mu_hat = as.vector(round(((segstats$mean-gamma)/beta))); 
-          model$start = rep(NA, n);
-          model$start[v.ix] = mu_hat;
-          model$start[s.ix] = segstats$mean-(mu_hat*beta+gamma);
-          model$start[gamma.ix] = gamma;
-          model$start[is.infinite(model$start)] = NA;
-        }
-      
-      sol = gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
-      sol$xopt = sol$x;
-    }
-  else
-    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
-  
-  if (is.null(sol$xopt))
-    sol.l = sol
-  else
-    sol.l = list(sol);
-  
-  adj = as(adj, 'sparseMatrix');
-  mu = segstats$mean
-  sd = segstats$sd
-  segstats = segstats[, c()]
-  segstats$mean = mu
-  segstats$sd = sd
-  segstats$ncn = ncn
-
-  if (verbose)
-    cat('Post processing .. \n')
-  
-  sol.l = lapply(sol.l, function(sol)
-  {
-           vcn = round(sol$xopt[v.ix])
-           ecn = round(sol$xopt[e.ix])
-           sol$residual = round(sol$xopt[s.ix])
-           sol$beta = sol$xopt[beta.ix]
-           sol$gamma = sol$xopt[gamma.ix]
-           sol$purity = 2/(2+sol$gamma)
-           sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
-#           sol$mu.all = mu.all
-           sol$adj = adj*0;
-           if (length(v.ix.c)>0)
-             sol$nll.cn = (sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]]
-           else
-             sol$nll.cn = NA
-           
-#           sol$nll.opt = pp.nll(segstats[v.ix.c], sol$purity, sol$ploidy, field = 'mean')$NLL
-           if (length(v.ix.c)>0)
-             sol$nll.opt = pp.nll(segstats[v.ix.c], gamma = sol$gamma, beta = sol$beta, field = 'mean', field.ncn = field.ncn)$NLL
-           else
-             sol$nll.opt = NA
-           
-           sol$gap.cn = as.numeric(1 - sol$nll.opt / sol$nll.cn)
-           sol$adj[edges] = ecn;
-           sol$segstats = segstats
-           sol$segstats$cn = round(vcn)
-           sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
-           sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
-           sol$segstats$edges.in = sapply(1:length(sol$segstats),
-             function(x) {ix = which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-           sol$segstats$edges.out = sapply(1:length(sol$segstats),
-             function(x) {ix = which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
-           
-           if (edge.slack)
-             {
-##                sol$segstats$eslack.s = round(sol$xopt[es.s.ix])
-##                sol$segstats$eslack.t = round(sol$xopt[es.t.ix])
-##                sol$eslack.s = round(sol$xopt[es.s.ix])
-##                sol$eslack.t = round(sol$xopt[es.t.ix])
-               sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
-               sol$segstats$eslack.out = round(sol$xopt[es.s.ix])
-               sol$eslack.in = round(sol$xopt[es.t.ix])
-               sol$eslack.out = round(sol$xopt[es.s.ix])
-             }
-           
-           sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-           sol$beta.constraints = c(beta.min, beta.max)
-           sol$cn.prior = cn.prior
-           sol$slack.prior = slack.prior
-
-#           if (any(!is.na(sol$eslack.in)))
- #            sol = .correct.slack(sol)
-
-#           print('did not correct slack')
-
-           if (debug)
-             browser()
-           
-           return(sol)
-         });
-  
-  sol.l = sol.l[order(sapply(sol.l, function(x) x$obj))]
-
-  if (length(sol.l)==1)
-    sol.l = sol.l[[1]]
-
-  return(sol.l)
-}
-
-
 
 
 ##############################################################
@@ -5876,58 +4809,6 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 }
 
 
-
-#' @name anno.hops
-#' @title anno.hops
-#' @description
-#'
-#' Adds simple annotations to GRangesList of walks including
-#' distance along each reference fragment and distance
-#' between "hops"
-#' 
-#' @param walks walks to annotate
-#' 
-#' @author Marcin Imielinski
-anno.hop = function(walks)
-{
-  gw = gr2dt(grl.unlist(walks))
-  gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
-  gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
-                        (strand[-1] != strand[-length(strand)]), Inf,
-                 ifelse(strand[-1]=='+',
-                        start[-1]-end[-length(end)],
-                        start[-length(end)]-end[-1]))
-               , Inf), by = grl.ix]
-
-  gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
-                          ifelse(strand[-1]=='+',
-                                 start[-1]-end[-length(end)],
-                                 start[-length(end)]-end[-1]))
-                        , Inf), by = grl.ix]
-
-  gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
-  gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
-     by = grl.ix]
-
-  gw[, ":="(frag.id = paste(grl.ix, ab.chunk), 
-            frag.iid = 1:length(grl.ix),
-            frag.pos = cumsum(width)
-            ), by = .(ab.chunk, grl.ix)]
-
-  gr.out = dt2gr(gw)
-  gr.out$width = NULL
-
-  setkey(gw, frag.id)
-
-  grl.out = split(gr.out[, c('ab.id','grl.iix', 'cn', 'cn.1', 'frag.id', 'frag.iid', 'frag.pos', 'dist', 'dist.nostrand')], gr.out$grl.ix)[as.character(1:length(walks))]
-
-  names(grl.out) = names(walks)
-  values(grl.out) = values(walks)
-
-    return(grl.out)
-}
-
-
 ###############################################
 #' annotate.walks
 #'
@@ -8254,7 +7135,8 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
             e.close = min.e<=d
 
             ## now for all "left close" starts we add whatever distance to that point + pad
-            gr.start(ss)[s.close]            
+            gr.start(ss)[s.close]
+            
 
             out = GRanges()
             if (any(s.close))
@@ -10003,7 +8885,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     b[v] = -1
     b[to] = 1
 
-    ix = which(Matrix::rowSums(A!=0)!=0) ## remove zero constraints
+    ix = which(rowSums(A!=0)!=0) ## remove zero constraints
 
     ## "ration" or reverse complementarity constraints
     tmp.constraints = edges[, list(e1 = enum[1], e2 = enum[2], ub = cn[1]), by = eclass]
@@ -10029,7 +8911,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         if (verbose)
             message('No solution to MIP!')
 
-#        browser()
+        browser()
         return(NULL)
     }
     
@@ -10064,29 +8946,25 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
 #' 
 #' @param jab JaBbA object
-#' #
+#' 
 #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
-#' @export
 #' @import igraph
-#' @export
-#' @author Marcin Imielinski
-#' @author Xiaotong Yao
-jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
+jabba.gwalk = function(jab, verbose = FALSE)
 {
     cn.adj = jab$adj
     adj = as.matrix(cn.adj)
     adj.new = adj*0
-    ## ALERT!!! see below
+    ## ALERT!!! see beloWd
     adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
-    ## adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
-    if (verbose){
-        ## ALERT!!! I'm gonna switch to source node width for default weight of edges
-        message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
-        ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
-    }
+    ## adj[which(0!=Adjd, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
+    ## if (ALERT){
+    ##     ## I!!! verbose'm gonna switch to source node width for default weight of edges
+    ##     message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+    ##     ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
+    ## }
     
     ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
-    ab.edges = ab.edges[Matrix::rowSums(is.na(ab.edges))==0, ]
+    ab.edges = ab.edges[rowSums(is.na(ab.edges))==0, ]
     ## ALERT!!!
     adj[ab.edges] = sign(cn.adj[ab.edges]) ## make ab.edges = 1
     ## adj[ab.edges] = adj[ab.edges] * 0.99 ## make ab.edges 1 bp shorter than ref!
@@ -10114,10 +8992,10 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     ss[loose == TRUE, is.end := TRUE]
     ss[loose == FALSE, is.end := 1:length(loose) %in% c(which.min(start), which.max(end)), by = list(seqnames, strand)]
     ends = which(ss$is.end)
-    src = (Matrix::colSums(adj)[ends]==0) ## indicate which are sources
+    src = (colSums(adj)[ends]==0) ## indicate which are sources
 
     ## sanity check
-    unb = which(!ss$is.end & Matrix::rowSums(jab$adj, na.rm = TRUE) != Matrix::colSums(jab$adj, na.rm = TRUE))
+    unb = which(!ss$is.end & rowSums(jab$adj, na.rm = TRUE) != colSums(jab$adj, na.rm = TRUE))
 
     if (length(unb)>0)
     {
@@ -10147,13 +9025,13 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     palindromic.path = rep(FALSE, maxrow)
     palindromic.cycle = rep(FALSE, maxrow)
 
-    nb.all = which(Matrix::rowSums(cn.adj) != Matrix::colSums(cn.adj))
+    nb.all = which(rowSums(cn.adj) != colSums(cn.adj))
     cn.adj0 = cn.adj
     G0 = G
     D0 = D
 
-    #' first peel off "simple" paths i.e. zero degree
-    #' ends with >0 copy number
+    # first peel off "simple" paths i.e. zero degree
+    # ends with >0 copy number
     psimp =  which(degree(G, mode = 'out')==0 & degree(G, mode = 'in')==0 & jab$segstats$cn>0)
     i = 0
     if (length(psimp)>0)
@@ -10169,11 +9047,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     ## and see if it is still there 
     ## peel off top path and add to stack, then update cn.adj
 
-    jab$segstats$tile.id = jab$segstats$tile.id + as.numeric(jab$segstats$loose)*0.5
-    
     tile.map =
         gr2dt(jab$segstats)[, .(id = 1:length(tile.id),
-                                tile.id = ifelse(strand == '+', 1, -1)*tile.id)]    
+                                tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
     rtile.map =
         gr2dt(jab$segstats)[, .(id = 1:length(tile.id),
                                 tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
@@ -10182,10 +9058,6 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
     ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
     ed = data.table(jab$edges)[cn>0, .(from, to , cn)]
-
-    if (nrow(ed)==0)
-        return(GRangesList())
-    
     ed[, ":="(fromss = tile.map[ .(from), tile.id],
               toss = tile.map[ .(to), tile.id]),
        by = 1:nrow(ed)]
@@ -10200,7 +9072,6 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     eclass.cn = ed[!duplicated(eclass), setNames(cn, eclass)]
 
     cleanup_mode = FALSE
-
     
     while (nrow(ij)>0)
     {
@@ -10226,8 +9097,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
             vpaths[[i]] = p
             epaths[[i]] = cbind(p[-length(p)], p[-1])                          
             eids = paste(epaths[[i]][,1], epaths[[i]][,2])            
-            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palinrdomic edges by 1/2
-                        
+            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
+            
+            
             rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
             repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
             plen = length(rvpath)
@@ -10247,9 +9119,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
             ##        palindromic = TRUE ## set to true while we "figure things out"
 
 
-            #' so now we want to subtract that cn units of that path from the graph
-            #' so we want to update the current adjacency matrix to remove that path
-            #' while keeping track of of the paths on the stack
+            # so now we want to subtract that cn units of that path from the graph
+            # so we want to update the current adjacency matrix to remove that path
+            # while keeping track of of the paths on the stack
             cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
             
             ## if (!palindromic) ## update reverse complement unless palindromic
@@ -10299,7 +9171,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
                     & degree(G)>0), ends)
 
                     ## ## check if cn.adj out of balance
-                    ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
+                    ## if (any((colSums(cn.adj)*rowSums(cn.adj) != 0) & (colSums(cn.adj) != rowSums(cn.adj)))){
                     ##     print("Junction OUT OF BALANCE!")
                     ##     browser()
                     ## }
@@ -10311,7 +9183,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
                     ## }
 
                     ## remain = as.matrix(jab$adj) - adj.new
-                    ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
+                    ## nb <- which(colSums(remain) != rowSums(remain))
                     ## if (any(!is.element(nb, nb.all)))
                     ##     browser()
                     
@@ -10390,8 +9262,8 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
     parents = .parents(adj)
     
-    #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
-    #' this will be a path for whom col index is = parent(row) for one of the rows
+    # then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+    # this will be a path for whom col index is = parent(row) for one of the rows
     ## ALERT!!! major change
     ## adjj = adj/as.matrix(cn.adj)
     ## adjj[which(is.nan(adjj))] = 0
@@ -10400,8 +9272,8 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     ## G = graph.adjacency(adjj, weighted = 'weight')
     D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
 
-    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
-    
+    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
+    ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
 
     ## now iterate from shortest to longest path
     ## peel that path off and see if it is still there ..
@@ -10409,7 +9281,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
     ## peel off top path and add to stack, then update cn.adj
 
-    cleanup_mode = FALSE
+    cleanup_mode = FALSE    
     while (nrow(ij)>0)
     {
         if (verbose)
@@ -10451,9 +9323,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
             ## }
             ##        palindromic = TRUE ## set to true while we "figure things out"
             
-            #' so now we want to subtract that cn units of that path from the graph
-            #' so we want to update the current adjacency matrix to remove that path
-            #' while keeping track of of the cycles on the stack        
+            # so now we want to subtract that cn units of that path from the graph
+            # so we want to update the current adjacency matrix to remove that path
+            # while keeping track of of the cycles on the stack        
             cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
             ## if (!palindromic) ## update reverse complement unless palindromic
             cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
@@ -10503,13 +9375,13 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
                     G = graph.adjacency(adj, weighted = 'weight')
                     ## G = graph.adjacency(adjj, weighted = 'weight')
                     
-                    ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
+                    ## if (any((colSums(cn.adj)*rowSums(cn.adj) != 0) & (colSums(cn.adj) != rowSums(cn.adj)))){
                     ##     print("Junction OUT OF BALANCE!")
                     ##     browser()
                     ## }
 
                     ## remain = as.matrix(jab$adj) - adj.new
-                    ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
+                    ## nb <- which(colSums(remain) != rowSums(remain))
                     ## if (any(!is.element(nb, nb.all)))
                     ##     browser()
                     
@@ -10528,7 +9400,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
         {
             message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
-            
+
             cleanup_mode = TRUE
         }                        
     }
@@ -10559,33 +9431,29 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     ## D2 = D
     ## remain2 = remain
     remain = as.matrix(jab$adj) - adj.new
-    remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
+    remain.ends = which(colSums(remain)*rowSums(remain)==0 & colSums(remain)-rowSums(remain)!=0)
     if (length(remain.ends)>0){
         if (verbose)
             message(length(remain.ends), "ends were not properly assigned a path. Do them.")
     }
     
     tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
-    ix = which(Matrix::rowSums(is.na(tmp[, 1:2]))==0)
+    ix = which(rowSums(is.na(tmp[, 1:2]))==0)
 
     if (length(ix)>0)
         adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
     else
         adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
-    vix = munlist(vall)
+    vix = munlist(vall)    
+    paths = split(jab$segstats[vix[,3]], vix[,1])
 
-    jab$segstats$node.id = 1:length(jab$segstats)
-    pathsegs = jab$segstats[vix[,3]]
-    pathsegs$grl.ix = vix[,1]    
-    abjuncs =  as.data.table(rbind(jab$ab.edges[, 1:2, '+'], jab$ab.edges[, 1:2, '-']))[, 
-                                   id := rep(1:nrow(jab$ab.edges),2)*
-                                       rep(c(1, -1), each = nrow(jab$ab.edges))][!is.na(from), ]    
+    abjuncs =  as.data.table(rbind(this.jab$ab.edges[, 1:2, '+'], this.jab$ab.edges[, 1:2, '-']))[, 
+                                   id := rep(1:nrow(this.jab$ab.edges),2)*
+                                               rep(c(1, -1), each = nrow(this.jab$ab.edges))][!is.na(from), ]
     abjuncs = abjuncs[, tag := structure(paste(from, to), names = id)]
     setkey(abjuncs, tag)           
-
-    pathsegs$ab.id = gr2dt(pathsegs)[ , .(ab.id = c(abjuncs[paste(node.id[-length(node.id)], node.id[-1]), id], NA)), by = grl.ix][, ab.id]
-
-    paths = split(pathsegs, vix[,1])        
+    paths = do.call('GRangesList', lapply(paths, function(x) {x$ab.id = c(abjuncs[paste(x$tile.id[-length(x$tile.id)], x$tile.id[-1]), id], NA); return(x)}))
+    
     values(paths)$ogid = 1:length(paths)
     values(paths)$cn = ecn[as.numeric(names(paths))]
     values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
@@ -10616,6 +9484,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
         unmix[list(unmix[pos == TRUE, mix]), ][, id := 1:length(ix)][!is.na(ix), ]
     )
     
+
     paths = paths[remix$ix]
     names(paths) = paste(remix$id, ifelse(remix$pos, '+', '-'), sep = '')
     values(paths)$id = remix$id
@@ -10623,66 +9492,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
     if (length(setdiff(values(paths)$ogid, 1:length(paths))))
         message('Warning!!! Some paths missing!')
-
-    ## for gGnome compatibiliity    
-    if (return.grl)
-    {
-      tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
-      setkeyv(tmp.dt, c('pid', 'nix'))
-      
-      ## mark nodes that precede a reference junction
-      tmp.dt[, d.to.next := c((start-data.table::shift(end))[-1], NA), by = pid]
-      tmp.dt[, d.to.next.neg := c((data.table::shift(start)-end)[-1], NA), by = pid]
-      tmp.dt[, same.strand := c((strand==data.table::shift(strand))[-1], NA), by = pid]
-      tmp.dt[, same.chrom := c((as.character(seqnames)==data.table::shift(as.character(seqnames)))[-1], NA), by = pid]
-      tmp.dt[, last.node := 1:.N == .N, by = pid]
-      tmp.dt[, before.ref := 
-                 (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
-                   (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
-                 ) & same.strand & same.chrom)]
-      tmp.dt[is.na(before.ref), before.ref := FALSE]
-
-      ## label reference runs of nodes then collapse 
-      .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))    
-      tmp.dt[, ref.run := .labrun(before.ref), by = pid]
-      tmp.dt[, ref.run.last := data.table::shift(ref.run), by = pid]
-      tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
-      tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
-      collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
-                                                  nix = nix[1],
-                                                  pid = pid[1],
-                                                  seqnames = seqnames[1],
-                                                  start = min(start),
-                                                  end = max(end),
-                                                  strand = strand[1]
-                                                ), by = ref.run.id]
-
-      ## concatenate back with nodes that precede a non reference junction
-      tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nix, seqnames, start, end, strand)],
-                     collapsed.dt[, .(pid, nix, seqnames, start, end, strand)])
-      setkeyv(tmp.dt, c('pid', 'nix'))
-
-      tmp.gr = dt2gr(tmp.dt)
-      tmp.segs = unique(tmp.gr)
-      tmp.gr$seg.id = match(tmp.gr, tmp.segs)
-      tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
-      tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
-
-      ## DDDDDDDDDDDDDDDDDDDDDDDD
-      browser()
-
-      gw = gGnome::gWalks$new(segs=tmp.segs,
-                      paths=tmp.paths,
-                      metacols=tmp.vals)
-      return(gw)
-    }
-
-
+    
     return(paths)
 }
-
-
-
-
-   
 
