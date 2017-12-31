@@ -1769,16 +1769,23 @@ jbaMIP = function(
   sensedcn = rep("E", nrow(Dcn))  
   consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))  
 
-
-  # dup constraints on junctions
-  # constrain every junction to get the same copy number as its reverse complement
-  Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
-  Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
-  Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
-  dcn = rep(0, nrow(Dcn))
-  sensedcn = rep("E", nrow(Dcn))  
-  consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))  
-
+  ## dup constraints on junctions
+  ## constrain every edge to get the same copy number as its reverse complement
+  if (nrow(edges)>0)
+  {
+    recip.ix = suppressWarnings(match(segstats, gr.flipstrand(segstats)))
+    eix = which(varmeta$type == 'edge')
+    redges = cbind(recip.ix[edges[,2]], recip.ix[edges[,1]]) ## reverse complement edge
+    eclass = pmin(1:nrow(edges), mmatch(edges, redges)) ## unique id to each edge / redge pair
+    numclass = max(eclass)
+    Djcn = data.table(eix, eclass)[, x := c(-1, 1), by = eclass][, sparseMatrix(eclass, eix, x = x, dims = c(numclass, ncol(Zero)))]
+    djcn = rep(0, nrow(Djcn))
+    sensedjcn = rep("E", nrow(Djcn))
+    consmeta = rbind(consmeta, data.frame(type = 'DupJ', label = paste('DupJ', 1:nrow(Djcn)), sense = 'E', b = djcn, stringsAsFactors = F))
+    Dcn = rBind(Dcn, Djcn)
+    dcn = c(dcn, djcn)
+    sensedcn = c(sensedcn, sensedjcn)
+  }
 
   if (edge.slack)
     {
@@ -3061,7 +3068,7 @@ jbaMIP.mipstart = function(
     ## we draw an arbitrary distinction between low and high variance using
     ## a (quasi arbitrary threshold) based on (a lower) slack.prio 
     ############################
-    browser()
+
     m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
     cnmle = round(m) ## MLE estimate for CN    
     residual.min = ((m-cnmle)/(segstats$sd))^2
@@ -3081,14 +3088,11 @@ jbaMIP.mipstart = function(
     varmeta[type == 'residual', guess := eps_hat]
 
     mipstart = varmeta$guess
-
-    
-
+   
     sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(mipstart = mipstart), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
 
-    }
+  }
 
-  browser()
   # setup MIP
   if (gurobi) # translate into gurobi
     {
@@ -3202,6 +3206,8 @@ jbaMIP.mipstart = function(
 
   if (length(sol.l)==1)
     sol.l = sol.l[[1]]
+
+  browser()
 
   return(sol.l)
 }
@@ -10625,9 +10631,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
         message('Warning!!! Some paths missing!')
 
     ## for gGnome compatibiliity    
-    if (return.grl)
+    if (!return.grl)
     {
-      tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
+      tmp.dt = as.data.table(copy(paths))[, pid := group_name][, nix := 1:.N, by =pid]
       setkeyv(tmp.dt, c('pid', 'nix'))
       
       ## mark nodes that precede a reference junction
@@ -10648,18 +10654,20 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
       tmp.dt[, ref.run.last := data.table::shift(ref.run), by = pid]
       tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
       tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
+      #tmp.dt[loose == TRUE, ref.run.id := NA] ## make sure loose ends stay ungrouped 
       collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
                                                   nix = nix[1],
                                                   pid = pid[1],
                                                   seqnames = seqnames[1],
                                                   start = min(start),
                                                   end = max(end),
+                                                  loose = FALSE,
                                                   strand = strand[1]
                                                 ), by = ref.run.id]
 
       ## concatenate back with nodes that precede a non reference junction
-      tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nix, seqnames, start, end, strand)],
-                     collapsed.dt[, .(pid, nix, seqnames, start, end, strand)])
+      tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nix, seqnames, start, end, strand, loose)],
+                     collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
       setkeyv(tmp.dt, c('pid', 'nix'))
 
       tmp.gr = dt2gr(tmp.dt)
@@ -10668,10 +10676,10 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
       tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
       tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
 
-      ## DDDDDDDDDDDDDDDDDDDDDDDD
-      browser()
+      names(tmp.paths) = ifelse(grepl('\\-', names(tmp.paths)), -1, 1)*as.numeric(gsub('\\D', '', names(tmp.paths)))
 
-      gw = gGnome::gWalks$new(segs=tmp.segs,
+      ##      gw = gGnome::gWalks$new(segs=tmp.segs,
+      gw = gWalks$new(segs=tmp.segs,
                       paths=tmp.paths,
                       metacols=tmp.vals)
       return(gw)
