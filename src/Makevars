@@ -1,0 +1,3 @@
+PKG_CFLAGS=-m64 -fPIC -fno-strict-aliasing
+PKG_CPPFLAGS=-I/gpfs/commons/home/mimielinski/lab/Software/CPLEX/CPLEX_Studio/cplex/include
+PKG_LIBS=-L/gpfs/commons/home/mimielinski/lab/Software/CPLEX/CPLEX_Studio/cplex/lib/x86-64_linux/static_pic -lcplex -lm -lpthread
