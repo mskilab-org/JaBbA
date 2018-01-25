@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/mskilab/JaBbA.svg?branch=master)](https://travis-ci.org/mskilab/JaBbA)
+[![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gUtils.svg)](https://codecov.io/github/mskilab/JaBbA?branch=master)
 
 # JaBbA 
 
