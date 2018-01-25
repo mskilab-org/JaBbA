@@ -147,7 +147,7 @@ JaBbA = function(
 
     if (!(tfield %in% names(values(ra.all))))
       {
-       j if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
+       if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
           message("Detected SvABA input. Expand to unfiltered set.")
           svaba.uf = gsub("svaba.somatic.sv.vcf",
                           "svaba.unfiltered.somatic.sv.vcf", ra)
