@@ -19,8 +19,8 @@ JaBbA.digest(jab, kag = NULL, verbose = T, keep.all = T)
 JaBbA.digest
 }
 \details{
-processes JaBbA object 
-(1) collapsing segments with same copy number that lack loose ends 
+processes JaBbA object
+(1) collapsing segments with same copy number that lack loose ends
 (2) (optional) +/- adds segments correponding to loose ends
 (3) outputting edges data frame with colors, and other formatting information
 (4) outputting junctions GRangesList with copy number, color, lty and other plotting components

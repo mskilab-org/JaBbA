@@ -56,6 +56,7 @@ $ploidy.constraints input ploidy constraints
 $beta.constraints input beta constrinats
 $cn.prior input cn.prior
 $slack.prior input slack.prior
+mimielinski Sunday, Dec 31, 2017 03:58:45 PM
 }
 \description{
 jbaMIP
@@ -73,7 +74,7 @@ the relative "concentration" of each interval) to infer
 (3) slack edges (if any needed)
 
 basically solves ABSOLUTE problem (fitting integer grid to continuous segment intensities)
-while enforcing edge-conservation constraints. 
+while enforcing edge-conservation constraints.
 
 Most important optional parameters include
 (1) cn.sd (expected deviation of absolute copy number from ploidy)

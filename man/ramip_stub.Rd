@@ -7,7 +7,7 @@
 ramip_stub(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200,
   slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
   purity.min = NA, purity.max = NA, ploidy.min = NA, ploidy.max = NA,
-  edge.nudge = 0, ab.force = NULL)
+  init = NULL, edge.nudge = 0, ab.force = NULL)
 }
 \description{
 run ramip

@@ -41,7 +41,7 @@ Low level function to annotate walks (GRanges list) with cds / promoter annotati
 given:
 walks: input grl of walks on the genome
 tx:  gr annotating transcript boundaries
-or grl annotating exon level transcripts e.g. refgene or grl with 
+or grl annotating exon level transcripts e.g. refgene or grl with
 grl-level meta data fields $s1, $s2, $e1, $e2 annotating start and end positions of transcipt and cds
 respectively, $gene_sym representing gene label, $chr - chromosome, $str strand
 and gr level features (exon_frame) annotating the frame (0,1,2) of the first exon position in a + transcript

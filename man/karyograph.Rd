@@ -14,9 +14,9 @@ karyograph(junctions, tile = NULL, label.edges = FALSE)
 \value{
 a list with the following fields
 $tile = GRanges of length 2*n tiling of the genome corresponding to union of rearrangement breakpoints and copy number endpoints
-$G = igraph object representing karyograph, here are the edge and vertex features 
+$G = igraph object representing karyograph, here are the edge and vertex features
      vertex features: $chrom, $start, $end, $width, $strand, $size, $shape, $border.width, $label, $chrom.ord, $y, $col, $weight
-     edge features:$ $bp.id, $weight, $from, $to, $col, $type, $line.style, $arrow.shape, $width, 
+     edge features:$ $bp.id, $weight, $from, $to, $col, $type, $line.style, $arrow.shape, $width,
      important:  $type specifies which edges are "aberrant" and "reference", $bp.id specifies which input rearrangement (item in junctions)
      a given aberrant edge came from (and is NA for reference edges)
 $adj = 2n x 2n adjacency matrix whose nonzero entries ij show the edge.id in $G
@@ -24,7 +24,7 @@ $ab.adj = 2n x 2n binary matrix specifying aberrant edges
 $ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
             in both orientations
 mimielinski Sunday, Aug 06, 2017 06:46:15 PM
-fix added to handle strange [0 0] junctions outputted 
+fix added to handle strange [0 0] junctions outputted
 by Snowman ... which failed to match to any tile
 todo: may want to also handle junctions that
 fall off the other side of the chromosome
@@ -39,7 +39,7 @@ used for downstream jbaMIP and karyoMIP functions
 Input bpp is a GRangesList of signed locus pairs describing aberrant adjacencies.
 The convention is as follows: Each locus in the input breakpoint pair points to the direction that
 is being joined by the adjacencies i.e.
-(-) bp points to "left" or preceding segment 
+(-) bp points to "left" or preceding segment
 (+) bp points to the  "right" or the following segment
 
 eg imagine a|bp1|b

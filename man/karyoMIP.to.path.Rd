@@ -20,7 +20,7 @@ karyoMIP.to.path(sol, K, e, gr = NULL, mc.cores = 1, verbose = T)
 \item{verbose}{flag}
 }
 \value{
-A list with following items: 
+A list with following items:
 $path length k list of paths, cycles (each item i is vector denoting sequence of vertices in G )
 $is.cycle length k logical vector whose component i denotes whether path i is cyclic
 $cn  length k integer vector whose component i denotes copy number of contig i

@@ -11,11 +11,11 @@ convex.basis(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 Outputs a matrix K of the convex basis of matrix A
 }
 \details{
-i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to 
+i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to
 Ax = 0, x>=0
 
 exclude.basis =  0, 1 matrix of dimension k x ncol(A) specifying k sparsity patterns that we would
-like to exclude from the convex.basis.  This can speed up computation since any non-negative 
+like to exclude from the convex.basis.  This can speed up computation since any non-negative
 combinations of vectors that satisfy an exclusion property will also be excludable, and thus
 we can remove such vectors as soon as we detect them..
 

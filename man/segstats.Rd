@@ -31,7 +31,7 @@ segstats is a step in the JaBbA pipeline
 \details{
 computes posterior mean's and sd's for a target tiling GRanges of segments (target)
 target must be a non-overlapping gapless strandless or two stranded tiling of the genome (eg output of gr.tile)
-if two stranded, then every stranded interval must have a mirror image interval included 
+if two stranded, then every stranded interval must have a mirror image interval included
 
 given a GRanges of signals using value field "field" of signal GRanges
 assuming that the signals inside each interval in "target" are independent samples from a
