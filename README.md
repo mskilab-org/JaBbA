@@ -14,21 +14,28 @@ Installation
 ```{r}
 source("https://bioconductor.org/biocLite.R")
 biocLite("GenomicRanges")
+biocLite("DNAcopy")
 ```
 
 2. Install devtools from CRAN (if you don't have it already)
 
 ```{r}
-install.packages('devtools')
+install.packages('devtools')  
+install.packages('slam')  
+install.packages('Rcplex')  
+## Requires IBM ILOG CPLEX: install the community version, Download Rcplex source,
+## note the include dir, and build Rcplex from source if auto install fails
+## R CMD INSTALL --configure-args="--with-cplex-dir=/Applications/CPLEX_Studio_Community128/cplex" Rcplex_0.3-3.tar.gz
 ```
 
 3. Install dependent mskilab dependencies
 
 ```{r}
 devtools::install_github('mskilab/gUtils')
+devtools::install_github('gTrack')
 devtools::install_github('mskilab/gGnome')
 
 3. Install JaBbA
 
 ```{r}
-devtools::install_github('mskilab/JaBbA)
+devtools::install_github('mskilab/JaBbA')
