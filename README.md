@@ -34,8 +34,11 @@ install.packages('Rcplex')
 devtools::install_github('mskilab/gUtils')
 devtools::install_github('gTrack')
 devtools::install_github('mskilab/gGnome')
+```
 
 3. Install JaBbA
 
 ```{r}
-devtools::install_github('mskilab/JaBbA')
+devtools::install_github('mskilab/JaBbA)
+```
+
