@@ -3,8 +3,8 @@
 
 # JaBbA 
 
-Inferring balanced integer cancer genome graphs using mixed integer programming analysis
-of read depth and junction patterns in WGS data. . 
+Inferring balanced cancer genome graphs using mixed integer programming analysis
+of read depth and junction patterns in WGS data. 
 
 Installation
 ------------
