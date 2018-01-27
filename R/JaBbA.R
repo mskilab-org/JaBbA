@@ -1,4 +1,3 @@
-#############################################################################
 ## Marcin Imielinski
 ##
 ## Weill-Cornell Medical College
@@ -80,10 +79,10 @@
 #' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 #'
 #'
-#' @param ra  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
-#' @param coverage  GRanges of coverage OR path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
+#' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
+#' @param coverage  GRanges of coverage OR path to tsv of cov file w GRanges style columns, rds of GRanges or .wig / .bed file of (+/- normalized, GC corrected) fragment density
 #' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
-#' @param seg  optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings
+#' @param seg  optional path to existing segmentation, if missing then will segment coverage using DNACopy with standard settings
 #' @param cfield  character, junction confidence meta data field in ra
 #' @param tfield  character, tier confidence meta data field in ra
 #' @param outdir  out directory to dump into, default ./
@@ -100,19 +99,19 @@
 #' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param reiterate  integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end
 #'
-#' @param rescue.window integer scalar bp window around which to rescue lower tier junctions 
+#' @param rescue.window integer scalar bp window around which to rescue lower tier junctions
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @export
 #' @import DNAcopy
 JaBbA = function(
-    ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+    junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
     coverage, # path to cov file, rds of GRanges
     seg = NULL, # path to seg file, rds of GRanges
+    outdir = './JaBbA', # out directory to dump into
     cfield = NULL, # character, junction confidence meta data field in ra
     tfield = NULL, # character, tier confidence meta data field in ra
     nudge.balanced = FALSE,  ## if TRUE nudge chains of balanced (or quasi balanced junctions)
     thresh.balanced = 500, ## threshold for balanced junctions
-    outdir = './', # out directory to dump into
     nseg = NULL, # path to normal seg file with $cn meta data field
     hets = NULL, # path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
     name = 'tumor', ## prefix for sample name to be output to seg file
@@ -131,12 +130,17 @@ JaBbA = function(
     overwrite = F ## whether to overwrite existing output in outdir
     )
 {
+  message('Running analysis in ', outdir)
+  ra = junctions
 
-  if (grepl("rds$", ra)){
-    ra.all = readRDS(ra)
-  } else {
-    ra.all = ra_breaks(ra)
-  }
+  if (is.character(ra))
+    {
+      if (grepl("rds$", ra)){
+        ra.all = readRDS(ra)
+      } else {
+        ra.all = read.junctions(ra)
+      }
+    }
 
   ## if we are iterating
   if (reiterate>0)  {
@@ -144,13 +148,14 @@ JaBbA = function(
     if (is.null(tfield))
       tfield = 'tier'
 
+    browser()
     if (!(tfield %in% names(values(ra.all))))
       {
        if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
           message("Detected SvABA input. Expand to unfiltered set.")
           svaba.uf = gsub("svaba.somatic.sv.vcf",
                           "svaba.unfiltered.somatic.sv.vcf", ra)
-          ra.uf = ra_breaks(svaba.uf)
+          ra.uf = read.junctions(svaba.uf)
           ## Careful!!! swapping the un
           ra.old = ra.all
           ra.all = ra.uf
@@ -186,7 +191,7 @@ JaBbA = function(
       saveRDS(last.ra, this.ra.file)
 
       jabba_stub(
-        ra = ra,
+        junctions = this.ra.file,
         coverage = coverage,
         seg = seg,
         nseg = nseg,
@@ -201,7 +206,7 @@ JaBbA = function(
         field = field,
         subsample = subsample,
         hets = hets,
-        init = init, 
+        init = init,
         slack.penalty = slack,
         ploidy = ploidy,
         purity = purity
@@ -234,7 +239,7 @@ JaBbA = function(
     cat('Done Iterating\n')
   } else  {
     jabba_stub(
-      ra = ra,
+      junctions = ra,
       seg = seg,
       coverage = coverage,
       nseg = nseg,
@@ -244,8 +249,6 @@ JaBbA = function(
       outdir = outdir,
       cores = cores,
       edgenudge = edgenudge,
-      gamma = gamma,
-      beta = beta,
       tilim = tilim,
       name = name,
       field = field,
@@ -289,10 +292,10 @@ JaBbA = function(
 #' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 #'
 #'
-#' @param ra  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
+#' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
 #' @param coverage  GRanges of coverage OR path to cov file, rds of GRanges or .wig / .bed file of (normalized, GC corrected) fragment density
 #' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
-#' @param seg  optional path to existing segmentation, if missing then will segment abu using DNACopy with standard settings
+#' @param seg  optional path to existing segmentation, if missing then we will segment coverage using DNACopy with standard settings
 #' @param cfield  character, junction confidence meta data field in ra
 #' @param tfield  character, tier confidence meta data field in ra
 #' @param outdir  out directory to dump into, default ./
@@ -309,7 +312,7 @@ JaBbA = function(
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @import DNAcopy
 jabba_stub = function(
-    ra, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+    junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
     coverage, # path to cov file, rds of GRanges
     seg = NULL, # path to seg file, rds of GRanges
     cfield = NULL, # character, junction confidence meta data field in ra
@@ -355,23 +358,29 @@ jabba_stub = function(
     {
         if (grepl('\\.rds$', coverage))
         {
-            cov = readRDS(coverage)
+            coverage = readRDS(coverage)
         }
+        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
+      {
+        coverage = dt2gr(fread(coverage))
+      }
         else
-        {
-            message('Importing seg from UCSC format')
-            cov = import.ucsc(coverage)
-            field = 'score';
-            cov = gr.fix(cov)
-        }
+      {
+        message('Importing seg from UCSC format')
+        coverage= import.ucsc(coverage)
+        field = 'score';
+        coverage = gr.fix(coverage)
+      }
     }
     else
-        cov = coverage
+        coverage = coverage
 
+    if (!inherits(coverage, 'GRanges'))
+      coverage = dt2gr(coverage)
 
-    if (!(field %in% names(values(cov))))
+    if (!(field %in% names(values(coverage))))
     {
-        new.field = names(values(cov))[1]
+        new.field = names(values(coverage))[1]
         warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
         field = new.field
     }
@@ -379,14 +388,15 @@ jabba_stub = function(
     if (is.null(seg))
     {
         message('No segmentation provided via seg variable, so performing segmentation using CBS')
-        vals = values(cov)[, field]
+        vals = values(coverage)[, field]
         ix = which(!is.na(vals))
-        cna = CNA(log(vals[ix]), as.character(seqnames(cov))[ix], start(cov)[ix], data.type = 'logratio')
+        cna = CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
         cat('finished making cna\n')
         seg = segment(smooth.CNA(cna), alpha = 1e-5, verbose = T)
         cat('finished segmenting\n')
-        seg = seg2gr(print(seg), seqlengths(cov)) ## remove seqlengths that have not been segmented
-        seg = gr.fix(seg, seqlengths(cov), drop = T)
+        seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
+#        seg = seg2gr(print(seg), seqlengths(coverage)) ## remove seqlengths that have not been segmented
+        seg = gr.fix(seg, seqlengths(coverage), drop = T)
         cat(length(seg), ' segments produced\n')
         names(seg) = NULL
     }
@@ -396,27 +406,30 @@ jabba_stub = function(
         {
             if (grepl('\\.rds$', seg))
             {
-                cov = readRDS(seg)
+                seg = readRDS(seg)
             }
             else
             {
                 message('Importing seg from UCSC format')
-                cov = import.ucsc(seg)
+                seg = import.ucsc(seg)
                 field = 'score';
             }
         }
-        else
-            cov = seg
     }
+
+
+    if (!inherits(seg, 'GRanges'))
+      seg = dt2gr(seg)
 
 
     if (!is.null(hets))
         if (!file.exists(hets))
             {
-                warning(sprintf('hets file "%s" not found, ignoring hets\n'))
+                warning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
                 hets = NULL
             }
 
+    ra = junctions
     if (!is.character(ra))
         {
             if (overwrite | !file.exists(kag.file))
@@ -453,12 +466,16 @@ jabba_stub = function(
         }
 
     ab.force = NULL
+    ab.exclude = NULL
     if (!is.null(tfield))
         {
             if (tfield %in% names(values(kag$junctions)))
                 {
                     ab.force = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='1')
                     cat('Found tier field enforcing >=1 CN at ', length(ab.force), 'junctions\n')
+
+                    ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
+                    cat('Found tier field enforcing 0 CN at ', length(ab.exclude), 'junctions\n')
                 }
         }
 
@@ -479,8 +496,7 @@ jabba_stub = function(
     } else { ## nudge everything ..
       if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
       if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
-        cov = readRDS(abu)
-        bps.cov = bpss %$% cov
+        bps.cov = bpss %$% coverage
         na.jix = unique((bps.cov %Q% (is.na(ratio)))$grl.ix)
         if (length(na.jix)>0){
           message("Cancel edge nudge for ", length(na.jix), " junctions.")
@@ -500,7 +516,8 @@ jabba_stub = function(
 
     if (overwrite | !file.exists(jabba.raw.rds.file))
       {
-        ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = cores, tilim = tilim, edge.nudge = edgenudge, ab.force = ab.force, mem = mem, init = init, 
+        ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = cores, tilim = tilim, edge.nudge = edgenudge,
+                   ab.force = ab.force, ab.exclude = ab.exclude, mem = mem, init = init,
                    purity.min = purity, purity.max = purity, ploidy.min = ploidy, ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty)
       }
@@ -593,8 +610,8 @@ jabba_stub = function(
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
-    jabd$td$y1 = y1
-    jabd.simple$td$y1 = y1
+    jabd$gtrack$y1 = y1
+    jabd.simple$gtrack$y1 = y1
 
     td.cov = gTrack(tmp.cov, y.field = field, col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
 
@@ -605,10 +622,10 @@ jabba_stub = function(
             if (is.character(tryCatch(png(jabba.png.file, width = 2000, height = 1000), error = function(e) 'bla')))
                 pdf(gsub('png$', 'pdf', jabba.png.file), width = 10, height = 10)
 
-            if (is.null(jabd$atd))
-                plot(c(td.cov, jabd$td))
+            if (is.null(jabd$agtrack))
+                plot(c(td.cov, jabd$gtrack))
             else
-                plot(c(jabd$atd, td.cov, jabd$td))
+                plot(c(jabd$agtrack, td.cov, jabd$gtrack))
 
             dev.off()
         }
@@ -618,10 +635,10 @@ jabba_stub = function(
             if (is.character(tryCatch(png(jabba.simple.png.file, width = 2000, height = 1000), error = function(e) 'bla')))
                 pdf(gsub("png$", "pdf", jabba.simple.png.file), width = 20, height = 10)
 
-            if (is.null(jabd.simple$atd))
-                plot(c(td.cov, jabd.simple$td))
+            if (is.null(jabd.simple$agtrack))
+                plot(c(td.cov, jabd.simple$gtrack))
             else
-                plot(c(jabd.simple$atd, td.cov, jabd.simple$td))
+                plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack))
 
             dev.off()
         }
@@ -1019,11 +1036,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
             this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
             this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
-            this.ra = ra_breaks(this.dranger, seqlengths = hg_seqlengths())
+            this.ra = read.junctions(this.dranger, seqlengths = hg_seqlengths())
         }
         else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
         {
-            tmp.ra = ra_breaks(ra.file, seqlengths = hg_seqlengths(), get.loose = T)
+            tmp.ra = read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T)
             if (length(tmp.ra)==0){
                 this.ra = gr.fix(GRangesList(), hg_seqlengths())
                 loose.ends = GRanges(seqlengths = hg_seqlengths())
@@ -1215,7 +1232,8 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
-                      ab.force = NULL ## indices of aberrant junctions to force include into the solution
+                      ab.force = NULL, ## indices of aberrant junctions to force include into the solution
+                      ab.exclude = NULL ## indices of aberrant junctions to force include into the solution
                       )
 {
     cat('Starting', kag.file, '\n')
@@ -1269,6 +1287,14 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
         adj.lb = this.kag$adj*0
         adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
         adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
+    }
+
+    if (!is.null(ab.exclude))
+    {
+      print(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
+      adj.ub = this.kag$adj*0+Inf
+      adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0
+      adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0
     }
 
     ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.lb = adj.lb , adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = T)
@@ -1676,7 +1702,6 @@ jbaMIP = function(
       args = as.list(match.call())[-1]
       args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
 
-      browser()
       sols = mclapply(1:length(cll), function(k, args)
         {
           if (debug)
@@ -2503,7 +2528,6 @@ jbaMIP = function(
   if (length(sol.l)==1)
     sol.l = sol.l[[1]]
 
-  browser()
 
   return(sol.l)
 }
@@ -2808,16 +2832,29 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
 
               jab = list(segstats = jab$segstats[ix], adj = jab$adj[ix, ix], ab.edges = jab$ab.edges, purity = jab$purity, ploidy = jab$ploidy)
 
+              #' mimielinski Friday, Jan 26, 2018 06:45:21 PM
+              #' fixing eslack
+              segstats = gr.fix(jab$segstats)
+              segstats$is.left.end = start(segstats)==1
+              segstats$is.right.end = end(segstats) == seqlengths(segstats)[as.character(seqnames(segstats))]
+              segstats$eslack.in = segstats$cn-colSums(jab$adj)
+              segstats$eslack.out = segstats$cn-rowSums(jab$adj)
+              segstats$eslack.in[(segstats$is.left.end & as.logical(strand(segstats)=='+')) |
+                                 (segstats$is.right.end & as.logical(strand(segstats)=='-'))] = 0
+              segstats$eslack.out[(segstats$is.right.end & as.logical(strand(segstats)=='+')) |
+                                  (segstats$is.left.end & as.logical(strand(segstats)=='-'))] = 0
+              jab$segstats = segstats
+
               tmp.adj = jab$adj*0
               jab$segstats$ref.child = gr.match(gr.flipstrand(flank(gr.flipstrand(jab$segstats),1)), jab$segstats, ignore.strand = F)
               jab$segstats$ref.parent = gr.match(flank(jab$segstats,1), jab$segstats, ignore.strand = F)
               ix = suppressWarnings(cbind(1:length(jab$segstats), jab$segstats$ref.child))
               nnaix = Matrix::rowSums(is.na(ix))==0
               if (any(nnaix))
-                  tmp.adj[ix[nnaix,, drop = F]] = 1
+                  tmp.adj[ix[nnaix,, drop = F]] = 1 ## fill in all reference edges
 
-              nnab = !ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0)
-
+              ## mark all non-NA aberrant edges
+              nnab = !ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0)  ## TRUE only if ab.edges has non zero and non NA edge id in ab.edges[,3]
               if (any(nnab))
                   tmp.adj[rbind(jab$ab.edges[nnab, 1:2, 1], jab$ab.edges[nnab, 1:2, 2])] = 1
 
@@ -2839,35 +2876,74 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       }
 
       adj = sign(bk.adj)*0.01 + jab$adj ## keep a hint of 0 copy edges
-      segstats = jab$segstats
 
-      lends = loose.ends(jab, kag)
+      #' mimielinski Friday, Jan 26, 2018 07:43:18 PM
+      #' rewriting to get rid of strange edge cases
+      #' resulting from unnecessarily having to use coordinates
+      #' to match up loose ends with their nodes
 
-      if (!is.null(lends))
-          lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
-
-    if (length(lends)>0)
+      if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
       {
-        strand(lends) = '+'
-        lends = c(lends, gr.flipstrand(lends))
-        lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
-        lends$id = nrow(adj) + c(1:length(lends))
-        lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
-        adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
-          cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
+        sink.ix = which(jab$segstats$eslack.out>0)
+        sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
+        sinks$cn = jab$segstats$eslack.out[sink.ix]
+        sinks$partner.id = sink.ix
+        sinks$id = nrow(adj) + 1:length(sinks)
+        sinks$loose = TRUE
+        sinks$right = as.logical(strand(sinks)=='+')
 
-        ## right side ends of '+' and left side ends of '-' are sinks
-        sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
-        adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
-        adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
+        source.ix = which(jab$segstats$eslack.in>0)
+        sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
+        sources$cn = jab$segstats$eslack.in[source.ix]
+        sources$partner.id = source.ix
+        sources$id = nrow(adj) + length(sinks) + 1:length(sources)
+        sources$loose = TRUE
+        sources$right = as.logical(strand(sources)=='+')
+
+        nlends = length(sources) + length(sinks)
+
+        ## pad original matrix with new nodes
+        adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
+                         cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
+
+        ## add new edges
+        adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
+        adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
         adj = adj.plus
-        lends$loose = T
         segstats$loose = F
-        segstats = grbind(jab$segstats, lends)
-        values(segstats) = rrbind(values(jab$segstats), values(lends))
+        segstats = grbind(jab$segstats, sinks, sources)
+        values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
       }
-    else
-      segstats$loose = F
+      else
+        segstats$loose = FALSE
+
+
+    ##  lends = loose.ends(jab, kag)
+    ##  if (!is.null(lends))
+    ##  lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
+
+    ## if (length(lends)>0)
+    ##   {
+    ##     strand(lends) = '+'
+    ##     lends = c(lends, gr.flipstrand(lends))
+    ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
+    ##     lends$id = nrow(adj) + c(1:length(lends))
+    ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
+    ##     adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
+    ##       cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
+
+    ##     ## right side ends of '+' and left side ends of '-' are sinks
+    ##     sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
+    ##     adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
+    ##     adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
+    ##     adj = adj.plus
+    ##     lends$loose = T
+    ##     segstats$loose = F
+    ##     segstats = grbind(jab$segstats, lends)
+    ##     values(segstats) = rrbind(values(jab$segstats), values(lends))
+    ##   }
+    ## else
+    ##   segstats$loose = F
 
     out = list()
 
@@ -3011,12 +3087,11 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
         ss[ss$loose]$border = alpha('white', 0)
       }
 
-    out$td = gTrack(ss, y.field = 'cn', edges = out$edges[order(out$edges$cn), ], name ='JaBbA', angle = 0)
-
+    out$td = out$gtrack = gTrack(ss, y.field = 'cn', edges = out$edges[order(out$edges$cn), ], name ='JaBbA', angle = 0)
     out$purity = jab$purity
-    out$ploidy = jab$ploidy
+      out$ploidy = jab$ploidy
 
-    return(out)
+      return(out)
   }
 
 ####################################################################
@@ -3072,23 +3147,23 @@ jbaMIP.process = function(
     if (is.null(sol$segstats$eslack.out))
       sol$segstats$eslack.out = sol$segstats$slack.out
 
-    ed.ij = which(sol$adj!=0, arr.ind = T)
+    ed.ij = Matrix::which(sol$adj!=0, arr.ind = T)
 
     ## B is vertices x edges (i.e. signed incidence matrix)
     B = sparseMatrix(c(ed.ij[,1], ed.ij[,2]), rep(1:nrow(ed.ij), 2), x = rep(c(-1.00001, 1), each = nrow(ed.ij)), dims = c(nrow(sol$adj), nrow(ed.ij)))
 
     rownames(B) = 1:nrow(B)
 
-    tmp.ix = which(abs(B)>=1)
+    tmp.ix = Matrix::which(abs(B)>=1)
     B[tmp.ix] = round(B[tmp.ix]) ## "0.00001" hack to take care of eclass matching below, these are length 1 self loop edge cases
 
-    ix.tel.5 = which(Matrix::colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres
+    ix.tel.5 = Matrix::which(Matrix::colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres
     sol$segstats$eslack.in[ix.tel.5] = sol$segstats$cn[ix.tel.5]
 
-    ix.tel.3 = which(Matrix::rowSums(sol$adj!=0)==0)
+    ix.tel.3 = Matrix::which(Matrix::rowSums(sol$adj!=0)==0)
     sol$segstats$eslack.out[ix.tel.3] = sol$segstats$cn[ix.tel.3]  ## make fake slacks for telomeres
 
-    ix.eslack.out = which(sol$segstats$eslack.out!=0);
+    ix.eslack.out = Matrix::which(sol$segstats$eslack.out!=0);
     names(ix.eslack.out) = paste('out slack', ix.eslack.out)
     ix.eslack.in = which(sol$segstats$eslack.in!=0);
     names(ix.eslack.in) = paste('in slack', ix.eslack.in)
@@ -3708,7 +3783,7 @@ jbaMIP.allelic = function(
 #' list with following fields:
 #' $segstats = GRanges of input segments with $cn.high and $cn.low segments populated
 #' $asegstats = GRanges of allelic segments (length is 2*length(segstats)) with high and low segments each having $cn, this is a "melted" segstats GRAnges
-#' $atd = gTrack of allelic segments and supporting input het.sites
+#' $agtrack = gTrack of allelic segments and supporting input het.sites
 #' $aadj = allelic adjacency matrix of allele specific junctions
 #' $ab.ix = indices of aberrant edges in $aadj
 #' $ref.ix = indices of reference edges in $aadj
@@ -4034,13 +4109,14 @@ jabba.alleles = function(
         )
 
     out = list(
-        segstats = jab$segstats,
-        asegstats = asegstats.final,
-        atd = atd,
-        aadj = aadj.final,
-        ab.ix = which((m %*% adj.ab %*% t(m))!=0, arr.ind = T),
-        ref.ix = which((m %*% adj.ref %*% t(m))!=0, arr.ind = T)
-      )
+      segstats = jab$segstats,
+      asegstats = asegstats.final,
+      atd = atd,
+      agtrack = atd,
+      aadj = aadj.final,
+      ab.ix = which((m %*% adj.ab %*% t(m))!=0, arr.ind = T),
+      ref.ix = which((m %*% adj.ref %*% t(m))!=0, arr.ind = T)
+    )
 
     return(out)
 }
@@ -6422,19 +6498,18 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 }
 
 
-
 ############################################
-#' ra_breaks
+#' read.junctions
 #'
 #' takes in either file or data frame from dranger or snowman or path to BND / SV type vcf file
 #' and returns junctions in VCF format.
 #'
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
-#' @name ra_breaks
+#' @name read.junctions
 #' @import VariantAnnotation
 ############################################
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
+read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
   )
   {
@@ -6490,14 +6565,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                   {
                       library(VariantAnnotation)
 
-                      vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+                      vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
                       if (!('SVTYPE' %in% names(info(vcf)))) {
                         warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                           return(GRangesList());
                     }
 
                       ## vgr = rowData(vcf) ## parse BND format
-                      vgr = read_vcf(rafile, swap.header = swap.header)
+                      vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
 
                       ## no events
                       if (length(vgr) == 0)
@@ -6909,7 +6984,7 @@ jgraph = function(jab, thresh_cl = 1e6, all = FALSE, thresh_r = 1e3, clusters = 
 #' $ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
 #'             in both orientations
 ############################################
-karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of ra_breaks(dranger.df) where dranger is df of dranger output)
+karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of read.junctions(dranger.df) where dranger is df of dranger output)
     tile = NULL, # pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
     label.edges = FALSE
   )
@@ -8575,8 +8650,8 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
 
     ## start and end indices of nodes
-    tip = which(strand(kg$tile)=='+')
-    tin = which(strand(kg$tile)=='-')
+    tip = which(as.character(strand(kg$tile))=='+')
+    tin = which(as.character(strand(kg$tile))=='-')
     gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
     gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
     gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
@@ -8788,7 +8863,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 #' @param verbose logical flag
 #' @return list of walk set around each locus or junction that is inputted to analysis, each list item is a list with the following fields
 #' $win = input locus of interest, $grl = GRangesList of walks, $grs is a collapsed footprint of all walks in the walk list for this locu
-#' $td gTrack of of the output, additional outputs for debugging: $sol, $K, $Bc, $eix, $vix, $h
+#' $gtrack gTrack of of the output, additional outputs for debugging: $sol, $K, $Bc, $eix, $vix, $h
 ####################################################
 jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
   trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
@@ -8849,7 +8924,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
       ix = which(sol$segstats$eslack.in!=0 | sol$segstats$eslack.out!=0)
       tmp.adj[ix, ix] = 0
-      pos.ix = which(strand(sol$segstats)=='+')
+      pos.ix = which(as.character(strand(sol$segstats))=='+')
       sol$segstats$tile.id = match(gr.stripstrand(sol$segstats), gr.stripstrand(sol$segstats[pos.ix]))
       G = graph.adjacency(tmp.adj!=0)
     }
@@ -8996,9 +9071,9 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
           values(grs) = values(p$grl)
           names(grs) = names(p$grl)
 
-          if (!is.null(sol$td))
+          if (!is.null(sol$gtrack))
             {
-              td.seg = sol$td
+              td.seg = sol$gtrack
               td.seg$y1 = y1
               td = c(td.seg, td.rg)
             }
@@ -9225,12 +9300,12 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
               gt.walk = gTrack(out$allpaths, draw.paths = T,border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
               gt.walk$path.cex.arrow = 0
               gt.walk$path.stack.x.gap = 1e6
-              out$td.allpaths = c(
+              out$gtrack.allpaths = c(
                   gt.walk,
                   td.seg,
                   td.rg)
               pdf(outfile.allpaths.pdf, height = 30, width = 24)
-              plot(out$td.allpaths,
+              plot(out$gtrack.allpaths,
                       windows = win, links = kag$junctions)
               dev.off()
               out$README = paste(out$README, 'allpaths= all paths through windows (not just optimal ones), td.allpaths = gTrack object of plot of all paths')
@@ -9669,7 +9744,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
 
         ## DEBUG DEBUG DEBUG
-        seg.ix = which(strand(jab$segstats)=='+'); seg.rix = which(strand(jab$segstats)=='-');
+        seg.ix = which(as.character(strand(jab$segstats))=='+'); seg.rix = which(as.character(strand(jab$segstats))=='-');
 
 
         if (nrow(ij)==0 & cleanup_mode == FALSE)
