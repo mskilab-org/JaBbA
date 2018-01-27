@@ -8303,6 +8303,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
                        cn.dist = dist,
                        verbose = F,
                        interval = 400,
+                       junc.only=TRUE
                        mc.cores = 1,
                        chunksize = 5000)
   {
