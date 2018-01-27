@@ -2439,16 +2439,29 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
 
               jab = list(segstats = jab$segstats[ix], adj = jab$adj[ix, ix], ab.edges = jab$ab.edges, purity = jab$purity, ploidy = jab$ploidy)
 
+              #' mimielinski Friday, Jan 26, 2018 06:45:21 PM
+              #' fixing eslack
+              segstats = gr.fix(jab$segstats)
+              segstats$is.left.end = start(segstats)==1
+              segstats$is.right.end = end(segstats) == seqlengths(segstats)[as.character(seqnames(segstats))]
+              segstats$eslack.in = segstats$cn-colSums(jab$adj)
+              segstats$eslack.out = segstats$cn-rowSums(jab$adj)
+              segstats$eslack.in[(segstats$is.left.end & as.logical(strand(segstats)=='+')) |
+                                 (segstats$is.right.end & as.logical(strand(segstats)=='-'))] = 0
+              segstats$eslack.out[(segstats$is.right.end & as.logical(strand(segstats)=='+')) |
+                                  (segstats$is.left.end & as.logical(strand(segstats)=='-'))] = 0
+              jab$segstats = segstats
+
               tmp.adj = jab$adj*0
               jab$segstats$ref.child = gr.match(gr.flipstrand(flank(gr.flipstrand(jab$segstats),1)), jab$segstats, ignore.strand = F)
               jab$segstats$ref.parent = gr.match(flank(jab$segstats,1), jab$segstats, ignore.strand = F)
               ix = suppressWarnings(cbind(1:length(jab$segstats), jab$segstats$ref.child))
               nnaix = Matrix::rowSums(is.na(ix))==0
               if (any(nnaix))
-                  tmp.adj[ix[nnaix,, drop = F]] = 1
+                  tmp.adj[ix[nnaix,, drop = F]] = 1 ## fill in all reference edges
 
-              nnab = !ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0)
-
+              ## mark all non-NA aberrant edges
+              nnab = !ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0)  ## TRUE only if ab.edges has non zero and non NA edge id in ab.edges[,3]
               if (any(nnab))
                   tmp.adj[rbind(jab$ab.edges[nnab, 1:2, 1], jab$ab.edges[nnab, 1:2, 2])] = 1
 
@@ -2470,35 +2483,74 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       }
 
       adj = sign(bk.adj)*0.01 + jab$adj ## keep a hint of 0 copy edges
-      segstats = jab$segstats
 
-      lends = loose.ends(jab, kag)
+      #' mimielinski Friday, Jan 26, 2018 07:43:18 PM
+      #' rewriting to get rid of strange edge cases
+      #' resulting from unnecessarily having to use coordinates
+      #' to match up loose ends with their nodes
 
-      if (!is.null(lends))
-          lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
-
-    if (length(lends)>0)
+      if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
       {
-        strand(lends) = '+'
-        lends = c(lends, gr.flipstrand(lends))
-        lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
-        lends$id = nrow(adj) + c(1:length(lends))
-        lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
-        adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
-          cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
+        sink.ix = which(jab$segstats$eslack.out>0)
+        sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
+        sinks$cn = jab$segstats$eslack.out[sink.ix]
+        sinks$partner.id = sink.ix
+        sinks$id = nrow(adj) + 1:length(sinks)
+        sinks$loose = TRUE
+        sinks$right = as.logical(strand(sinks)=='+')
 
-        ## right side ends of '+' and left side ends of '-' are sinks
-        sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
-        adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
-        adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
+        source.ix = which(jab$segstats$eslack.in>0)
+        sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
+        sources$cn = jab$segstats$eslack.in[source.ix]
+        sources$partner.id = source.ix
+        sources$id = nrow(adj) + length(sinks) + 1:length(sources)
+        sources$loose = TRUE
+        sources$right = as.logical(strand(sources)=='+')
+
+        nlends = length(sources) + length(sinks)
+
+        ## pad original matrix with new nodes
+        adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
+                         cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
+
+        ## add new edges
+        adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
+        adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
         adj = adj.plus
-        lends$loose = T
         segstats$loose = F
-        segstats = grbind(jab$segstats, lends)
-        values(segstats) = rrbind(values(jab$segstats), values(lends))
+        segstats = grbind(jab$segstats, sinks, sources)
+        values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
       }
-    else
-      segstats$loose = F
+      else
+        segstats$loose = FALSE
+
+
+    ##  lends = loose.ends(jab, kag)
+    ##  if (!is.null(lends))
+    ##  lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
+
+    ## if (length(lends)>0)
+    ##   {
+    ##     strand(lends) = '+'
+    ##     lends = c(lends, gr.flipstrand(lends))
+    ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
+    ##     lends$id = nrow(adj) + c(1:length(lends))
+    ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
+    ##     adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
+    ##       cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
+
+    ##     ## right side ends of '+' and left side ends of '-' are sinks
+    ##     sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
+    ##     adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
+    ##     adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
+    ##     adj = adj.plus
+    ##     lends$loose = T
+    ##     segstats$loose = F
+    ##     segstats = grbind(jab$segstats, lends)
+    ##     values(segstats) = rrbind(values(jab$segstats), values(lends))
+    ##   }
+    ## else
+    ##   segstats$loose = F
 
     out = list()
 
@@ -2642,13 +2694,14 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
         ss[ss$loose]$border = alpha('white', 0)
       }
 
-    out$td = gTrack(ss, y.field = 'cn', edges = out$edges[order(out$edges$cn), ], name ='JaBbA', angle = 0)
-
+    out$td = out$gtrack = gTrack(ss, y.field = 'cn', edges = out$edges[order(out$edges$cn), ], name ='JaBbA', angle = 0)
     out$purity = jab$purity
-    out$ploidy = jab$ploidy
+      out$ploidy = jab$ploidy
 
-    return(out)
+      return(out)
   }
+
+
 
 ####################################################################
 #' jbaMIP.process
