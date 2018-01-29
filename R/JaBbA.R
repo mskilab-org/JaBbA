@@ -2431,7 +2431,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       if (is.null(kag))
           {
               if (verbose)
-                  cat('Redigesting..\n')
+                cat('Redigesting..\n')
               ## redigesting
               ix = rep(TRUE, length(jab$segstats))
               if (!is.null(jab$segstats$loose))
@@ -2484,24 +2484,26 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
 
       adj = sign(bk.adj)*0.01 + jab$adj ## keep a hint of 0 copy edges
 
+      segstats = jab$segstats
+      segstats$loose = FALSE
+
       #' mimielinski Friday, Jan 26, 2018 07:43:18 PM
       #' rewriting to get rid of strange edge cases
       #' resulting from unnecessarily having to use coordinates
       #' to match up loose ends with their nodes
-
-      if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
+      if (any(segstats$eslack.out>0 | segstats$eslack.in>0, na.rm = TRUE))
       {
-        sink.ix = which(jab$segstats$eslack.out>0)
-        sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
-        sinks$cn = jab$segstats$eslack.out[sink.ix]
+        sink.ix = which(segstats$eslack.out>0)
+        sinks = gr.end(segstats[sink.ix],ignore.strand = FALSE)
+        sinks$cn = segstats$eslack.out[sink.ix]
         sinks$partner.id = sink.ix
         sinks$id = nrow(adj) + 1:length(sinks)
         sinks$loose = TRUE
         sinks$right = as.logical(strand(sinks)=='+')
 
-        source.ix = which(jab$segstats$eslack.in>0)
-        sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
-        sources$cn = jab$segstats$eslack.in[source.ix]
+        source.ix = which(segstats$eslack.in>0)
+        sources = gr.start(segstats[source.ix],ignore.strand = FALSE)
+        sources$cn = segstats$eslack.in[source.ix]
         sources$partner.id = source.ix
         sources$id = nrow(adj) + length(sinks) + 1:length(sources)
         sources$loose = TRUE
@@ -2517,13 +2519,10 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
         adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
         adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
         adj = adj.plus
-        segstats$loose = F
-        segstats = grbind(jab$segstats, sinks, sources)
-        values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
-      }
-      else
-        segstats$loose = FALSE
-
+        vals = rrbind(values(segstats), values(sinks), values(sources))
+        segstats = grbind(segstats, sinks, sources)
+        values(segstats) = vals
+      }      
 
     ##  lends = loose.ends(jab, kag)
     ##  if (!is.null(lends))
@@ -2533,9 +2532,9 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     ##   {
     ##     strand(lends) = '+'
     ##     lends = c(lends, gr.flipstrand(lends))
-    ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
+    ##     lends$partner.id = gr.match((lends), segstats, ignore.strand = F)
     ##     lends$id = nrow(adj) + c(1:length(lends))
-    ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
+    ##     lends$right = end(lends) == end(segstats)[lends$partner.id]
     ##     adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
     ##       cBind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
 
@@ -2544,13 +2543,13 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     ##     adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
     ##     adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
     ##     adj = adj.plus
-    ##     lends$loose = T
-    ##     segstats$loose = F
-    ##     segstats = grbind(jab$segstats, lends)
-    ##     values(segstats) = rrbind(values(jab$segstats), values(lends))
+      ##     lends$loose = T
+    ##   vals = rrbind(values(segstats), values(lends))
+      ##     segstats = grbind(segstats, lends)
+      ##  values(segstats) = vals
+    ##     
     ##   }
-    ## else
-    ##   segstats$loose = F
+
 
     out = list()
 
@@ -2585,7 +2584,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
       out$segstats$loose = out$segstats$start.ix %in% loose.ix
 
     adj.new.ix = out$adj = collapsed$adj*0 ## rewire copy numbers and edge indices according to collapsed
-    edge.ix = which(collapsed$adj!=0, arr.ind = T)
+    edge.ix = Matrix::which(collapsed$adj!=0, arr.ind = T)
 
     if (nrow(edge.ix)>0)
       {
@@ -2669,9 +2668,9 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     out$G = graph.adjacency(adj.new.ix, weighted = 'edge.ix')
 
     out$segstats$edges.in = sapply(1:length(out$segstats),
-      function(x) {ix = which(out$adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+      function(x) {ix = Matrix::which(out$adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
     out$segstats$edges.out = sapply(1:length(out$segstats),
-      function(x) {ix = which(out$adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+      function(x) {ix = Matrix::which(out$adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
 
     pos.ix = which( as.logical( strand(out$segstats)=='+') )
     out$segstats$tile.id = match(gr.stripstrand(out$segstats), gr.stripstrand(out$segstats[pos.ix]))
@@ -4369,7 +4368,7 @@ collapse.paths = function(G, verbose = T)
   if (length(singletons)>0)
       {
           tmp = out[singletons, singletons]
-          cl = clusters(graph(as.numeric(t(which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
+          cl = clusters(graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
           dix = unique(cl)
           if (length(dix)>0)
               {
@@ -8992,6 +8991,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     return(tmp.p)
 }
 
+
 #' @name jabba.gwalk
 #' @title jabba.gwalk
 #' @description
@@ -8999,25 +8999,27 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
 #'
 #' @param jab JaBbA object
-#'
+#' #
 #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
 #' @import igraph
-jabba.gwalk = function(jab, verbose = FALSE)
+#' @author Marcin Imielinski
+#' @author Xiaotong Yao
+jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 {
     cn.adj = jab$adj
     adj = as.matrix(cn.adj)
     adj.new = adj*0
-    ## ALERT!!! see beloWd
+    ## ALERT!!! see below
     adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
-    ## adj[which(0!=Adjd, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
-    ## if (ALERT){
-    ##     ## I!!! verbose'm gonna switch to source node width for default weight of edges
-    ##     message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
-    ##     ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
-    ## }
+    ## adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
+    if (verbose){
+        ## ALERT!!! I'm gonna switch to source node width for default weight of edges
+        message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+        ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
+    }
 
     ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
-    ab.edges = ab.edges[rowSums(is.na(ab.edges))==0, ]
+    ab.edges = ab.edges[Matrix::rowSums(is.na(ab.edges))==0, ]
     ## ALERT!!!
     adj[ab.edges] = sign(cn.adj[ab.edges]) ## make ab.edges = 1
     ## adj[ab.edges] = adj[ab.edges] * 0.99 ## make ab.edges 1 bp shorter than ref!
@@ -9045,10 +9047,10 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ss[loose == TRUE, is.end := TRUE]
     ss[loose == FALSE, is.end := 1:length(loose) %in% c(which.min(start), which.max(end)), by = list(seqnames, strand)]
     ends = which(ss$is.end)
-    src = (colSums(adj)[ends]==0) ## indicate which are sources
+    src = (Matrix::colSums(adj)[ends]==0) ## indicate which are sources
 
     ## sanity check
-    unb = which(!ss$is.end & rowSums(jab$adj, na.rm = TRUE) != colSums(jab$adj, na.rm = TRUE))
+    unb = which(!ss$is.end & Matrix::rowSums(jab$adj, na.rm = TRUE) != Matrix::colSums(jab$adj, na.rm = TRUE))
 
     if (length(unb)>0)
     {
@@ -9078,13 +9080,13 @@ jabba.gwalk = function(jab, verbose = FALSE)
     palindromic.path = rep(FALSE, maxrow)
     palindromic.cycle = rep(FALSE, maxrow)
 
-    nb.all = which(rowSums(cn.adj) != colSums(cn.adj))
+    nb.all = which(Matrix::rowSums(cn.adj) != Matrix::colSums(cn.adj))
     cn.adj0 = cn.adj
     G0 = G
     D0 = D
 
-    # first peel off "simple" paths i.e. zero degree
-    # ends with >0 copy number
+    #' first peel off "simple" paths i.e. zero degree
+    #' ends with >0 copy number
     psimp =  which(degree(G, mode = 'out')==0 & degree(G, mode = 'in')==0 & jab$segstats$cn>0)
     i = 0
     if (length(psimp)>0)
@@ -9100,6 +9102,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## and see if it is still there
     ## peel off top path and add to stack, then update cn.adj
 
+    jab$segstats$tile.id = jab$segstats$tile.id + as.numeric(jab$segstats$loose)*0.5
+
     tile.map =
         gr2dt(jab$segstats)[, .(id = 1:length(tile.id),
                                 tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
@@ -9111,6 +9115,10 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
     ed = data.table(jab$edges)[cn>0, .(from, to , cn)]
+
+    if (nrow(ed)==0)
+        return(GRangesList())
+
     ed[, ":="(fromss = tile.map[ .(from), tile.id],
               toss = tile.map[ .(to), tile.id]),
        by = 1:nrow(ed)]
@@ -9126,6 +9134,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     cleanup_mode = FALSE
 
+
     while (nrow(ij)>0)
     {
         if (verbose)
@@ -9133,7 +9142,6 @@ jabba.gwalk = function(jab, verbose = FALSE)
         i = i+1
         ## swap this
         ##        vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
-
 
         p = get.constrained.shortest.path(cn.adj, G, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
@@ -9150,8 +9158,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
             vpaths[[i]] = p
             epaths[[i]] = cbind(p[-length(p)], p[-1])
             eids = paste(epaths[[i]][,1], epaths[[i]][,2])
-            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
-
+            cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palinrdomic edges by 1/2
 
             rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
             repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
@@ -9172,9 +9179,9 @@ jabba.gwalk = function(jab, verbose = FALSE)
             ##        palindromic = TRUE ## set to true while we "figure things out"
 
 
-            # so now we want to subtract that cn units of that path from the graph
-            # so we want to update the current adjacency matrix to remove that path
-            # while keeping track of of the paths on the stack
+            #' so now we want to subtract that cn units of that path from the graph
+            #' so we want to update the current adjacency matrix to remove that path
+            #' while keeping track of of the paths on the stack
             cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
 
             ## if (!palindromic) ## update reverse complement unless palindromic
@@ -9224,7 +9231,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
                     & degree(G)>0), ends)
 
                     ## ## check if cn.adj out of balance
-                    ## if (any((colSums(cn.adj)*rowSums(cn.adj) != 0) & (colSums(cn.adj) != rowSums(cn.adj)))){
+                    ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
                     ##     print("Junction OUT OF BALANCE!")
                     ##     browser()
                     ## }
@@ -9236,7 +9243,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
                     ## }
 
                     ## remain = as.matrix(jab$adj) - adj.new
-                    ## nb <- which(colSums(remain) != rowSums(remain))
+                    ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
                     ## if (any(!is.element(nb, nb.all)))
                     ##     browser()
 
@@ -9254,7 +9261,7 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
 
         ## DEBUG DEBUG DEBUG
-        seg.ix = which(strand(jab$segstats)=='+'); seg.rix = which(strand(jab$segstats)=='-');
+        seg.ix = which(as.character(strand(jab$segstats))=='+'); seg.rix = which(as.character(strand(jab$segstats))=='-');
 
 
         if (nrow(ij)==0 & cleanup_mode == FALSE)
@@ -9315,8 +9322,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
 
     parents = .parents(adj)
 
-    # then find paths that begin at a node and end at (one of its) immediate upstream neighbors
-    # this will be a path for whom col index is = parent(row) for one of the rows
+    #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+    #' this will be a path for whom col index is = parent(row) for one of the rows
     ## ALERT!!! major change
     ## adjj = adj/as.matrix(cn.adj)
     ## adjj[which(is.nan(adjj))] = 0
@@ -9325,8 +9332,8 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## G = graph.adjacency(adjj, weighted = 'weight')
     D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
 
-    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
-    ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+    ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+
 
     ## now iterate from shortest to longest path
     ## peel that path off and see if it is still there ..
@@ -9376,9 +9383,9 @@ jabba.gwalk = function(jab, verbose = FALSE)
             ## }
             ##        palindromic = TRUE ## set to true while we "figure things out"
 
-            # so now we want to subtract that cn units of that path from the graph
-            # so we want to update the current adjacency matrix to remove that path
-            # while keeping track of of the cycles on the stack
+            #' so now we want to subtract that cn units of that path from the graph
+            #' so we want to update the current adjacency matrix to remove that path
+            #' while keeping track of of the cycles on the stack
             cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
             ## if (!palindromic) ## update reverse complement unless palindromic
             cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
@@ -9428,13 +9435,13 @@ jabba.gwalk = function(jab, verbose = FALSE)
                     G = graph.adjacency(adj, weighted = 'weight')
                     ## G = graph.adjacency(adjj, weighted = 'weight')
 
-                    ## if (any((colSums(cn.adj)*rowSums(cn.adj) != 0) & (colSums(cn.adj) != rowSums(cn.adj)))){
+                    ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
                     ##     print("Junction OUT OF BALANCE!")
                     ##     browser()
                     ## }
 
                     ## remain = as.matrix(jab$adj) - adj.new
-                    ## nb <- which(colSums(remain) != rowSums(remain))
+                    ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
                     ## if (any(!is.element(nb, nb.all)))
                     ##     browser()
 
@@ -9484,29 +9491,34 @@ jabba.gwalk = function(jab, verbose = FALSE)
     ## D2 = D
     ## remain2 = remain
     remain = as.matrix(jab$adj) - adj.new
-    remain.ends = which(colSums(remain)*rowSums(remain)==0 & colSums(remain)-rowSums(remain)!=0)
+    remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
     if (length(remain.ends)>0){
         if (verbose)
             message(length(remain.ends), "ends were not properly assigned a path. Do them.")
     }
 
     tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
-    ix = which(rowSums(is.na(tmp[, 1:2]))==0)
+    ix = which(Matrix::rowSums(is.na(tmp[, 1:2]))==0)
 
     if (length(ix)>0)
         adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
     else
         adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
     vix = munlist(vall)
-    paths = split(jab$segstats[vix[,3]], vix[,1])
 
-    abjuncs =  as.data.table(rbind(this.jab$ab.edges[, 1:2, '+'], this.jab$ab.edges[, 1:2, '-']))[,
-                                   id := rep(1:nrow(this.jab$ab.edges),2)*
-                                               rep(c(1, -1), each = nrow(this.jab$ab.edges))][!is.na(from), ]
+    jab$segstats$node.id = 1:length(jab$segstats)
+    pathsegs = jab$segstats[vix[,3]]
+    pathsegs$grl.ix = vix[,1]
+    abjuncs =  as.data.table(rbind(jab$ab.edges[, 1:2, '+'], jab$ab.edges[, 1:2, '-']))[,
+                                   id := rep(1:nrow(jab$ab.edges),2)*
+                                       rep(c(1, -1), each = nrow(jab$ab.edges))][!is.na(from), ]
     abjuncs = abjuncs[, tag := structure(paste(from, to), names = id)]
     setkey(abjuncs, tag)
-    paths = do.call('GRangesList', lapply(paths, function(x) {x$ab.id = c(abjuncs[paste(x$tile.id[-length(x$tile.id)], x$tile.id[-1]), id], NA); return(x)}))
 
+    ## annotate ab.id (if any) following each segment in each path
+    pathsegs$ab.id = gr2dt(pathsegs)[ , ab.id := c(abjuncs[paste(node.id[-length(node.id)], node.id[-1]), id], NA), by = grl.ix][, ab.id]
+
+    paths = split(pathsegs, vix[,1])
     values(paths)$ogid = 1:length(paths)
     values(paths)$cn = ecn[as.numeric(names(paths))]
     values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
@@ -9537,7 +9549,6 @@ jabba.gwalk = function(jab, verbose = FALSE)
         unmix[list(unmix[pos == TRUE, mix]), ][, id := 1:length(ix)][!is.na(ix), ]
     )
 
-
     paths = paths[remix$ix]
     names(paths) = paste(remix$id, ifelse(remix$pos, '+', '-'), sep = '')
     values(paths)$id = remix$id
@@ -9546,6 +9557,63 @@ jabba.gwalk = function(jab, verbose = FALSE)
     if (length(setdiff(values(paths)$ogid, 1:length(paths))))
         message('Warning!!! Some paths missing!')
 
+    ## for gGnome compatibiliity
+    if (!return.grl)
+    {
+      tmp.dt = as.data.table(copy(paths))[, pid := group_name][, nix := 1:.N, by =pid]
+      setkeyv(tmp.dt, c('pid', 'nix'))
+
+      ## mark nodes that precede a reference junction
+      tmp.dt[, d.to.next := c((start-data.table::shift(end))[-1], NA), by = pid]
+      tmp.dt[, d.to.next.neg := c((data.table::shift(start)-end)[-1], NA), by = pid]
+      tmp.dt[, same.strand := c((strand==data.table::shift(strand))[-1], NA), by = pid]
+      tmp.dt[, same.chrom := c((as.character(seqnames)==data.table::shift(as.character(seqnames)))[-1], NA), by = pid]
+      tmp.dt[, last.node := 1:.N == .N, by = pid]
+      tmp.dt[, before.ref :=
+                 (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
+                   (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
+                 ) & same.strand & same.chrom)]
+      tmp.dt[is.na(before.ref), before.ref := FALSE]
+
+      ## label reference runs of nodes then collapse
+      .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))
+      tmp.dt[, ref.run := .labrun(before.ref), by = pid]
+      tmp.dt[, ref.run.last := data.table::shift(ref.run), by = pid]
+      tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
+      tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
+      #tmp.dt[loose == TRUE, ref.run.id := NA] ## make sure loose ends stay ungrouped
+      collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
+                                                  nix = nix[1],
+                                                  pid = pid[1],
+                                                  seqnames = seqnames[1],
+                                                  start = min(start),
+                                                  end = max(end),
+                                                  loose = FALSE,
+                                                  strand = strand[1]
+                                                ), by = ref.run.id]
+
+      ## concatenate back with nodes that precede a non reference junction
+      tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nix, seqnames, start, end, strand, loose)],
+                     collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
+      setkeyv(tmp.dt, c('pid', 'nix'))
+
+      tmp.gr = dt2gr(tmp.dt)
+      tmp.segs = unique(tmp.gr)
+      tmp.gr$seg.id = match(tmp.gr, tmp.segs)
+      tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
+      tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
+
+      names(tmp.paths) = ifelse(grepl('\\-', names(tmp.paths)), -1, 1)*as.numeric(gsub('\\D', '', names(tmp.paths)))
+
+      ##      gw = gGnome::gWalks$new(segs=tmp.segs,
+      gw = gWalks$new(segs=tmp.segs,
+                      paths=tmp.paths,
+                      metacols=tmp.vals)
+      return(gw)
+    }
+
+
     return(paths)
 }
+
 
