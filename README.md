@@ -9,11 +9,10 @@ of read depth and junction patterns in WGS data.
 Installation
 ------------
 1. Install IBM ILOG
-   [CPLEX](https://www.ibm.com/products/ilog-cplex-optimization-studio)
-   (academic license is free under [IBM academic
-   initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing)
+   [CPLEX](https://www.ibm.com/products/ilog-cplex-optimization-studio).
+   The software is proprietary, but can be obtained for free under [IBM's academic
+   initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
    (note this is why Travis build is failing)
-
 
 2. Install dependent packages and latest Bioconductor (if you haven't already)
 
