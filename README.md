@@ -8,28 +8,35 @@ of read depth and junction patterns in WGS data.
 
 Installation
 ------------
+1. Install IBM ILOG
+   [CPLEX](https://www.ibm.com/products/ilog-cplex-optimization-studio)
+   (academic license is free under [IBM academic
+   initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing)
+   (note this is why Travis build is failing)
 
-1. Install dependent packages and latest Bioconductor (if you haven't already)
+
+2. Install dependent packages and latest Bioconductor (if you haven't already)
 
 ```{r}
+install.packages('Rcplex')
 source("https://bioconductor.org/biocLite.R")
 biocLite("GenomicRanges")
 ```
 
-2. Install devtools from CRAN (if you don't have it already)
+3. Install devtools from CRAN (if you don't have it already)
 
 ```{r}
 install.packages('devtools')
 ```
 
-3. Install dependent mskilab dependencies
+4. Install dependent mskilab dependencies
 
 ```{r}
 devtools::install_github('mskilab/gUtils')
 devtools::install_github('mskilab/gGnome')
 ```
 
-3. Install JaBbA
+5. Install JaBbA
 
 ```{r}
 devtools::install_github('mskilab/JaBbA)
