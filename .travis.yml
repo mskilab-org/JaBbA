@@ -19,7 +19,7 @@ install:
   - ./travis-tool.sh install_deps
   - ./travis-tool.sh install_github r-lib/testthat
   - ./travis-tool.sh install_github mskilab/gUtils
-  - ./travis-tool.sh install_github mskilab/bamUtils
+  - ./travis-tool.sh install_github mskilab/gTrack
 
 script: ./travis-tool.sh run_tests
 
