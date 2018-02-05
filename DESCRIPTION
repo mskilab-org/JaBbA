@@ -15,7 +15,9 @@ Imports:
     GenomicRanges (>= 1.18),
     igraph (>= 0.7),
     gUtils,
-    gTrack
+    gTrack, 
+    DNAcopy, 
+    VariantAnnotation
 License: What license is it under?
 LazyData: true
 RoxygenNote: 6.0.1
