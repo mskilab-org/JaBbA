@@ -13,7 +13,7 @@ install:
 - pwd 
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
-- R CMD install Rcplex_0.3-3.tar.gz 
+- R CMD install --configure-args="--with-cplex-dir=/home/travis/build/CPLEX_ENTER_SVR_12.6.2_LNX_X86-64.bin?dl=0" Rcplex_0.3-3.tar.gz 
 - ./travis-tool.sh install_github r-lib/testthat
 - ./travis-tool.sh install_github mskilab/gUtils
 - ./travis-tool.sh install_github mskilab/gTrack
