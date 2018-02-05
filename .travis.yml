@@ -6,7 +6,7 @@ before_install:
 - chmod 755 ./travis-tool.sh
 - ./travis-tool.sh bootstrap
 - curl -OL $URL
-- curl https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
+- curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
 - echo 'whereamirn'
 - pwd 
 install:
