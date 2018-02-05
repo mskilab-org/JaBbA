@@ -5,13 +5,15 @@ before_install:
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
 - ./travis-tool.sh bootstrap
-- curl $URL
+- curl -OL $URL
 - curl https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- ls -la
+- echo 'whereamirn'
+- pwd 
 install:
+- pwd 
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
-- R CMD install Rcplex_0.3-3.tar.gz
+- R CMD install Rcplex_0.3-3.tar.gz 
 - ./travis-tool.sh install_github r-lib/testthat
 - ./travis-tool.sh install_github mskilab/gUtils
 - ./travis-tool.sh install_github mskilab/gTrack
