@@ -7,10 +7,8 @@ before_install:
 - ./travis-tool.sh bootstrap
 - curl -OL $SECRET
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- echo 'whereamirn'
-- pwd
+- tar zxvf cool.tar.gz
 install:
-- pwd
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
 - R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/cplex" Rcplex_0.3-3.tar.gz
