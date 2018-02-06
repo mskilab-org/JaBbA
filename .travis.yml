@@ -7,7 +7,7 @@ before_install:
 - ./travis-tool.sh bootstrap
 - curl -OL $COOL
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- find . -m '*.gz' -print
+- find . -name "*.gz" -print
 install:
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
