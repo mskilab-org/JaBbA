@@ -4,6 +4,8 @@ group: deprecated-2017Q4
 before_install:
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+- echo "$PWD"
+- echo $PWD
 - ./travis-tool.sh bootstrap
 - curl $COOL --output /home/travis/build/cool.tar.gz
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
