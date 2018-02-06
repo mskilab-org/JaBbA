@@ -18,6 +18,8 @@ Imports:
     gTrack, 
     DNAcopy, 
     VariantAnnotation
+Suggests:
+    testthat
 License: What license is it under?
 LazyData: true
 RoxygenNote: 6.0.1
