@@ -4,16 +4,15 @@ group: deprecated-2017Q4
 before_install:
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
-- echo "$PWD"
-- echo $PWD
 - ./travis-tool.sh bootstrap
-- curl $COOL --output /home/travis/build/cool.tar.gz
+- curl -OL $COOL 
+- echo $PWD
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- tar -xzf /home/travis/build/cool.tar.gz
+- tar -xzf /home/travis/build/mskilab/JaBbA/cool.tar.gz
 install:
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
-- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/cplex" Rcplex_0.3-3.tar.gz
+- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/cplex" Rcplex_0.3-3.tar.gz
 - ./travis-tool.sh install_github r-lib/testthat
 - ./travis-tool.sh install_github mskilab/gUtils
 - ./travis-tool.sh install_github mskilab/gTrack
