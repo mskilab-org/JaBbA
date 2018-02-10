@@ -9,11 +9,13 @@ Depends:
     gTrack,
     gUtils
 Imports:
-    data.table (>= 1.9),
-    GenomicRanges (>= 1.18),
-    igraph (>= 0.7),
-    gUtils,
-    gTrack
+  VariantAnnotation,
+  DNAcopy,
+  data.table (>=   1.9),
+  GenomicRanges (>= 1.18),
+  igraph (>= 0.7),
+  gUtils,
+  gTrack
 Suggests:
     testthat    
 License: What license is it under?
