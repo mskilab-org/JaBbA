@@ -2,7 +2,7 @@
 
 export(JaBbA)
 export(jabba.gwalk)
-export(jbaMIP.mipstart)
+export(jbaMIP)
 import(DNAcopy)
 import(GenomicRanges)
 import(Matrix)
