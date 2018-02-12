@@ -39,10 +39,7 @@
 ## to install igraph, may need "use GCC-4.8"
 ## installing RCplex need to run:
 ##
-## install.packages('Rcplex', configure.args = c("--with-cplex-include=/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/include/", "--with-cplex-lib='-L/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.2/cplex/lib/x86-64_sles10_4.1/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
-##
-## install.packages('Rcplex', configure.args = c("--with-cplex-include=/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.6/cplex/include/", "--with-cplex-lib='-L/broad/software/free/Linux/redhat_5_x86_64/pkgs/cplex_12.6/cplex/lib/x86-64_linux/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
-##
+
 ## install.packages('Rcplex', configure.args = c("--with-cplex-include=/nfs/home/mimielinski/Software/CPLEX/CPLEX_Studio/cplex/include/", "--with-cplex-lib='-L/nfs/home/mimielinski/Software/CPLEX/CPLEX_Studio/cplex/lib/x86-64_linux/static_pic/ -lcplex -lm -lpthread'", "--with-cplex-cflags='-m64 -fPIC -I/usr/include'"))
 ##
 ##
@@ -97,6 +94,7 @@
 #' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
 #' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param use.gurobi  logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE) .. up to user to make sure the respective package is already installed 
 #' @param reiterate  integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end
 #'
 #' @param rescue.window integer scalar bp window around which to rescue lower tier junctions
@@ -126,33 +124,43 @@ JaBbA = function(
     rescue.window = 1e4, ## window around loose ends at which to rescue low tier junctions
     init = NULL, ## previous JaBbA object to use as a solution
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
+    use.gurobi = FALSE, ## use gurobi instead of CPLEX
     slack.penalty = 1e3, ## nll penalty for each loose end copy
-    overwrite = F ## whether to overwrite existing output in outdir
+    overwrite = FALSE, ## whether to overwrite existing output in outdir
+    verbose = TRUE ## whether to provide verbose output
     )
 {
-  message('Running analysis in ', outdir)
+  system(paste('mkdir -p', outdir))
+  jmessage('Starting analysis in ', normalizePath(outdir))
   ra = junctions
+  reiterate = 1 + as.integer(reiterate)
 
   if (is.character(ra))
-    {
+  {
       if (grepl("rds$", ra)){
         ra.all = readRDS(ra)
       } else {
         ra.all = read.junctions(ra)
       }
-    }
+  } else
+  {
+    ra.all = ra
+  }
 
-  ## if we are iterating
-  if (reiterate>0)  {
-    cat('Iterating for max', reiterate, 'iterations\n')
+  if (verbose)
+  {
+    jmessage("Read in ", length(ra.all), " total junctions")
+  }
+
+  ## if we are iterating more than once
+  if (reiterate>1)  {
     if (is.null(tfield))
       tfield = 'tier'
 
-    browser()
     if (!(tfield %in% names(values(ra.all))))
       {
-       if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
-          message("Detected SvABA input. Expand to unfiltered set.")
+        if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
+          jmessage("Detected SvABA input. Expand to unfiltered set.")
           svaba.uf = gsub("svaba.somatic.sv.vcf",
                           "svaba.unfiltered.somatic.sv.vcf", ra)
           ra.uf = read.junctions(svaba.uf)
@@ -178,18 +186,23 @@ JaBbA = function(
 
     last.ra = ra.all[values(ra.all)[, tfield]<3]
 
-    cat('Starting with ', length(last.ra), 'junctions\n')
+#    if (verbose)
+#    {
+    jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
+    jmessage('Will progressively add tier 3 junctions that within ', rescue.window, 'bp of a loose end in the previous iteration')
+    jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
+    jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
+ ##   }
 
     while (continue) {
       gc()
       this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
       system(paste('mkdir -p', this.iter.dir))
 
-      cat('Starting iteration', this.iter, 'in', this.iter.dir, '\n')
+      jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
 
       this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
       saveRDS(last.ra, this.ra.file)
-
       jabba_stub(
         junctions = this.ra.file,
         coverage = coverage,
@@ -197,7 +210,7 @@ JaBbA = function(
         nseg = nseg,
         cfield = cfield,
         tfield = tfield,
-        nudge.balanced = nudgebalance,
+        nudge.balanced = nudge.balanced,
         outdir = this.iter.dir,
         cores = cores,
         edgenudge = edgenudge,
@@ -207,14 +220,19 @@ JaBbA = function(
         subsample = subsample,
         hets = hets,
         init = init,
-        slack.penalty = slack,
+        use.gurobi = use.gurobi,
+        slack.penalty = slack.penalty,
         ploidy = ploidy,
-        purity = purity
+        purity = purity,
+        overwrite = overwrite,
+        verbose = verbose
       )
       gc()
 
       jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
       le = jab$segstats[jab$segstats$loose]
+
+      ## junction rescue
       ## rescues junctions that are within rescue.window bp of a loose end
       new.ra  = ra.all[union(values(last.ra)$id, values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
       num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
@@ -225,18 +243,31 @@ JaBbA = function(
       num.used.junc = length(which(jcn>0))
       cat('Adding ', num.new.junc, 'new junctions, yielding', num.used.junc, 'used junctions and ', length(new.ra), 'total junctions\n')
 
-      if (num.new.junc==0 | this.iter >= iter)
+      if (num.new.junc==0 | this.iter >= reiterate)
         continue = FALSE
       else {
         last.ra = new.ra
         this.iter = this.iter + 1
       }
+
+      pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
+      purity = pp1$purity[1]
+      ploidy = pp1$ploidy[1]
+
+      seg = readRDS(paste0(outdir,'/iteration1/seg.rds'))
+
+      if (verbose)
+      {
+        jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
+      }
+
+      browser()
     }
 
     this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
 
     system(sprintf('cp %s/* %s', this.iter.dir, outdir))
-    cat('Done Iterating\n')
+    jmessage('Done Iterating')
   } else  {
     jabba_stub(
       junctions = ra,
@@ -245,19 +276,22 @@ JaBbA = function(
       nseg = nseg,
       cfield = cfield,
       tfield = tfield,
-      nudge.balanced = nudgebalance,
+      nudge.balanced = nudge.balanced,
       outdir = outdir,
       cores = cores,
       edgenudge = edgenudge,
       tilim = tilim,
       name = name,
+      use.gurobi = use.gurobi,
       field = field,
       subsample = subsample,
-      slack.penalty = slack,
+      slack.penalty = slack.penalty,
       hets = hets,
       ploidy = ploidy,
       init = init,
-      purity = purity
+      purity = purity,
+      overwrite = overwrite,
+      verbose = verbose
     )
   }
 }
@@ -332,8 +366,9 @@ jabba_stub = function(
     mem = 16, ## max memory for MIP portion
     init = NULL, ## previous JaBbA object to use as a solution
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
-    slack.penalty = 1e3, ## nll penalty for each loose end copy
-    overwrite = F ## whether to overwrite existing output in outdir
+    slack.penalty = 1e2, ## nll penalty for each loose end copy
+    overwrite = F, ## whether to overwrite existing output in outdir
+    verbose = TRUE
 )
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
@@ -341,9 +376,12 @@ jabba_stub = function(
     junctions.rds.file = paste(outdir, 'junctions.rds', sep = '/')
     jabba.raw.rds.file = paste(outdir, 'jabba.raw.rds', sep = '/')
     jabba.rds.file = paste(outdir, 'jabba.rds', sep = '/')
+    jabba.json.file = paste(outdir, 'jabba.json', sep = '/')
+    jabba.gg.rds.file = paste(outdir, 'jabba.gg.rds', sep = '/')
     jabba.vcf.file = paste(outdir, 'jabba.vcf', sep = '/')
     jabba.cnv.vcf.file = paste(outdir, 'jabba.cnv.vcf', sep = '/')
     jabba.simple.rds.file = paste(outdir, 'jabba.simple.rds', sep = '/')
+    jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
     jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
     jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
     jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
@@ -352,7 +390,6 @@ jabba_stub = function(
     seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
     seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
     nozzle.file = paste(outdir, 'nozzle', sep = '/')
-    message('Reading in coverage')
 
     if (is.character(coverage))
     {
@@ -362,11 +399,12 @@ jabba_stub = function(
         }
         else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
       {
-        coverage = dt2gr(fread(coverage))
+        tmp = fread(coverage)
+        coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
       }
         else
       {
-        message('Importing seg from UCSC format')
+        jmessage('Importing seg from UCSC format')
         coverage= import.ucsc(coverage)
         field = 'score';
         coverage = gr.fix(coverage)
@@ -378,6 +416,12 @@ jabba_stub = function(
     if (!inherits(coverage, 'GRanges'))
       coverage = dt2gr(coverage)
 
+
+    if (verbose)
+    {
+      jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
+    }
+
     if (!(field %in% names(values(coverage))))
     {
         new.field = names(values(coverage))[1]
@@ -385,41 +429,62 @@ jabba_stub = function(
         field = new.field
     }
 
-    if (is.null(seg))
+    seg.fn = paste0(outdir, '/seg.rds')
+    if (!overwrite & file.exists(seg.fn))
     {
-        message('No segmentation provided via seg variable, so performing segmentation using CBS')
+      if (verbose)
+      {
+        jmessage('Using previous segmentation found in jabba directory')
+      }
+      seg = readRDS(seg.fn)
+    } else {
+      if (is.null(seg))
+      {
+        if (verbose)
+        {
+          jmessage('No segmentation provided, so performing segmentation using CBS')
+        }
         vals = values(coverage)[, field]
+        new.sl = seqlengths(coverage)
         ix = which(!is.na(vals))
-        cna = CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
-        cat('finished making cna\n')
-        seg = segment(smooth.CNA(cna), alpha = 1e-5, verbose = T)
-        cat('finished segmenting\n')
+        cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
+        seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
+
+        if (verbose)
+        {
+          jmessage('Segmentation finished')
+        }
         seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
-#        seg = seg2gr(print(seg), seqlengths(coverage)) ## remove seqlengths that have not been segmented
         seg = gr.fix(seg, seqlengths(coverage), drop = T)
-        cat(length(seg), ' segments produced\n')
+
+        if (verbose)
+        {
+          jmessage(length(seg), ' segments produced')
+        }
         names(seg) = NULL
-    }
-    else
-    {
+      }
+      else
+      {
         if (is.character(seg))
         {
-            if (grepl('\\.rds$', seg))
-            {
-                seg = readRDS(seg)
-            }
-            else
-            {
-                message('Importing seg from UCSC format')
-                seg = import.ucsc(seg)
-                field = 'score';
-            }
+          if (grepl('\\.rds$', seg))
+          {
+            seg = readRDS(seg)
+          }
+          else
+          {
+            jmessage('Importing seg from UCSC format')
+            seg = import.ucsc(seg)
+            field = 'score';
+          }
         }
+      }
     }
 
+    saveRDS(seg, seg.fn)
 
     if (!inherits(seg, 'GRanges'))
-      seg = dt2gr(seg)
+      seg = dt2gr(seg, seqlengths(coverage), drop = TRUE)
 
 
     if (!is.null(hets))
@@ -430,10 +495,11 @@ jabba_stub = function(
             }
 
     ra = junctions
+
     if (!is.character(ra))
         {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, het.file = hets)
+                karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         }
@@ -442,12 +508,12 @@ jabba_stub = function(
         if (grepl('rds$', ra) | grepl('vcf$', ra) | grepl('vcf\\.gz$', ra))
         {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, het.file = hets)
+                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         } else  {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverage, dranger.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, subsample = subsample, het.file = hets)
+                karyograph_stub(seg, coverage, dranger.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         }
@@ -467,15 +533,23 @@ jabba_stub = function(
 
     ab.force = NULL
     ab.exclude = NULL
+
     if (!is.null(tfield))
         {
             if (tfield %in% names(values(kag$junctions)))
                 {
-                    ab.force = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='1')
-                    cat('Found tier field enforcing >=1 CN at ', length(ab.force), 'junctions\n')
+                  ab.force = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='1')
+                  if (verbose)
+                    {
+                      jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')
+                    }
 
-                    ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
-                    cat('Found tier field enforcing 0 CN at ', length(ab.exclude), 'junctions\n')
+                  ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
+
+                  if (verbose)
+                  {
+                    jmessage('Found tier field enforcing 0 CN at ', length(ab.exclude), ' junctions')
+                  }
                 }
         }
 
@@ -496,17 +570,21 @@ jabba_stub = function(
     } else { ## nudge everything ..
       if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
       if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
-        bps.cov = bpss %$% coverage
-        na.jix = unique((bps.cov %Q% (is.na(ratio)))$grl.ix)
+        bps.cov = gr.val(bpss, coverage, val = 'ratio')
+#        bps.cov = bpss %$% coverage
+        na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
         if (length(na.jix)>0){
-          message("Cancel edge nudge for ", length(na.jix), " junctions.")
+          if (verbose)
+            {
+              jmessage("Cancel edge nudge for ", length(na.jix), " junctions.")
+            }
           edgenudge[na.jix] = 0
         }
       }
     }
 
-    saveRDS(ab.force, paste0(opt$outdir, "ab.force.rds"))
-    saveRDS(edgenudge, paste0(opt$outdir, "edge.nudge.rds"))
+    saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
+    saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
 
     if (!is.null(init))
     {
@@ -517,7 +595,7 @@ jabba_stub = function(
     if (overwrite | !file.exists(jabba.raw.rds.file))
       {
         ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = cores, tilim = tilim, edge.nudge = edgenudge,
-                   ab.force = ab.force, ab.exclude = ab.exclude, mem = mem, init = init,
+                   ab.force = ab.force, ab.exclude = ab.exclude, mem = mem, init = init, verbose = verbose,
                    purity.min = purity, purity.max = purity, ploidy.min = ploidy, ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty)
       }
@@ -525,18 +603,34 @@ jabba_stub = function(
     kag = readRDS(kag.file)
     jab = readRDS(jabba.raw.rds.file)
 
-    if (!file.exists(jabba.rds.file))
+    if (overwrite | !file.exists(jabba.rds.file))
+      {
         jabd = JaBbA.digest(jab, kag)
+      }
     else
+      {
         jabd = readRDS(jabba.rds.file)
+      }
 
     jabd$purity = jab$purity
     jabd$ploidy = jab$ploidy
 
-    if (!file.exists(jabba.simple.rds.file))
-        jabd.simple = JaBbA.digest(jab, kag, keep.all = F) ## simplified
-    else
-        jabd.simple = readRDS(jabba.simple.rds.file)
+    if (overwrite | !file.exists(jabba.simple.rds.file))
+    {
+      if (verbose)
+      {
+        jmessage('simplifying segments in JaBbA graph but keeping all edges (including copy 0), dumping to jabba.rds')
+      }
+
+      jabd.simple = JaBbA.digest(jab, kag, keep.all = F) ## simplified
+    }
+    else {
+      if (verbose)
+      {
+        jmessage('simplifying segments in JaBbA graph but removing all copy 0 aberrant edges, dumping to jabba.simple.rds')
+      }
+      jabd.simple = readRDS(jabba.simple.rds.file)
+    }
 
     jabd.simple$purity = jab$purity
     jabd.simple$ploidy = jab$ploidy
@@ -553,7 +647,11 @@ jabba_stub = function(
     write.tab(seg.out, seg.tab.file)
     jabd$segstats$seg.id = 1:length(jabd$segstats)
 
-    cat('Checking for hets\n')
+    if (verbose)
+      {
+        jmessage('Checking for hets')
+      }
+
     if (!is.null(hets))
         if (file.exists(hets))
             tryCatch(
@@ -569,18 +667,32 @@ jabba_stub = function(
                 },
                 error = function(e) print("Jabba allelic generation failed"))
 
-    saveRDS(jabd$segstats, seg.gr.file)
-    saveRDS(jab, jabba.raw.rds.file)
-    saveRDS(jabd, jabba.rds.file)
-    saveRDS(jabd.simple, jabba.simple.rds.file)
+    jab$segstats = gr.fix(jab$segstats)
+    jabd$segstats = gr.fix(jabd$segstats)
+    jabd.simple$segstats = gr.fix(jabd.simple$segstats)
+
+    if (overwrite | !file.exists(jabba.simple.rds.file))
+      {
+        saveRDS(jabd$segstats, seg.gr.file)
+        saveRDS(jab, jabba.raw.rds.file)
+        saveRDS(jabd, jabba.rds.file)
+        saveRDS(jabd.simple, jabba.simple.rds.file)
+
+        jab.gg = gGnome::bGraph$new(jab = jabd)
+        jab.simple.gg = gGnome::bGraph$new(jab = jabd.simple)
+
+        saveRDS(jab.simple.gg, jabba.simple.gg.rds.file)
+        saveRDS(jab.gg, jabba.gg.rds.file)
+      }
+
 
     tryCatch(
-        {
-            jabba2vcf(jabd, jabba.vcf.file);
-            jabba2vcf(jabd, jabba.cnv.vcf.file, cnv = TRUE)
-            jabba2vcf(jabd.simple, jabba.simple.vcf.file)
-            jabba2vcf(jabd.simple, jabba.simple.cnv.vcf.file, cnv = TRUE)
-        }, error = function(e) print("Jabba VCF generation failed"))
+    {
+      jabba2vcf(jabd, jabba.vcf.file);
+      jabba2vcf(jabd, jabba.cnv.vcf.file, cnv = TRUE)
+      jabba2vcf(jabd.simple, jabba.simple.vcf.file)
+      jabba2vcf(jabd.simple, jabba.simple.cnv.vcf.file, cnv = TRUE)
+    }, error = function(e) print("Jabba VCF generation failed"))
 
     if (nrow(jabd$edges)>0){
       seg.adj = cbind(data.frame(sample = rep(name, nrow(jabd$edges))), jabd$edges[, c('from', 'to', 'cn', 'type')])
@@ -606,7 +718,7 @@ jabba_stub = function(
 
     saveRDS(kag$junctions, junctions.rds.file)
 
-    tmp.cov = sample(cov, pmin(length(cov), 5e5))
+    tmp.cov = sample(coverage, pmin(length(coverage), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
@@ -615,35 +727,45 @@ jabba_stub = function(
 
     td.cov = gTrack(tmp.cov, y.field = field, col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
 
-    cat('Generating figures\n')
+    if (verbose)
+      {
+        jmessage('Generating figures')
+      }
 
-    if (!file.exists(jabba.png.file))
+    if (overwrite | !file.exists(jabba.png.file))
         {
             if (is.character(tryCatch(png(jabba.png.file, width = 2000, height = 1000), error = function(e) 'bla')))
                 pdf(gsub('png$', 'pdf', jabba.png.file), width = 10, height = 10)
 
+            jun = jabd$junctions
+            values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
+
             if (is.null(jabd$agtrack))
-                plot(c(td.cov, jabd$gtrack))
+                plot(c(td.cov, jabd$gtrack), links = jun)
             else
-                plot(c(jabd$agtrack, td.cov, jabd$gtrack))
+                plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
 
             dev.off()
         }
 
-    if (!file.exists(jabba.simple.png.file))
-        {
+    if (overwrite | !file.exists(jabba.simple.png.file))
+    {
+
+      jun = jabd.simple$junctions
+      values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
+
             if (is.character(tryCatch(png(jabba.simple.png.file, width = 2000, height = 1000), error = function(e) 'bla')))
                 pdf(gsub("png$", "pdf", jabba.simple.png.file), width = 20, height = 10)
 
             if (is.null(jabd.simple$agtrack))
-                plot(c(td.cov, jabd.simple$gtrack))
+                plot(c(td.cov, jabd.simple$gtrack), links = jun)
             else
-                plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack))
+                plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
 
             dev.off()
         }
 
-    return('done')
+    jmessage('Done .. job output in: ', normalizePath(outdir))
 }
 
 
@@ -681,7 +803,7 @@ ppgrid = function(
 {
 
   if (verbose)
-      cat('Setting up matrices .. \n')
+      jmessage('setting up ppgrid matrices .. \n')
 
     if (is.na(ploidy.min)) ploidy.min = 1.2
     if (is.na(ploidy.max)) ploidy.max = 6
@@ -759,6 +881,7 @@ ppgrid = function(
 
     dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
 
+  if (verbose)
     cat('\n')
 
     ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
@@ -844,7 +967,10 @@ ppgrid = function(
 
         for (i in 1:nrow(out))
         {
-            cat(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
+          if (verbose)
+            {
+              jmessage(sprintf('Evaluating alleles for solution %s of %s\n', i, nrow(out)))
+            }
             alpha = out$purity[i]
             tau = out$ploidy[i]
                                         #                  gamma = 2/alpha - 2
@@ -1001,189 +1127,254 @@ ppgrid = function(
 
 #' karyograph
 karyograph_stub = function(seg.file, ## path to rds file of initial genome partition (values on segments are ignored)
-    cov.file, ## path to rds file GRanges of coverage with meta data field "field"
-    nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
-    het.file = NULL,
-    ra = NULL,
-    dranger.file = NULL,
-    out.file,
-    ra.file = NULL,
-    force.seqlengths = NULL,
-    purity =  NA,
-    ploidy = NA,
-    field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
+     cov.file, ## path to rds file GRanges of coverage with meta data field "field"
+     nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
+                           het.file = NULL,
+                           ra = NULL,
+                           dranger.file = NULL,
+                           out.file,
+                           use.ppurple = TRUE,
+                           ra.file = NULL,
+                           verbose = FALSE,
+                           force.seqlengths = NULL,
+                           purity =  NA,
+                           ploidy = NA,
+                           field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
+{
+  loose.ends = GRanges()
+
+  if (!is.null(ra))
+    this.ra = ra
+  else
+  {
+
+    if (!is.null(dranger.file))
     {
-        loose.ends = GRanges()
+      this.dranger = read.delim(dranger.file, strings = F)
 
-    if (!is.null(ra))
-        this.ra = ra
-    else
-    {
-
-        if (!is.null(dranger.file))
-        {
-            this.dranger = read.delim(dranger.file, strings = F)
-
-            if (ncol(this.dranger)<=1) ## wrong separator
-                this.dranger = read.delim(dranger.file, sep = ',', strings = F)
+      if (ncol(this.dranger)<=1) ## wrong separator
+              this.dranger = read.delim(dranger.file, sep = ',', strings = F)
 
             if (!is.null(this.dranger$strand1) & !is.null(this.dranger$strand2))
             {
-                ## looks like snowman input flip breaks so that they are pointing away from junction
-                this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
-                this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
+              ## looks like snowman input flip breaks so that they are pointing away from junction
+              this.dranger$str1 = ifelse(this.dranger$strand1 == '+', '-', '+')
+              this.dranger$str2 = ifelse(this.dranger$strand2 == '+', '-', '+')
             }
 
             this.dranger$chr1 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr1))
             this.dranger$chr2 = gsub('23', 'X', gsub('24', 'Y', this.dranger$chr2))
             this.ra = read.junctions(this.dranger, seqlengths = hg_seqlengths())
-        }
-        else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
-        {
+          }
+          else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
+          {
             tmp.ra = read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T)
             if (length(tmp.ra)==0){
-                this.ra = gr.fix(GRangesList(), hg_seqlengths())
-                loose.ends = GRanges(seqlengths = hg_seqlengths())
+              this.ra = gr.fix(GRangesList(), hg_seqlengths())
+              loose.ends = GRanges(seqlengths = hg_seqlengths())
             } else {
-                this.ra = tmp.ra$junctions
-                loose.ends = tmp.ra$loose.ends
+              this.ra = tmp.ra$junctions
+              loose.ends = tmp.ra$loose.ends
             }
-        }
-        else
+          }
+          else
             this.ra = readRDS(ra.file)
-    }
-    ## if we don't have normal segments then coverage file will be our bible for seqlengths
-
-
-    if (is.character(cov.file))
-    {
-        if (grepl('\\.rds$', cov.file))
-            this.cov = readRDS(cov.file)
-        else
-        {
-            this.cov = import.ucsc(cov.file)
-            field = 'score';
         }
+  ## if we don't have normal segments then coverage file will be our bible for seqlengths
+
+
+  if (is.character(cov.file))
+  {
+    if (grepl('\\.rds$', cov.file))
+      this.cov = readRDS(cov.file)
+    else
+    {
+      this.cov = import.ucsc(cov.file)
+      field = 'score';
     }
-    else
-        this.cov = cov.file
+  }
+  else
+    this.cov = cov.file
 
-    ## now make sure we have the "best" seqlengths
-    .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
+  ## now make sure we have the "best" seqlengths
+  .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
 
-    if (is.null(force.seqlengths))
-        sl = .fixsl(seqlengths(this.ra), this.cov)
-    else
-        sl = .fixsl(force.seqlengths, this.cov)
+  if (is.null(force.seqlengths))
+    sl = .fixsl(seqlengths(this.ra), this.cov)
+  else
+    sl = .fixsl(force.seqlengths, this.cov)
                                         #      sl = .fixsl(seqlengths(this.ra), this.cov)
 
-    if (!is.null(nseg.file))
-    {
-        if (is.character(nseg.file))
-            nseg = readRDS(nseg.file)
-        else
-            nseg = nseg.file
-        sl = .fixsl(sl, nseg)
-    }
-
-    ## make sure all sl's are equiv
-    if (is.character(seg.file))
-        this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+  if (!is.null(nseg.file))
+  {
+    if (is.character(nseg.file))
+      nseg = readRDS(nseg.file)
     else
-        this.seg = seg.file
+      nseg = nseg.file
+    sl = .fixsl(sl, nseg)
+  }
 
-    if (length(loose.ends>0))
+  ## make sure all sl's are equiv
+  if (is.character(seg.file))
+    this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+  else
+    this.seg = seg.file
+
+  if (length(loose.ends>0))
+  {
+    if (verbose)
     {
-        cat('Adding loose ends from vcf file to seg file')
-        this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))
+      jmessage('Adding loose ends from vcf file to seg file')
     }
+    this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))
+  }
 
-    this.ra = gr.fix(this.ra, sl, drop = T)
+  this.ra = gr.fix(this.ra, sl, drop = T)
 
-    this.kag = karyograph(this.ra, this.seg)
+  this.kag = karyograph(this.ra, this.seg)
 
-    if (is.null(nseg.file))
-        this.kag$segstats$ncn = 2
-
-    cat('Computing segstats\n')
-    hets.gr = NULL
-
-    if (!is.null(het.file))
-    {
-        hets = fread(het.file)
-        cat('loaded hets\n')
-        hets.gr = seg2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
-    }
-
-    if (length(hets.gr)>0){
-        ## pretend we don't have hets at all
-
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'), mc.cores = mc.cores)
-    }
-    else
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
-
+  if (is.null(nseg.file))
     this.kag$segstats$ncn = 2
 
-    if (!is.null(nseg.file))
-        if (is.null(nseg$cn))
-            stop('Normal seg file does not have "cn" met data field')
-        else
-        {
-            this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
-            this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
-        }
+  hets.gr = NULL
 
 
-    ## 6/15 temp fix for sd on short segments, which we overestimate for now
-    cov.thresh = pmin(1e5, median(width(this.cov)))
-    cat('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
-    fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
-                                        #    this.kag$segstats$mean[make.na] = NA
-    this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
+  if (!is.null(het.file))
+  {
+    hets = fread(het.file)
+    if (verbose)
+    {
+      jmessage('loaded hets')
+    }
 
-    #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
+    if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n)) ## old format, apply het filter ourselves
+    {
+      hets.gr$ref.frac.n = hets.gr$alt.count.n / (hets.gr$alt.count.n + hets.gr$ref.count.n)
+      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
+      hets.gr$alt = hets$alt.count.t
+      hets.gr$ref = hets$ref.count.t
+    }
+    else ## new, standard format, with $alt and $ref field
+    {
+      hets.gr = dt2gr(hets)
+      hets.gr$alt.count.t = hets.gr$alt
+      hets.gr$ref.count.t = hets.gr$ref
+    }
+  }
 
-    ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
-    pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
+  if (length(hets.gr)>0){
+    ## pretend we don't have hets at all
 
-    if (!is.null(het.file))
-        pp = ppgrid(ss.tmp, verbose = T, plot = F, mc.cores = mc.cores,
-                    purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-                    ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
+    this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref.count.t', 'alt.count.t'), mc.cores = mc.cores)
+  }
+  else
+    this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
+
+  this.kag$segstats$ncn = 2
+
+  if (!is.null(nseg.file))
+    if (is.null(nseg$cn))
+      stop('Normal seg file does not have "cn" met data field')
     else
-        pp = ppgrid(ss.tmp, verbose = T, plot = F, mc.cores = mc.cores,
-                    purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-                    ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
+    {
+      this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
+      this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
+    }
 
-    dev.off()
 
-    saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
+  ## 6/15 temp fix for sd on short segments, which we overestimate for now
+  cov.thresh = pmin(1e5, median(width(this.cov)))
+                                        #    jmessage('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
+  fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
+                                        #    this.kag$segstats$mean[make.na] = NA
+  this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
 
-    this.kag$purity = pp[1,]$purity
-    this.kag$ploidy = pp[1,]$ploidy
-    this.kag$beta = pp[1,]$beta
-    this.kag$gamma = pp[1,]$gamma
-    this.kag$segstats$cn = rel2abs(this.kag$segstats, beta = this.kag$beta, gamma = this.kag$gamma, field = 'mean')
+                                        #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
+  ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
+  pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
 
-    if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
-        pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
-    tmp.kag = this.kag
+  if (!is.na(purity) & !is.na(ploidy)) ## purity and ploidy are completely set
+  {
+    pp = data.table(purity = purity, ploidy = ploidy)
+  }
+  else if (use.ppurple)
+  {
 
-    tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] )
-    if ( class( tryres ) == "try-error" ) browser()
+    if (is.na(purity))
+      {
+        purity = seq(0, 1, 0.1)
+      }
 
-    if (length(tmp.kag$segstats)<10)
-        warning('number of segments used for purity ploidy extremely low .. check coverage data')
-    .plot_ppfit(tmp.kag)
-    dev.off()
+    if (is.na(ploidy))
+      {
+        ploidy = seq(1, 6, 0.2)
+      }
 
-    y1 = 10
+    cov$y = values(cov)[, field]
 
-    if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+    if (verbose)
+    {
+      jmessage('Computing purity and ploidy with Ppurple')
+    }
+
+    pp = ppurple(cov = cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose)
+  }
+  else
+    {
+      if (!is.null(het.file))
+        {
+          pp = ppgrid(ss.tmp, verbose = verbose, plot = F, mc.cores = mc.cores,
+                      purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+                      ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
+        }
+      else
+        {
+          pp = ppgrid(ss.tmp, verbose = verbose, plot = F, mc.cores = mc.cores,
+                      purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
+                      ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
+        }
+    }
+
+  sw = as.numeric(width(ss.tmp))
+  mu = values(cov)[, field]
+  mu[is.infinite(mu)] = NA
+  w = as.numeric(width(cov))
+  w[is.na(mu)] = NA
+  sw = sum(w, na.rm = T)
+  mutl = sum(mu * w, na.rm = T)
+  pp$beta = ((1-pp$purity)*2 + pp$purity*pp$ploidy) * sw / (pp$purity * mutl)
+  pp$gamma = 1*(1-pp$purity)/pp$purity
+
+  saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
+
+  this.kag$purity = pp[1,]$purity
+  this.kag$ploidy = pp[1,]$ploidy
+  this.kag$beta = pp[1,]$beta
+  this.kag$gamma = pp[1,]$gamma
+  this.kag$segstats$cn = rel2abs(this.kag$segstats, purity = this.kag$purity, ploidy = this.kag$ploidy, field = 'mean')
+  if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+    pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
+  tmp.kag = this.kag
+
+  tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] )
+  if ( class( tryres ) == "try-error" ) browser()
+
+  if (length(tmp.kag$segstats)<10)
+    warning('number of segments used for purity ploidy extremely low .. check coverage data')
+  .plot_ppfit(tmp.kag)
+  dev.off()
+
+  if (verbose)
+  {
+    jmessage('Built gGraph with ', length(this.kag$tile), ' nodes, ', sum(this.kag$adj!=0), ' edges, purity ', round(this.kag$purity,2), ', and ploidy ', round(this.kag$ploidy,2))
+  }
+
+  y1 = 10
+
+  if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
         pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
 
-    plot(c(gTrack(gr.fix(sample(this.cov, 5e4), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
+    plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
            gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
     dev.off()
 
@@ -1206,56 +1397,42 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     abline(v = 1/kag$beta*(0:1000) + kag$gamma/kag$beta, col = alpha('red', 0.3), lty = c(4, rep(2, 1000)))
 }
 
-#' run cbs
-cbs_stub = function(cov.file, out.file, field = 'ratio', alpha = 1e-5)
-{
-    require(DNAcopy)
-    ## resegment from scratch, using cbs, and recompute karyoMIP w out edge cons,
-
-    cat('reading', cov.file, '\n')
-                                        #   this.cov = seg2gr(read.delim(cov.file, strings = F), seqlengths = hg_seqlengths())
-    this.cov = readRDS(cov.file)
-    ix = which(!is.na(values(this.cov)[, field]))
-    cat('sending ', length(ix), ' segments\n')
-    cna = CNA(log(values(this.cov)[, field])[ix], as.character(seqnames(this.cov))[ix], start(this.cov)[ix], data.type = 'logratio')
-    cat('finished making cna\n')
-    seg = segment(smooth.CNA(cna), alpha = 1e-5, verbose = T)
-    cat('finished segmenting\n')
-    out = seg2gr(print(seg))
-    cat(length(out), ' segments produced\n')
-    saveRDS(out, out.file)
-}
-
 #' run ramip
 ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
+                      verbose = FALSE,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
                       ab.force = NULL, ## indices of aberrant junctions to force include into the solution
                       ab.exclude = NULL ## indices of aberrant junctions to force include into the solution
                       )
 {
-    cat('Starting', kag.file, '\n')
 
     this.kag = readRDS(kag.file)
 
     if (is.null(this.kag$gamma) | is.null(this.kag$beta))
     {
-        pp = ppgrid(this.kag$segstats, verbose = T, plot = T, purity.min = purity.min, purity.max = purity.max, ploidy.min = ploidy.min, ploidy.max = ploidy.max)
+        pp = ppgrid(this.kag$segstats, verbose = verbose, plot = T, purity.min = purity.min, purity.max = purity.max, ploidy.min = ploidy.min, ploidy.max = ploidy.max)
         this.kag$beta = pp[1,]$beta
         this.kag$gamma = pp[1,]$gamma
     }
 
-    if (!is.na(gamma))
+  if (!is.na(gamma))
     {
-        cat(sprintf('Overriding gamma with %s\n', gamma))
+      if (verbose)
+        {
+          jmessage(sprintf('Overriding gamma with %s\n', gamma))
+        }
         this.kag$gamma = gamma
     }
 
     if (!is.na(beta))
     {
-        cat(sprintf('Overriding beta with %s\n', beta))
+      if (verbose)
+      {
+        jmessage(sprintf('Overriding beta with %s\n', beta))
+      }
         this.kag$beta = beta
     }
 
@@ -1274,7 +1451,10 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
         .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
-        print(Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
+        if (verbose)
+          {
+            jmessage('Creating ILOG CPLEX PARAMETER FILE in ', Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
+          }
     }
 
     adj.nudge = this.kag$adj*0;
@@ -1283,28 +1463,33 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
     adj.lb = NULL
     if (!is.null(ab.force))
     {
-        print(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
-        adj.lb = this.kag$adj*0
-        adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
-        adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
+      if (verbose)
+      {
+        jmessage(paste('Enforcing lower bounds on aberrant junctions:', paste(ab.force, collapse = ',')))
+      }
+      adj.lb = this.kag$adj*0
+      adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
+      adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
     }
 
     if (!is.null(ab.exclude))
     {
-      print(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
+      if (verbose)
+      {
+        jmessage(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
+      }
       adj.ub = this.kag$adj*0+Inf
       adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0
       adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0
     }
 
-    ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.lb = adj.lb , adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = T)
-    saveRDS(ra.sol, out.file)
+  ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, adj.lb = adj.lb , use.gurobi = use.gurobi, adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = verbose)
+  saveRDS(ra.sol, out.file)
 
     if (customparams)
     {
         system(paste('rm', param.file))
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
-        cat('Finished', kag.file, '\n')
     }
 }
 
@@ -1480,6 +1665,8 @@ segstats = function(target,
     return(target)
 }
 
+jmessage = function(..., pre = 'JaBbA')
+  message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
 
 ####################################################################
 #' jbaMIP
@@ -1541,6 +1728,7 @@ segstats = function(target,
 jbaMIP = function(
   adj, # binary n x n adjacency matrix ($adj output of karyograph)
   segstats, # n x 1 GRanges object with "mean" and "sd" value fields
+  mipstart = NULL, ## sparse adjacency matrix of mipstarts (0 = NA, 0+eps + 0, k>=1 = k)
   ########### optional args
   beta = NA, # beta guess (optional)
   gamma = NA, # gamma guess (optional)
@@ -1572,12 +1760,13 @@ jbaMIP = function(
   na.node.nudge = TRUE,
   ecn.out.ub = rep(NA, length(segstats)), ## upper bound for cn of edges leaving nodes
   ecn.in.ub = rep(NA, length(segstats)),  ## upper bound for cn of edges entering nodes
-  gurobi = F, # otherwise will use cplex
+  use.gurobi = F, # otherwise will use cplex
   nsolutions = 1,
   verbose = F,
   debug = F,
   mc.cores = 1, ## only matters if partition = T
-  ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE, slack.prior = 1,
+  ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE,
+  slack.prior = 1,
   ... # passed to optimizer
   )
 {
@@ -1588,7 +1777,7 @@ jbaMIP = function(
   if (is.null(adj.lb))
       adj.lb = 0*adj
 
-#  message('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
+#  jmessage('Gunes!!! We are enforcing ', sum(adj.lb!=0), ' lower bound constraints!!!!!')
 
   #####
   # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
@@ -1611,7 +1800,9 @@ jbaMIP = function(
       fix = as.integer(which(residual.diff>(8/slack.prior))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
 
       if (verbose)
-        cat('Fixing', length(fix), 'nodes that are unmovable by slack\n')
+        {
+          jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
+        }
 
       ##
       ## now we will create a graph of unfixed nodes and fixed node "halves"
@@ -1693,8 +1884,10 @@ jbaMIP = function(
       cll = cll[ord.ix]
 
       if (verbose)
-        cat('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
-            paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '\n')
+        {
+          jmessage('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
+                   paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
+        }
 
       cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
 
@@ -1742,10 +1935,10 @@ jbaMIP = function(
           args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
 
           if (verbose)
-            cat('Starting cluster ', k, 'of', length(cll), 'which has', length(uix), 'nodes comprising',
-                sum(as.numeric(width(segstats[uix])))/2/1e6, 'MB and', length(unique(seqnames((segstats[uix])))),
-                'chromosomes, including', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
-                     length(unique(seqnames((segstats[uix])))))]), collapse = ', '), '\n')
+            jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
+                     round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ', length(unique(seqnames((segstats[uix])))),
+                     ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
+                     length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
 
 
           out = do.call('jbaMIP', args)
@@ -1849,7 +2042,9 @@ jbaMIP = function(
   edges = which(adj!=0, arr.ind = T)
 
   if (verbose)
-    cat('Setting up matrices .. \n')
+    {
+#      jmessage('Setting up matrices ..')
+    }
 
   varmeta = data.frame() ## store meta data about variables to keep track
   consmeta = data.frame() ## store meta data about constraints to keep track
@@ -1909,7 +2104,10 @@ jbaMIP = function(
     lb[e.ix] = adj.lb[edges]
 
   if (any(ix <<- !is.na(cn.fix)))
-    cat('Fixing copy states on', sum(ix), 'vertices\n')
+    if (verbose>1)
+      {
+        jmessage('Fixing copy states on ', sum(ix), ' vertices')
+      }
 
 ### implement lower bounds and fixes
   if (any(!is.na(cn.lb)))
@@ -1976,7 +2174,9 @@ jbaMIP = function(
     mu.all = NA
 
   if (verbose)
-    cat('cn constraints .. \n')
+    {
+#      jmessage('cn constraints ..')
+    }
 
   if (length(v.ix.c)>0)
     {
@@ -2056,7 +2256,9 @@ jbaMIP = function(
   if (edge.slack)
     {
       if (verbose)
-        cat('edge slack .. \n')
+        {
+#          jmessage('edge slack ..')
+        }
 
       # dup constraints on (reverse complement) edge.slack
       # (these make sure that reverse complement edge.slacks are
@@ -2147,7 +2349,9 @@ jbaMIP = function(
   if (!ignore.edge)
     {
       if (verbose)
-        cat('edge consistency matrix .. \n')
+        {
+#          jmessage('edge consistency matrix .. ')
+        }
 
       ## add edge consistency criteria
       ## for every node that is source of an edge
@@ -2177,10 +2381,12 @@ jbaMIP = function(
       B = rBind(Bs, Bt)
 
       if (verbose)
-        cat('populating linear constraints .. \n')
+      {
+#        jmessage('populating linear constraints ..')
+      }
 
       consmeta = rbind(consmeta,
-        data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)), sense = 'E', b = 0, stringsAsFactors = F),
+                       data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)), sense = 'E', b = 0, stringsAsFactors = F),
         data.frame(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)), sense = 'E', b = 0, stringsAsFactors = F)
         )
 
@@ -2251,12 +2457,12 @@ jbaMIP = function(
 
   EPS = 0.000000000001
   if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
-      if (length(v.ix.na)>0)
-      {
-          if (verbose)
-              message('NA nudging node!!')
-          Qobj[cbind(v.ix.na, v.ix.na)] = EPS
-      }
+    if (length(v.ix.na)>0)
+    {
+      if (verbose)
+        jmessage('NA nudging node!!')
+      Qobj[cbind(v.ix.na, v.ix.na)] = EPS
+    }
 
 #  if (!ignore.cons)
 #    Qobj[s.ix[length(s.ix)], s.ix[length(s.ix)]] = 1
@@ -2267,7 +2473,9 @@ jbaMIP = function(
   if (nrow(edges)>0)
     {
       if (verbose)
-        cat('Adding ', sum(adj.nudge[edges]), "of edge nudge across", sum(adj.nudge[edges]!=0), "edges\n")
+      {
+#        jmessage('Adding ', sum(adj.nudge[edges]), " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
+      }
 
       cvec[e.ix] = -adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
     }
@@ -2285,12 +2493,18 @@ jbaMIP = function(
 
       ## let any specified "loose ends" have unpenalized slack
       if (length(loose.ends)>0)
+      {
+        if (verbose)
         {
-          cat('Relaxing slack penalty on', length(loose.ends), 'loose ends\n')
+#          jmessage('Relaxing slack penalty on', length(loose.ends), 'loose ends\n')
+        }
           cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
         }
 
-      cat(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s\n', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
+      if (verbose>1)
+      {
+        jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
+      }
 
 
     }
@@ -2299,125 +2513,130 @@ jbaMIP = function(
     Qobj[cbind(pd.ix, pd.ix)] = 1/purity.prior[2]^2
 
   if (verbose)
-    cat('Beginning optimization .. \n')
-
-  ## guess mipstart if gamma.guess and beta.guess are non NA
-  if (!is.na(gamma.guess) & !is.na(beta.guess))
-  {
-    ## convert everything to data.tables
-    varmeta = as.data.table(varmeta)
-    consmeta = as.data.table(consmeta)
-    consmeta[, id := 1:.N]
-    varmeta[, id := 1:.N]
-    varmeta[, guess := as.numeric(0)]
-
-    ## first guess the node copy number n_hat by rounding
-    mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
-    ix = varmeta[type == 'interval', id]
-    n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
-    varmeta[type == 'interval', guess := n_hat]
-
-    ## guess each edge copy number by iterating through edges and peeling off the min copy number of source
-    ## and sink
-    e_hat = lb[varmeta[type == 'edge', id]]
-    e_done = rep(FALSE, length(e_hat))
-    rev.eix = mmatch(edges, cbind(rev.ix[edges[,2]], rev.ix[edges[,1]])) ## match edges to their reverse complements
-    message('Computing initial guess on edge weight')
-    for (i in 1:nrow(edges))
     {
-      if (!e_done[i]) ## specify both edge and its reverse complement (so if e_hat[i] is non NA, it has already been filled)
-      {
-        if (edges[i, 1] == edges[i, 2]) ## be careful overdrawing fold back edges, otherwise can generate strand imbalance
-          e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], floor(min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE)/2))
-        else
-          e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE))
-        ## make sure to also change reverse complement
-        n_hat[rev.ix[edges[i,1]]] = n_hat[edges[i,1]] = n_hat[edges[i,1]] - e_hat[i]
-        n_hat[rev.ix[edges[i,2]]] = n_hat[edges[i,2]] = n_hat[edges[i,2]] - e_hat[i]
-        e_done[i] = e_done[rev.eix[i]] = TRUE
-      }
-    }
-    message('Finished computing initial guess on edge weight')
-    varmeta[type == 'edge', guess := e_hat]
-
-    ## now guess each target and source slack
-    ## which is just the difference between the copy number at
-    ## c_i and the incoming / outgoing edges
-
-    n_hat = varmeta[type == 'interval', guess]
-    ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
-    Bs = Amat[consmeta[type == 'EdgeSource', id],]
-    six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-    s_slack_hat = rep(0, length(n_hat))
-    s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
-    s_slack_hat[is.na(s_slack_hat)] = 0
-    varmeta[type == 'source.slack', guess := s_slack_hat]
-
-    ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
-    Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-    tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-    t_slack_hat = rep(0, length(n_hat))
-    t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
-    t_slack_hat[is.na(t_slack_hat)] = 0
-    varmeta[type == 'target.slack', guess := t_slack_hat]
-    varmeta[label == 'beta', guess := beta.guess]
-    varmeta[label == 'gamma', guess := gamma.guess]
-
-    ## fix negative loose ends, by adding copy number to the node and then slack at the other end
-    ## (these occur from nonzero lower bounds on junctions)
-    ## i.e. for negative source slack add copy number to node, and positive target slack
-    if (any(neg.source <- varmeta[type == 'source.slack', which(guess<0)]))
-    {
-      tmp = varmeta[type == 'source.slack', guess[neg.source]]
-      varmeta[type == 'source.slack' & subid %in% neg.source, guess := 0]
-      varmeta[type == 'interval' & subid %in% neg.source, guess := guess - tmp]
-      varmeta[type == 'target.slack' & subid %in% neg.source , guess := guess - tmp]
+#      jmessage('Beginning optimization ..')
     }
 
-    if (any(neg.target <- varmeta[type == 'target.slack', which(guess<0)]))
-    {
-      tmp = varmeta[type == 'target.slack', guess[neg.target]]
-      varmeta[type == 'target.slack' & subid %in% neg.target, guess := 0]
-      varmeta[type == 'interval' & subid %in% neg.target, guess := guess - tmp]
-      varmeta[type == 'source.slack' & subid %in% neg.target , guess := guess - tmp]
-   }
+  ## ## guess mipstart if gamma.guess and beta.guess are non NA
+  ## if (!is.na(gamma.guess) & !is.na(beta.guess))
+  ## {
+  ##   ## convert everything to data.tables
+  ##   varmeta = as.data.table(varmeta)
+  ##   consmeta = as.data.table(consmeta)
+  ##   consmeta[, id := 1:.N]
+  ##   varmeta[, id := 1:.N]
+  ##   varmeta[, guess := as.numeric(0)]
 
-    ############################
-    ## now we have a lot of slacks
-    ## so we need to "straighten" out all high variance nodes
-    ## with respect to their nearest low variance node
-    ## we draw an arbitrary distinction between low and high variance using
-    ## a (quasi arbitrary threshold) based on (a lower) slack.prio
-    ############################
+  ##   ## first guess the node copy number n_hat by rounding
+  ##   mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
+  ##   ix = varmeta[type == 'interval', id]
+  ##   n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
+  ##   varmeta[type == 'interval', guess := n_hat]
 
-    m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
-    cnmle = round(m) ## MLE estimate for CN
-    residual.min = ((m-cnmle)/(segstats$sd))^2
-    residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
-    residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
-    fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-    branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
+  ##   ## guess each edge copy number by iterating through edges and peeling off the min copy number of source
+  ##   ## and sink
+  ##   e_hat = lb[varmeta[type == 'edge', id]]
+  ##   e_done = rep(FALSE, length(e_hat))
+  ##   rev.eix = mmatch(edges, cbind(rev.ix[edges[,2]], rev.ix[edges[,1]])) ## match edges to their reverse complements
+  ##   jmessage('Computing initial guess on edge weight')
+  ##   for (i in 1:nrow(edges))
+  ##   {
+  ##     if (!e_done[i]) ## specify both edge and its reverse complement (so if e_hat[i] is non NA, it has already been filled)
+  ##     {
+  ##       if (edges[i, 1] == edges[i, 2]) ## be careful overdrawing fold back edges, otherwise can generate strand imbalance
+  ##         e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], floor(min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE)/2))
+  ##       else
+  ##         e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE))
+  ##       ## make sure to also change reverse complement
+  ##       n_hat[rev.ix[edges[i,1]]] = n_hat[edges[i,1]] = n_hat[edges[i,1]] - e_hat[i]
+  ##       n_hat[rev.ix[edges[i,2]]] = n_hat[edges[i,2]] = n_hat[edges[i,2]] - e_hat[i]
+  ##       e_done[i] = e_done[rev.eix[i]] = TRUE
+  ##     }
+  ##   }
+  ##   jmessage('Finished computing initial guess on edge weight')
+  ##   varmeta[type == 'edge', guess := e_hat]
+
+  ##   ## now guess each target and source slack
+  ##   ## which is just the difference between the copy number at
+  ##   ## c_i and the incoming / outgoing edges
+
+  ##   n_hat = varmeta[type == 'interval', guess]
+  ##   ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
+  ##   Bs = Amat[consmeta[type == 'EdgeSource', id],]
+  ##   six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+  ##   s_slack_hat = rep(0, length(n_hat))
+  ##   s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
+  ##   s_slack_hat[is.na(s_slack_hat)] = 0
+  ##   varmeta[type == 'source.slack', guess := s_slack_hat]
+
+  ##   ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
+  ##   Bt = Amat[consmeta[type == 'EdgeTarget', id],]
+  ##   tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+  ##   t_slack_hat = rep(0, length(n_hat))
+  ##   t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
+  ##   t_slack_hat[is.na(t_slack_hat)] = 0
+  ##   varmeta[type == 'target.slack', guess := t_slack_hat]
+  ##   varmeta[label == 'beta', guess := beta.guess]
+  ##   varmeta[label == 'gamma', guess := gamma.guess]
+
+  ##   ## fix negative loose ends, by adding copy number to the node and then slack at the other end
+  ##   ## (these occur from nonzero lower bounds on junctions)
+  ##   ## i.e. for negative source slack add copy number to node, and positive target slack
+  ##   if (any(neg.source <- varmeta[type == 'source.slack', which(guess<0)]))
+  ##   {
+  ##     tmp = varmeta[type == 'source.slack', guess[neg.source]]
+  ##     varmeta[type == 'source.slack' & subid %in% neg.source, guess := 0]
+  ##     varmeta[type == 'interval' & subid %in% neg.source, guess := guess - tmp]
+  ##     varmeta[type == 'target.slack' & subid %in% neg.source , guess := guess - tmp]
+  ##   }
+
+  ##   if (any(neg.target <- varmeta[type == 'target.slack', which(guess<0)]))
+  ##   {
+  ##     tmp = varmeta[type == 'target.slack', guess[neg.target]]
+  ##     varmeta[type == 'target.slack' & subid %in% neg.target, guess := 0]
+  ##     varmeta[type == 'interval' & subid %in% neg.target, guess := guess - tmp]
+  ##     varmeta[type == 'source.slack' & subid %in% neg.target , guess := guess - tmp]
+  ##  }
+
+  ##   ############################
+  ##   ## now we have a lot of slacks
+  ##   ## so we need to "straighten" out all high variance nodes
+  ##   ## with respect to their nearest low variance node
+  ##   ## we draw an arbitrary distinction between low and high variance using
+  ##   ## a (quasi arbitrary threshold) based on (a lower) slack.prio
+  ##   ############################
+
+  ##   m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
+  ##   cnmle = round(m) ## MLE estimate for CN
+  ##   residual.min = ((m-cnmle)/(segstats$sd))^2
+  ##   residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
+  ##   residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
+  ##   fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
+  ##   branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
 
 
-    ## path endpoints are either fix or branch
-    endpoints = union(fix, branch)
+  ##   ## path endpoints are either fix or branch
+  ##   endpoints = union(fix, branch)
 
 
-    ## compute residual as difference between rounded and "mean" value
-    n_hat = varmeta[type == 'interval', guess]
-    eps_hat = mu_hat - n_hat
-    varmeta[type == 'residual', guess := eps_hat]
+  ##   ## compute residual as difference between rounded and "mean" value
+  ##   n_hat = varmeta[type == 'interval', guess]
+  ##   eps_hat = mu_hat - n_hat
+  ##   varmeta[type == 'residual', guess := eps_hat]
 
-    mipstart = varmeta$guess
+  ##   mipstart = varmeta$guess
 
-    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(mipstart = mipstart), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
+  ##   sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(mipstart = mipstart), list(trace = ifelse(verbose>=1, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
 
-  }
+  ## }
 
   # setup MIP
-  if (gurobi) # translate into gurobi
-    {
-      print('Running gurobi!')
+  if (use.gurobi) # translate into gurobi
+  {
+    if (verbose)
+      {
+        jmessage('Running gurobi!')
+      }
 
       model = list()
       model$A = Amat
@@ -2444,7 +2663,7 @@ jbaMIP = function(
       sol$xopt = sol$x;
     }
   else
-    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
+    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
 
   if (is.null(sol$xopt))
     sol.l = sol
@@ -2459,8 +2678,6 @@ jbaMIP = function(
   segstats$sd = sd
   segstats$ncn = ncn
 
-  if (verbose)
-    cat('Post processing .. \n')
 
   sol.l = lapply(sol.l, function(sol)
   {
@@ -2527,7 +2744,6 @@ jbaMIP = function(
 
   if (length(sol.l)==1)
     sol.l = sol.l[[1]]
-
 
   return(sol.l)
 }
@@ -2743,7 +2959,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
         stop('mprior must be matrix with as many columns as there are walks')
 
       m = nrow(mprior)
-      message('Adding mprior to karyoMIP')
+      jmessage('Adding mprior to karyoMIP')
 
       ## column cat matrices with blank Zero matrix on left, with
       ## constraints acting on binary variables, then identity matrix on right to capture
@@ -2783,7 +2999,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
       vtype = c(vtype, pvtype)
       cvec = c(cvec, pcvec)
 
-      message('Solving optimization with additional ', m, ' matrix prior terms')
+      jmessage('Solving optimization with additional ', m, ' matrix prior terms')
 
       sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
     }
@@ -2823,8 +3039,8 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   {
       if (is.null(kag))
           {
-              if (verbose)
-                  cat('Redigesting..\n')
+#              if (verbose)
+ #                 cat('Redigesting..\n')
               ## redigesting
               ix = rep(TRUE, length(jab$segstats))
               if (!is.null(jab$segstats$loose))
@@ -2910,8 +3126,8 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
         adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
         adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
         adj = adj.plus
-        segstats$loose = F
         segstats = grbind(jab$segstats, sinks, sources)
+        segstats$loose = F
         values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
       }
       else
@@ -3914,8 +4130,8 @@ jabba.alleles = function(
         return(which.max(ll)-1)
       })
 
-    if (verbose)
-      cat('\n')
+#    if (verbose)
+#      cat('\n')
 
     re.seg$high = re.seg$cn-re.seg$low
           }
@@ -4256,7 +4472,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
     ra.sol$segstats$eslack.in = eslack.in
     ra.sol$eslack.out = eslack.out
     ra.sol$eslack.in = eslack.in
-    cat('\n')
+#    cat('\n')
     return(ra.sol)
   }
 
@@ -4531,8 +4747,8 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
     ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
 
     if (is.na(beta))
-        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
-                                        #  beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * total)
+        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * total)
+    ##  beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * total)
 
                                         #    return((abs + gamma) / beta)
     return((abs + ncn*gamma/2) / beta)
@@ -4748,14 +4964,14 @@ collapse.paths = function(G, verbose = T)
 
   out = G!=0
 
-  if (verbose)
-      cat('graph size:', nrow(out), 'nodes\n')
+#  if (verbose)
+ #     cat('graph size:', nrow(out), 'nodes\n')
 
   ## first identify all nodes with exactly one parent and child to do initial collapsing of graph
   singletons = which(Matrix::rowSums(out)==1 & Matrix::colSums(out)==1)
 
-  if (verbose)
-      cat('Collapsing simple paths..\n')
+#  if (verbose)
+#      cat('Collapsing simple paths..\n')
 
   sets = split(1:nrow(G), 1:nrow(G))
   if (length(singletons)>0)
@@ -4767,8 +4983,8 @@ collapse.paths = function(G, verbose = T)
               {
                   for (j in dix)
                       {
-                          if (verbose)
-                              cat('.')
+#                          if (verbose)
+#                              cat('.')
 
                           ## grab nodes in this cluster
                           setj = singletons[which(cl == j)]
@@ -4789,7 +5005,9 @@ collapse.paths = function(G, verbose = T)
       }
 
   if (verbose)
-      cat('done\nnow fixing branches\n')
+  {
+#    jmessage('done\nnow fixing branches\n')
+  }
 
   todo = rep(FALSE, nrow(G))
   todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE
@@ -4799,9 +5017,9 @@ collapse.paths = function(G, verbose = T)
         sets.last = sets
         out.last = out
 
-        if (verbose)
-            if ((sum(todo) %% 200)==0)
-                cat('todo:', sum(todo), 'num sets:', sum(!sapply(sets, is.null)), '\n')
+#        if (verbose)
+#            if ((sum(todo) %% 200)==0)
+#                cat('todo:', sum(todo), 'num sets:', sum(!sapply(sets, is.null)), '\n')
 
         i = which(todo)[1]
 
@@ -5857,7 +6075,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
         if (is.null(cds))
             {
                 if (verbose)
-                    message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')
+                    jmessage('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')
                 cds = read_gencode('cds')
             }
 
@@ -6591,6 +6809,14 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                         stop("MATEID or SVTYPE not included. Required")
 
                       vgr$mateid = vgr$MATEID
+
+                      if (!is.character(vgr$mateid))
+                          {
+                            vgr$mateid = unstrsplit(vgr$MATEID)
+                            if (any(nix<-nchar(vgr$mateid)==0))
+                              vgr$mateid[nix] = NA
+                          }
+
                       if (is.null(vgr$SVTYPE))
                           vgr$svtype = vgr$SVTYPE
                       else
@@ -6998,8 +7224,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     if (length(junctions)>0)
       {
         bp.p = grl.pivot(junctions)
-        bp1 = gr.end(gr.fix(bp.p[[1]]), 1, ignore.strand = F)
-        bp2 = gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F)
+        bp1 = suppressWarnings(gr.end(gr.fix(bp.p[[1]]), 1, ignore.strand = F))
+        bp2 = suppressWarnings(gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F))
 
 
         #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
@@ -7735,7 +7961,7 @@ jabba.dist = function(jab, gr1, gr2,
 
     if (verbose)
         {
-            message('Finished making gr objects')
+            jmessage('Finished making gr objects')
             print(Sys.time() -now)
         }
 
@@ -7798,7 +8024,7 @@ jabba.dist = function(jab, gr1, gr2,
 
     if (verbose)
         {
-            message('Finished mapping gr1 and gr2 objects to jabba graph')
+            jmessage('Finished mapping gr1 and gr2 objects to jabba graph')
             print(Sys.time() -now)
         }
 
@@ -7852,7 +8078,7 @@ jabba.dist = function(jab, gr1, gr2,
 
         if (verbose)
             {
-                message('Finished computing distances')
+                jmessage('Finished computing distances')
                 print(Sys.time() -now)
             }
 
@@ -7913,7 +8139,7 @@ jabba.dist = function(jab, gr1, gr2,
 
         if (verbose)
             {
-                message('Finished correcting distances')
+                jmessage('Finished correcting distances')
                 print(Sys.time() -now)
             }
       }
@@ -7942,7 +8168,7 @@ jabba.dist = function(jab, gr1, gr2,
 
     if (verbose)
         {
-            message('Finished aggregating distances to original object')
+            jmessage('Finished aggregating distances to original object')
             print(Sys.time() -now)
         }
     return(D)
@@ -7962,9 +8188,11 @@ jabba.dist = function(jab, gr1, gr2,
 #' @param cnv flag whether to dump in CNV format
 #' @return returns character string or writes to file if specified
 #########################################
-jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = skidb::read_hg(fft = T), cnv = FALSE)
+jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE)
     {
-        require(data.table)
+      if (is.null(hg))
+        hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
+
         vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
 
         ## convert all aberrant connections into pairs of VCF rows
@@ -8236,26 +8464,31 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = skidb::read_hg(ff
                 ss = jab$segstats[six]
 
                 if (length(ss)>0)
-                    {
-                        body = data.frame("CHROM" = seqnames(ss), POS = start(ss),
-                            ID = paste(sampleid, '_seg', six, sep = ''),
-                            REF = as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))),
-                            ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
-                            QUAL = ".",
-                            FILTER = "PASS",
-                            INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
-                                ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
-                            FORMAT = "GT:CN",
-                            GENO = paste("./.", ss$cn, sep = ':'))
-                        names(body)[1] = '#CHROM'
-                        names(body)[ncol(body)] = sampleid
-                    }
+                {
+                  REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))), error = function(e) NULL)
+                  if (is.null(REF))
+                  {
+                    REF = 'N'
+                  }
+                  body = data.frame("CHROM" = as.character(seqnames(ss)), POS = start(ss),
+                                    ID = paste(sampleid, '_seg', six, sep = ''),
+                                    REF = REF,
+                                    ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
+                                    QUAL = ".",
+                                    FILTER = "PASS",
+                                    INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
+                                                 ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
+                                    FORMAT = "GT:CN",
+                                    GENO = paste("./.", ss$cn, sep = ':'))
+                  names(body)[1] = '#CHROM'
+                  names(body)[ncol(body)] = sampleid
+                }
                 else
-                    {
-                        body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
-                        names(body)[1] = '#CHROM'
-                        names(body)[ncol(body)] = sampleid
-                    }
+              {
+                body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
+                names(body)[1] = '#CHROM'
+                names(body)[ncol(body)] = sampleid
+              }
             }
 
         if (!is.null(fn))
@@ -8812,7 +9045,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     sum.paths = mcmapply(function(x, y, i)
     {
         if (verbose)
-        message('path ', i, ' of ', nrow(sum), '\n')
+        jmessage('path ', i, ' of ', nrow(sum), '\n')
         if ((ra.which[x, y]) == 1)
             get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
         else if ((ra.which[x, y]) == 2)
@@ -8931,7 +9164,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     }
 
   if (verbose)
-    message(paste('Processing JaBbA'))
+    jmessage(paste('Processing JaBbA'))
 
   h = jbaMIP.process(sol)
 
@@ -9345,7 +9578,10 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
       system(paste('rm', param.file))
       Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
-      cat('Finished\n')
+      if (verbose)
+        {
+          jmessage('Finished')
+        }
     }
 
   return(out)
@@ -9403,7 +9639,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     if (is.na(first.overdraft) & tmp.pcn>0)
     {
         if (verbose)
-            message('Shortest path is good enough!')
+            jmessage('Shortest path is good enough!')
         return(tmp.p)
     }
 
@@ -9440,12 +9676,12 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 
 
     if (verbose)
-        message('YES WE ARE DOING PROPER MIP!!!!')
+        jmessage('YES WE ARE DOING PROPER MIP!!!!')
 
     if (!(res$status %in% c(101, 102)))
     {
         if (verbose)
-            message('No solution to MIP!')
+            jmessage('No solution to MIP!')
 
 #        browser()
         return(NULL)
@@ -9463,10 +9699,10 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         tmp.pcn = edges[.(tmp.eid), if (length(cn)>1) cn/2 else cn, by = eclass][, min(V1)]
         overdrafts.eclass = intersect(names(which(table(tmp.eclass)==2)), rationed.edges$eclass)
         if (length(overdrafts.eclass)==0)
-            message('No overdrafts after MIP')
+            jmessage('No overdrafts after MIP')
         else
         {
-            message('Still overdraft!')
+            jmessage('Still overdraft!')
             browser()
         }
     }
@@ -9498,8 +9734,8 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     ## adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
     if (verbose){
         ## ALERT!!! I'm gonna switch to source node width for default weight of edges
-        message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
-        ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
+        jmessage('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+        ## jmessage('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
     }
 
     ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
@@ -9538,7 +9774,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
     if (length(unb)>0)
     {
-        message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+        jmessage(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
         ends = c(ends, unb)         ## shameless HACK ... TOFIX
     }
 
@@ -9622,7 +9858,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     while (nrow(ij)>0)
     {
         if (verbose)
-            message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
+            jmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
         i = i+1
         ## swap this
         ##        vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
@@ -9630,7 +9866,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
         p = get.constrained.shortest.path(cn.adj, G, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
         if (is.null(p)){
-            message('Came up empty!')
+            jmessage('Came up empty!')
             i = i -1
             ij = ij[-1, , drop = FALSE]
         }
@@ -9673,7 +9909,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
             if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
             {
-                message('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
+                jmessage('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
                                         #            browser()
                 cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
                 ## if (!palindromic) ## update reverse complement unless palindromic
@@ -9750,13 +9986,13 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
         if (nrow(ij)==0 & cleanup_mode == FALSE)
         {
-            message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            jmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
             cleanup_mode = TRUE
         }
     }
     if (verbose)
-        message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+        jmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
     ## ## record G, D, remaining edges at the end of path peeling
     ## G1 = G
@@ -9829,14 +10065,14 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     while (nrow(ij)>0)
     {
         if (verbose)
-            message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+            jmessage('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
         i = i+1
                                         #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
 
         p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
         if (is.null(p)){
-            message('Came up empty!')
+            jmessage('Came up empty!')
             i = i -1
             ij = ij[-1, , drop = FALSE]
         } else
@@ -9876,7 +10112,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
             if (!all(cn.adj[ecycles[[i]]]>=0))
             {
-                message('backtracking')
+                jmessage('backtracking')
                 ## browser()
                 cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]+ccns[i]
                 ## if (!palindromic) ## update reverse complement unless palindromic
@@ -9942,7 +10178,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
         if (nrow(ij)==0 & cleanup_mode == FALSE)
         {
-            message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+            jmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
 
             cleanup_mode = TRUE
@@ -9950,7 +10186,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     }
 
     if (verbose)
-        message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+        jmessage('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
 
     if (i>0)
@@ -9978,7 +10214,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
     if (length(remain.ends)>0){
         if (verbose)
-            message(length(remain.ends), "ends were not properly assigned a path. Do them.")
+            jmessage(length(remain.ends), "ends were not properly assigned a path. Do them.")
     }
 
     tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
@@ -10016,7 +10252,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     if (length(check)>0)
         stop('Alleles do not add up to marginal copy number profile!')
     else if (verbose)
-        message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+        jmessage('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
 
     ## match up paths and their reverse complements
     psig = lapply(paths, function(x) ifelse(as.logical(strand(x)=='+'), 1, -1)*x$tile.id)
@@ -10039,7 +10275,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     values(paths)$str = ifelse(remix$pos, '+', '-')
 
     if (length(setdiff(values(paths)$ogid, 1:length(paths))))
-        message('Warning!!! Some paths missing!')
+        jmessage('Warning!!! Some paths missing!')
 
     ## for gGnome compatibiliity
     if (!return.grl)
@@ -10101,7 +10337,102 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 }
 
 
+#' @name read_vcf
+#' @title read_vcf
+#'
+#' @description
+#'
+#' wrapper around variantAnnotation reads VCF into granges or data.table format
+#'
+#' @author Marcin Imielinski
+read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
+    {
+        require(VariantAnnotation)
+        in.fn = fn
 
+        if (verbose)
+            cat('Loading', fn, '\n')
+
+        if (!is.null(gr))
+            {
+                tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+                cmd = sprintf('bcftools view %s %s > %s', fn,  paste(gr.string(gr.stripstrand(gr)), collapse = ' '), tmp.slice.fn)
+                if (verbose)
+                    cat('Running', cmd, '\n')
+                system(cmd)
+                fn = tmp.slice.fn
+            }
+
+        if (!is.null(swap.header))
+            {
+                if (!file.exists(swap.header))
+                    stop(sprintf('Swap header file %s does not exist\n', swap.header))
+
+                system(paste('mkdir -p', tmp.dir))
+                tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+                if (grepl('gz$', fn))
+                    system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
+                else
+                    system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
+
+                if (grepl('gz$', swap.header))
+                    system(sprintf("zcat %s | grep '^[#]' > %s.header", swap.header, tmp.name))
+                 else
+                    system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
+
+                system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
+                vcf = readVcf(tmp.name, hg, ...)
+                system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
+            }
+        else
+            vcf = readVcf(fn, hg, ...)
+
+        out = granges(vcf)
+
+        if (!is.null(values(out)))
+            values(out) = cbind(values(out), info(vcf))
+        else
+            values(out) = info(vcf)
+
+
+        if (!is.null(geno))
+        {
+
+          if (!is.logical(geno))
+            geno = TRUE
+
+
+          if (geno)
+            for (g in  names(geno(vcf)))
+            {
+              geno = names(geno(vcf))
+              warning(sprintf('Loading all geno fields:\n\t%s', paste(geno, collapse = ',')))
+            }
+
+          gt = NULL
+          if (length(g)>0)
+            {
+              for (g in geno)
+              {
+                m = as.data.frame(geno(vcf)[[g]])
+                names(m) = paste(g, names(m), sep = '_')
+                if (is.null(gt))
+                  gt = m
+                else
+                  gt = cbind(gt, m)
+              }
+              values(out) = cbind(values(out), as(gt, 'DataFrame'))
+            }
+        }
+
+          if (!is.null(gr))
+            system(paste('rm', tmp.slice.fn))
+
+        if (add.path)
+            values(out)$path = in.fn
+
+        return(out)
+    }
 
 
 

@@ -27,7 +27,7 @@ dnl
 dnl 4. If none of the above are given, the script tries to find the location of the CPLEX installation and then does the same as 3.
 
 
-AC_INIT([Rcplex], 0.3.2)
+AC_INIT([JaBbA], 0.01)
 
 FOUND_ALL="no"
 

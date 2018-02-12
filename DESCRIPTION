@@ -7,15 +7,17 @@ Depends:
     R (>= 3.1.1),
     Matrix,
     gTrack,
-    gUtils
+    gUtils,
+    gGnome,
+    Ppurple
 Imports:
-  VariantAnnotation,
-  DNAcopy,
+  VariantAnnotation (>= 1.24),
+  DNAcopy (>= 1.52),
   data.table (>=   1.9),
   GenomicRanges (>= 1.18),
   igraph (>= 0.7),
-  gUtils,
-  gTrack
+  gUtils (>= 0.2),
+  gTrack (>= 0.1)
 Suggests:
     testthat    
 License: What license is it under?
