@@ -1,4 +1,4 @@
-#include "Rcplex.h"
+#include "Rcplex2.h"
 
 void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
   int i, status, value;

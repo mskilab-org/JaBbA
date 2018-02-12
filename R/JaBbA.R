@@ -28,6 +28,10 @@
 #' @import data.table
 #' @import DNAcopy
 #' @import gUtils
+#' @useDynLib JaBbA
+#' @importFrom Rcpp sourceCpp
+
+
 
 ###############################
 ## EXPORTED FUNCTIONS
@@ -260,8 +264,6 @@ JaBbA = function(
       {
         jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
       }
-
-      browser()
     }
 
     this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
@@ -337,6 +339,7 @@ JaBbA = function(
 #' @param hets  optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
 #' @param name  prefix for sample name to be output to seg file
 #' @param cores  number of cores to use (default 1)
+#' @param use.gurobi  logical flag whether to use gurobi vs CPLEX
 #' @param nseg  path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
 #' @param subsample  numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
 #' @param tilim  timeout for jbaMIP computation (default 1200 seconds)
@@ -366,7 +369,8 @@ jabba_stub = function(
     mem = 16, ## max memory for MIP portion
     init = NULL, ## previous JaBbA object to use as a solution
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
-    slack.penalty = 1e2, ## nll penalty for each loose end copy
+    slack.penalty = 1e2, ## nll penalty for each loose end cop
+    use.gurobi = FALSE,
     overwrite = F, ## whether to overwrite existing output in outdir
     verbose = TRUE
 )
@@ -594,7 +598,7 @@ jabba_stub = function(
 
     if (overwrite | !file.exists(jabba.raw.rds.file))
       {
-        ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = cores, tilim = tilim, edge.nudge = edgenudge,
+        ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = cores, tilim = tilim, edge.nudge = edgenudge, use.gurobi = use.gurobi,
                    ab.force = ab.force, ab.exclude = ab.exclude, mem = mem, init = init, verbose = verbose,
                    purity.min = purity, purity.max = purity, ploidy.min = ploidy, ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty)
@@ -1310,14 +1314,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         ploidy = seq(1, 6, 0.2)
       }
 
-    cov$y = values(cov)[, field]
+    this.cov$y = values(this.cov)[, field]
 
     if (verbose)
     {
       jmessage('Computing purity and ploidy with Ppurple')
     }
 
-    pp = ppurple(cov = cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose)
+    pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose)
   }
   else
     {
@@ -1336,9 +1340,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     }
 
   sw = as.numeric(width(ss.tmp))
-  mu = values(cov)[, field]
+  mu = values(this.cov)[, field]
   mu[is.infinite(mu)] = NA
-  w = as.numeric(width(cov))
+  w = as.numeric(width(this.cov))
   w[is.na(mu)] = NA
   sw = sum(w, na.rm = T)
   mutl = sum(mu * w, na.rm = T)
@@ -1402,6 +1406,7 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, mem = 16, tilim = 1200, 
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
+                      use.gurobi = FALSE, 
                       verbose = FALSE,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
                       ab.force = NULL, ## indices of aberrant junctions to force include into the solution
@@ -1760,7 +1765,7 @@ jbaMIP = function(
   na.node.nudge = TRUE,
   ecn.out.ub = rep(NA, length(segstats)), ## upper bound for cn of edges leaving nodes
   ecn.in.ub = rep(NA, length(segstats)),  ## upper bound for cn of edges entering nodes
-  use.gurobi = F, # otherwise will use cplex
+  use.gurobi = FALSE, # otherwise will use cplex
   nsolutions = 1,
   verbose = F,
   debug = F,
@@ -1810,7 +1815,7 @@ jbaMIP = function(
       ## and a node that is sending edges
       ##
       unfix = as.numeric(setdiff(1:length(segstats), fix))
-      G = graph(as.numeric(t(which(adj!=0, arr.ind = T))), n = length(segstats), directed = T)
+      G = graph(as.numeric(t(Matrix::which(adj!=0, arr.ind = T))), n = length(segstats), directed = T)
       V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
 
       if (length(fix)>0)
@@ -1828,8 +1833,8 @@ jbaMIP = function(
       ## add nodes representing the "receiving" and "sending" side of fixed nodes
       if (length(fix)>0 & length(unfix)>0)
         {
-          tofix = which(adj[unfix, fix]!=0, arr.ind = T)
-          fromfix = which(adj[fix, unfix]!=0, arr.ind = T)
+          tofix = Matrix::which(adj[unfix, fix]!=0, arr.ind = T)
+          fromfix = Matrix::which(adj[fix, unfix]!=0, arr.ind = T)
         }
       else
         {
@@ -1838,7 +1843,7 @@ jbaMIP = function(
         }
 
       if (length(fix)>0)
-        fixtofix = which(adj[fix, fix]!=0, arr.ind = T)
+        fixtofix = Matrix::which(adj[fix, fix]!=0, arr.ind = T)
       else
         fixtofix = c()
 
@@ -1994,9 +1999,9 @@ jbaMIP = function(
       out$segstats$ecn.in =  Matrix::colSums(out$adj)
 
       out$segstats$edges.in = sapply(1:length(out$segstats),
-        function(x) {ix = which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+        function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
       out$segstats$edges.out = sapply(1:length(out$segstats),
-        function(x) {ix = which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+        function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
 
       ###
       ###
@@ -2039,12 +2044,13 @@ jbaMIP = function(
   if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
     stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
 
-  edges = which(adj!=0, arr.ind = T)
+  edges = Matrix::which(adj!=0, arr.ind = T)
 
   if (verbose)
     {
 #      jmessage('Setting up matrices ..')
     }
+
 
   varmeta = data.frame() ## store meta data about variables to keep track
   consmeta = data.frame() ## store meta data about constraints to keep track
@@ -2056,6 +2062,7 @@ jbaMIP = function(
     stringsAsFactors = F)
   varmeta = rbind(varmeta, data.frame(id = s.ix, subid = 1:length(s.ix), label = paste('residual', 1:length(s.ix), sep = ''),
     type = 'residual', stringsAsFactors = F))
+
 
 #  s.ix = length(v.ix) + v.ix + 1
   if (nrow(edges)>0)
@@ -2663,8 +2670,10 @@ jbaMIP = function(
       sol$xopt = sol$x;
     }
   else
-    sol = Rcplex(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
-
+  {
+    varmeta$mipstart = as.numeric(NA)
+    sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = c(list(...), list(mipstart = varmeta$mipstart, trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis)))
+    }
   if (is.null(sol$xopt))
     sol.l = sol
   else
@@ -2708,9 +2717,9 @@ jbaMIP = function(
            sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
            sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
            sol$segstats$edges.in = sapply(1:length(sol$segstats),
-             function(x) {ix = which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+             function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
            sol$segstats$edges.out = sapply(1:length(sol$segstats),
-             function(x) {ix = which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
+             function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
 
            if (edge.slack)
              {
@@ -3484,7 +3493,7 @@ jbaMIP.allelic = function(
     ref.jun = ref.jun[adj[ref.jun]>0, ]
     ab.adj = adj
     ab.adj[ref.jun] = 0
-    ab.jun = which(ab.adj!=0, arr.ind = T) ## aberrant junctions
+    ab.jun = Matrix::which(ab.adj!=0, arr.ind = T) ## aberrant junctions
 
     ## this will map vertices to their (positive) duplicate
     ## doing this will help contain some of the dimensionality
@@ -4213,7 +4222,7 @@ jabba.alleles = function(
             phased.out[amap[i, ]] = TRUE
             phased.in[amap[j, ]] = TRUE
 
-            if (length(a.ab <- which(adj.ab[i,]!=0))>0)
+            if (length(a.ab <- Matrix::which(adj.ab[i,]!=0))>0)
               {
                 ## if a.ab (partner) is already phased then unpopulate the non-ab allelic junction, otherwise populate both alleles of partner
                 if (any(ph <- aadj[amap[i, fm.ij[1]], amap[a.ab, ]] !=0))
@@ -4231,7 +4240,7 @@ jabba.alleles = function(
                     phased.out[amap[i, ]] = FALSE
               }
 
-            if (length(b.ab <- which(adj.ab[,j]!=0))>0)
+            if (length(b.ab <- Matrix::which(adj.ab[,j]!=0))>0)
               {
                 ## if b.ab (partner) is already phased then concentrate all of the junction copy into the aberrant allele of this interval
                 if (any(ph <- aadj[amap[b.ab, ], amap[j, fm.ij[2]]] !=0))
@@ -4300,9 +4309,9 @@ jabba.alleles = function(
     asegstats$phased = !unphased
 
     asegstats.final$edges.in = sapply(1:length(asegstats.final),
-      function(x) {ix = which(aadj.final[,x]!=0); paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')})
+      function(x) {ix = Matrix::which(aadj.final[,x]!=0); paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')})
     asegstats.final$edges.out = sapply(1:length(asegstats.final),
-      function(x) {ix = which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
+      function(x) {ix = Matrix::which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
 
     asegstats.final$slack.in = asegstats.final$cn - Matrix::colSums(aadj.final)
     asegstats.final$slack.out = asegstats.final$cn - Matrix::rowSums(aadj.final)
@@ -6150,7 +6159,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
         ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
         ##
 
-        seg.edges = as.data.frame(which(A!=0, arr.ind = T))
+        seg.edges = as.data.frame(matrix::which(A!=0, arr.ind = T))
         colnames(seg.edges) = c('from.seg', 'to.seg')
         edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
             seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
@@ -6282,7 +6291,7 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
 junction.paths = function(cn, adj)
   {
     ## preallocate, preallocate, preallocate
-    ed = which(adj!=0)
+    ed = Matrix::which(adj!=0)
     NMAX = length(cn)*3 ## should be larger than the number of anticipated paths
     EMAX = 1000
     BOOSTER.ROW = 1e4
@@ -6301,8 +6310,8 @@ junction.paths = function(cn, adj)
 
     for (i in which(!is.na(cn)))
       {
-        outgoing.nodes = which(adj[i, ]>0)
-        incoming.nodes = which(adj[, i]>0)
+        outgoing.nodes = Matrix:which(adj[i, ]>0)
+        incoming.nodes = Matrix:which(adj[, i]>0)
         outgoing.cn = adj[i, outgoing.nodes]
         incoming.cn = adj[incoming.nodes, i]
         outgoing.edges = .sub2ind(dim(adj), i, outgoing.nodes)
@@ -7458,8 +7467,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 
     ## current tile is partition of genome only in positive orientation + dummy intervals for breakpoints
     ## output tile is forward partition and followed by reverse partition
-    ## (this is what is currently referenced by adj.ref and adj.ab)
-    ## TODO: clean up this part
     tmp.nm = as.character(c(1:length(tile), -(1:length(tile))))
     tile = c(tile, gr.flipstrand(tile))
     names(tile) = tmp.nm
@@ -7468,11 +7475,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ## and adj.source which remembers whether edge ij was reference (value = 1) or aberrant (value = 2)
     adj.source = sign(adj.ref)+2*sign(adj.ab)
     adj = sign(adj.ref)+sign(adj.ab)
-    tryres <- try( edges <- which(adj!=0, arr.ind=T), silent=T ) ## num edge x 2 matrix of vertex pairs
-    if ( class( tryres ) == "try-error" ) {
-          relib( "Matrix" ); relib( "gUtils" )
-          edges <- which(adj!=0, arr.ind=T)
-    }
+    tryres <- try( edges <- Matrix::which(adj!=0, arr.ind=T), silent=T ) ## num edge x 2 matrix of vertex pairs
+
     adj[edges] = 1:nrow(edges) ## re number edges across edge set
     rownames(adj) = colnames(adj) = 1:nrow(adj)
     G = graph.adjacency(adj ,weighted = 'edge.ix') ## edge.ix will allow us to match up edges in the adj matrix with edges in the igraph
@@ -7529,9 +7533,9 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
             ix = c(ab.edges[,1,1], ab.edges[,2,1], ab.edges[,1,2], ab.edges[,2,2])
             tile$edges.out = tile$edges.in = ''
             tile$edges.in[ix]= sapply(ix,
-                function(x) {ix = which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
+                function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
             tile$edges.out[ix] = sapply(ix,
-                function(x) {ix = which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
+                function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
         }
 
     return(list(tile = tile, adj = adj, G = G, ab.adj = adj.ab != 0, ab.edges = ab.edges, junctions = junctions))
@@ -8567,7 +8571,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
       adj2 = kag$adj
       adj2[kag$ab.edges[nnab, 1:2, 1]] = 0
       adj2[kag$ab.edges[nnab, 1:2, 2]] = 0
-      G = graph(as.numeric(t(which(adj2!=0, arr.ind = T))), n = length(kag$segstats), directed = T)
+      G = graph(as.numeric(t(Matrix::which(adj2!=0, arr.ind = T))), n = length(kag$segstats), directed = T)
     }
 
     if (verbose)
@@ -8724,10 +8728,6 @@ chromoplexy = function(kag = NULL, # output of karyograph
       else
         return(list(paths = c(), cycles = c()))
 
-      ## hack: this removes some "inconsistent" paths or cycles whose del bridge / amp bridge links
-      ## involve aberrant edges that are contained in the respective cycle
-      ## TODO: Can try to repair this more elegantly above, though prob no great way to prevent this,
-      ## TODO: also this post hoc pruning may (rarely) result in a non exhaustive enumeration of cycles
       ## if there are other possible "bridge links" between members of a cycle that do not involve
       ## members of the cycle.  Fix: Best way to fix this would be actually recompute shortest paths after removing
       ## edges cresponding to edges in the path.
@@ -9730,7 +9730,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
     adj = as.matrix(cn.adj)
     adj.new = adj*0
     ## ALERT!!! see below
-    adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
+    adj[Matrix::which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[Matrix::which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
     ## adj[which(adj!=0, arr.ind = TRUE)] = width(jab$segstats)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
     if (verbose){
         ## ALERT!!! I'm gonna switch to source node width for default weight of edges
@@ -10434,5 +10434,46 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
         return(out)
     }
 
+
+
+#' @name levapply
+#' @title levapply
+#'
+#' @description
+#' Applies FUN locally to levels of x and returns vector of length()
+#' (eg can do a "local" order within levels)
+#'
+#' @param x input vector of data
+#' @param by length(x) vector of categorical labels
+#' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
+#' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
+#' @author Marcin Imielinski
+#############################
+levapply = function(x, by, FUN = 'order')
+  {
+    if (!is.list(by))
+      by = list(by)
+
+    f = factor(do.call('paste', c(list(sep = '|'), by)))
+    ixl = split(1:length(x), f);
+    ixv = lapply(ixl, function(y) x[y])
+    res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
+    out = rep(NA, length(x))
+    out[as.numeric(names(res))] = res;
+    return(out)
+  }
+
+chr2num = function(x, xy = FALSE)
+  {
+      if (inherits(x, 'factor') | inherits(x, 'Rle'))
+            x = as.character(x)
+
+     out = gsub('chr', '', x);
+
+     if (!xy)
+            out = as.numeric(gsub('M', '25', gsub('Y', '24', gsub('X', '23', out))))
+
+     return(out)
+       }
 
 

@@ -1,5 +1,5 @@
 // The actual solving procedure is called using the function Rcplex 
-#include "Rcplex.h"
+#include "Rcplex2.h"
 
 SEXP Rcplex_QCP(SEXP numcols_p,
 		SEXP numrows_p,

@@ -2,11 +2,16 @@
 
 rm -rf src
 
-if [ -z "$CPLEX_DIR" ]
+system=`uname`
+
+if [ -z "${CPLEX_DIR}" ]
 then
-    echo "CPLEX_DIR environment variable not set, please set (e.g. ~/Path/To/CPLEX_Studio/) prior to installing in order to install JaBbA with modified Rcplex functionality"
-elif [ ! -d "$CPLEX_DIR" ]; then
-    echo "CPLEX_DIR variable set but directory $CPLEX_DIR not found, please set to a valid path (e.g. ~/Path/To/CPLEX_Studio/) in order to install JaBbA with modified Rcplex functionality"
+    echo "CPLEX_DIR environment variable not set, please set (e.g. ~/Path/To/CPLEX_Studio/) prior to installing in order to install JaBbA with modified CPLEX functionality"
+    cp -r src.blank src
+elif [ ! -d "${CPLEX_DIR}" ]
+then
+    echo "CPLEX_DIR variable set but directory $CPLEX_DIR not found, please set to a valid absolute path (e.g. /Path/To/CPLEX_Studio/) in order to install JaBbA with CPLEX functionality"
+    cp -r src.blank src
 else
     echo "CPLEX_DIR environment variable, found (CPLEX_DIR=$CPLEX_DIR), will install modified Rcplex functionality"
     cp -r src.rcplex src

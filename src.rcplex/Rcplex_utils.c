@@ -1,7 +1,7 @@
 // Utility functions like CPLEX initialization/closing routines and
 // list accessors
 
-#include "Rcplex.h"
+#include "Rcplex2.h"
 #include <time.h>
 
 void Rcplex_wait (int seconds) {

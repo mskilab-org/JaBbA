@@ -1,7 +1,10 @@
 ###########################################################################
 ## The following function solves a linear or quadratic program (LP|QP).
 
-Rcplex <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
+#' @name Rcplex2
+#' @title Rcplex2
+#' @export
+Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
                    control = list(), objsense = c("min", "max"), sense = "L",
                    vtype = NULL, n = 1)
   {
@@ -88,7 +91,7 @@ Rcplex <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
     on.exit(.C("Rcplex_free"))
 
     ## Call the solver
-    res <- .Call("Rcplex",
+    res <- .Call("Rcplex2",
                  as.integer(numcols),
                  as.integer(numrows),
                  as.integer(objsensei),
