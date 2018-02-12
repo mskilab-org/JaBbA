@@ -281,7 +281,7 @@ JaBbA = function(
     names(seg.out)[1:4] = c('track.name', 'chrom', 'start', 'end')
     seg.out$seg.id = 1:nrow(seg.out)
     cols = c('track.name', 'chrom', 'start', 'end', 'cn', 'seg.id')
-    seg.out = seg.out[, c(cols, setdiff(names(seg.out), cols))]
+    seg.out = seg.out[, c(cols, GenomicRanges::setdiff(names(seg.out), cols))]
     write.tab(seg.out, seg.tab.file)
     jabd$segstats$seg.id = 1:length(jabd$segstats)
 
