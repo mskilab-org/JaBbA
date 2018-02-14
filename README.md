@@ -81,17 +81,9 @@ JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jbaout
 
 ```
 
-9. command line documentation
+Usage (command line)
 
 ```{bash}
- _____         ___    _      _____ 
-(___  )       (  _`\ ( )    (  _  )
-    | |   _ _ | (_) )| |_   | (_) |
- _  | | /'_` )|  _ <'| '_`\ |  _  |
-( )_| |( (_| || (_) )| |_) )| | | |
-`\___/'`\__,_)(____/'(_,__/'(_) (_)
-
-(Junction     Balance     Analysis)
 
 Usage: jba [options] JUNCTIONS COVERAGE
  	JUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
