@@ -1,8 +1,8 @@
 [![Build Status](https://travis-ci.org/mskilab/JaBbA.svg?branch=master)](https://travis-ci.org/mskilab/JaBbA)
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/JaBbA.svg)](https://codecov.io/github/mskilab/JaBbA?branch=master)
 
-JaBbA
-(Junction Balance Analysis)
+#JaBbA
+##(Junction Balance Analysis)
 
 Inferring balanced cancer genome graphs with mixed-integer programming analysis
 of read depth and junction patterns in WGS data. 
