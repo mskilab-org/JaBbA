@@ -50,10 +50,10 @@ devtools::install_github('mskilab/JaBbA)
 ```
 
 
-Installation (command line)
+Installation (jba executable)
 ------------
 
-7. Pull JaBbA git and add pulled directory to PATH
+7. (after installing R package) Pull JaBbA git and add pulled directory to PATH
 
 ```{bash}
 $ git clone git@github:mskilab/JaBbA
@@ -83,7 +83,7 @@ JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jbaout
 ```
 
 
-Usage (jba command line executable)
+Usage (jba executable)
 ------------
 
 
