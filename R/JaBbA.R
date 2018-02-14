@@ -359,6 +359,7 @@ JaBbA = function(
 
 
 #' @name jabba_stub
+#' @rdname internal
 #' @title jabba_stub
 #' @description
 #' Internal function to run single iteration of JaBbA
@@ -947,7 +948,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     {
       if (file.exists(nseg.file))
       {
-        if (grepl(nseg.file, '\\.rds$'))
+        if (grepl('\\.rds$', nseg.file, ignore.case = TRUE))
         {
           nseg = readRDS(nseg.file)
         }
@@ -4380,6 +4381,7 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
 
 ##################################
 #' @name vaggregate
+#' @rdname internal
 #' @title vaggregate
 #'
 #' @description
@@ -4416,6 +4418,7 @@ alpha = function(col, alpha)
 
 
 #' @name ra_tier
+#' @rdname internal
 #' @title ra_tier (
 #' @description
 #'
@@ -5186,6 +5189,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 ############################################################################################################################
 
 #' @name jabba.kid
+#' @rdname internal
 #' @title jabba.kid
 #' @description
 #'
@@ -5283,6 +5287,7 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 
 
 #' @name anno.hops
+#' @rdname internal
 #' @title anno.hops
 #' @description
 #'
@@ -6403,6 +6408,7 @@ loose.ends = function(sol, kag)
 
 
 #' @name jab2json
+#' @rdname internal
 #' @title jab2json
 #'
 #' @description
@@ -6524,6 +6530,7 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
 #' @name read.junctions
+#' @rdname internal
 #' @import VariantAnnotation
 #' @export
 ############################################
@@ -6886,6 +6893,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
 #' junctions
 #'
 #' @name jgraph
+#' @rdname internal
 jgraph = function(jab, thresh_cl = 1e6, all = FALSE, thresh_r = 1e3, clusters = FALSE)
 {
     ## identify sinks and sources
@@ -7325,6 +7333,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 
 
 #' @name karyotrack
+#' @rdname internal
 #' @title karyo track
 #' @details
 #'
@@ -9491,6 +9500,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 }
 
 #' @name jabba.gwalk
+#' @rdname internal
 #' @title jabba.gwalk
 #' @description
 #'
@@ -10116,6 +10126,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
 
 
 #' @name read_vcf
+#' @rdname internal
 #' @title read_vcf
 #'
 #' @description
@@ -10214,6 +10225,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
 
 
 #' @name levapply
+#' @rdname internal
 #' @title levapply
 #'
 #' @description
