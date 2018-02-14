@@ -1,0 +1,111 @@
+#!/usr/bin/env Rscript
+library(optparse)
+options(warn=-1)
+options(error = NULL)
+
+jbastr = "
+ _____         ___    _      _____ 
+(___  )       (  _`\\ ( )    (  _  )
+    | |   _ _ | (_) )| |_   | (_) |
+ _  | | /'_` )|  _ <'| '_`\\ |  _  |
+( )_| |( (_| || (_) )| |_) )| | | |
+`\\___/'`\\__,_)(____/'(_,__/'(_) (_)
+
+(Junction     Balance     Analysis)\n"
+
+if (!exists("opt"))
+{
+  option_list = list(
+    make_option(c("-s", "--seg") , type = "character", default = NULL, help = "Path to .rds file of GRanges object or .bed file or  .txt / .csv file of intervals corresponding to initial segmentation (optional, will use CBS of coverage to compute if not provided)"),
+    make_option(c("-f", "--field"), type = "character", default = "ratio", help = "Name of meta data field or column of coverage file to use for coverage signal from coverage file, may be required if coverage file has several fields"),        
+    make_option(c("-t", "--tfield"), type = "character", help = "Name of meta data field of ra GRanges or data frame that specifies tiers of junctions, where tier 1 is forced to be included, tier 2 is optional, and tier 3 junctions are only used in when --iterate is set"),
+    make_option(c("-i", "--hets"), type = "character", default = NULL, help = "Path to tab or commadelimited hets file output of het counts with columns /fields $seqnames, $start, $end, $alt, $ref"),
+    make_option(c("-o", "--outdir"), type = "character", default = "./jbaout", help = "Directory to dump output into (default JaBbA)"),
+    make_option(c("-k", "--slack"), type = "numeric", default = 1000, help = "Slack penalty to apply per loose end copy"),
+    make_option(c("-z", "--subsample"), type = "numeric", default = 1, help = "Numeric value between 0 and 1 specifying whether to subsample coverage for intra segment variance estimation"),
+    make_option(c("-l", "--tilim"), type = "integer", default = 1200, help = "Time limit for JaBbA MIP"),
+    make_option(c("-p", "--ploidy"), type = "character", default = NA, help = "Ploidy guess"),
+    make_option(c("-q", "--purity"), type = "character", default = NA, help = "Purity guess"),
+    make_option(c("-c", "--cores"), type = "integer", default = 1,  help = "Number of cores for JaBBa MIP"),
+    make_option(c("-m", "--iterate"), type = "integer", default = 0, help = "How many times to iterate through tiers"),
+    make_option(c("-r", "--window"), type = "numeric", default = 1e4, help = "Integer window (in bp) to dumpster dive and rescue junctions near loose ends (default 10,000)"),
+    make_option(c("-e", "--edgenudge"), type = "numeric", default = 0.1,  help = "Edge nudge for optimization, to be multiplied by edge specific confidence score if provided"),
+    make_option(c("-b", "--nseg"), type = "character", default = NULL, help = "Path to .rds file of GRanges object of intervals corresponding or .txt / .tsv / .csv with GRanges fields (seqnames, start, end) specifying copy number for normal tissue, needs to have $cn field"),
+    make_option(c("-x", "--strict"), action = "store_true", default = FALSE, help = "restricting input junctions to only the subset overlapping seg"),
+    make_option(c("-u", "--gurobi"), action = "store_true", default = FALSE, help = "flag to use gurobi (gurobi R package must be installed) instead of default CPLEX (cplex must be installed prior to library installation)"),
+    make_option(c("-w", "--overwrite"), type = "logical", action = "store_true", default = FALSE, help = "Flag whether to overwrite previous directory"),
+    make_option(c("-v", "--verbose"), action = "store_true", default = FALSE, help = "verbose output"),
+    make_option(c("-y", "--nudgebalanced"), action = "store_true", default = TRUE, help = "Manually nudge balanced junctions into the model.")
+  )
+  parseobj = OptionParser(usage = "jba [options] JUNCTIONS COVERAGE
+ \tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
+ \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .txt file that is coercible to a granges, use --field=FIELD argument if using specific field of a multi-column table')", option_list=option_list)
+                                        #        parseobj = OptionParser(option_list=option_list)
+  args = tryCatch(parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE),
+                  error = function(e) {message(jbastr); print_help(parseobj); NULL})
+
+
+  opt = NULL;
+  if (!is.null(args)) {
+    opt = args$options
+    opt$junctions = args$args[1]
+    opt$coverage = args$args[2]
+
+    
+    if (!file.exists(opt$junctions))
+    {
+      message('Did not find junction file ', opt$junctions)
+        print_help(parseobj); stop()
+      }
+
+    if (!file.exists(opt$coverage))
+    {
+      message('Did not find coverage file ', opt$coverage)
+      print_help(parseobj); stop()
+    }
+  }
+
+}
+
+if (!is.null(opt))
+{
+  jmessage = function(..., pre = 'JaBbA')
+  message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
+
+  message(jbastr)
+  jmessage('Located junction file ', opt$junctions)
+  jmessage('Located coverage file ', opt$coverage)
+  jmessage('Loading packages ...')
+
+  suppressPackageStartupMessages(
+  {
+    library(JaBbA)
+#    source('~/links/JaBbA.R')    
+    jab = JaBbA(coverage = opt$coverage,
+                junctions = opt$junctions,
+                seg = opt$seg,
+                tfield = opt$tfield,
+                nseg = opt$nseg,
+                hets = opt$hets,
+                outdir = opt$outdir,
+                subsample = opt$subsample,
+                field = opt$field,
+                slack = opt$slack,
+                tilim = opt$tilim,
+                ploidy = opt$ploidy,
+                strict = opt$strict,
+                purity = opt$purity,
+                verbose = opt$verbose,
+                mc.cores = opt$cores,
+                reiterate = opt$iterate,
+                overwrite = as.logical(opt$overwrite),
+                rescue.window = opt$window,
+                edgenudge = opt$edgenudge,
+                nudge.balanced = opt$nudgebalanced,
+                use.gurobi = opt$gurobi)
+  })
+
+
+  writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
+  saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
+}

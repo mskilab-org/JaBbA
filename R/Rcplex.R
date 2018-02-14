@@ -3,6 +3,11 @@
 
 #' @name Rcplex2
 #' @title Rcplex2
+#' @description
+#'
+#' Modification of Rcplex which takes in mipcontrol parameters.
+#'
+#' 
 #' @export
 Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
                    control = list(), objsense = c("min", "max"), sense = "L",
