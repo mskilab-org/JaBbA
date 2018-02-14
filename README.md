@@ -90,7 +90,8 @@ Usage (command line)
 
 Usage: jba [options] JUNCTIONS COVERAGE
  	JUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
- 	COVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .txt file that is coercible to a granges, use --field=FIELD argument if using specific field of a multi-column table')
+ 	COVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges
+       (use --field=FIELD argument so specify which column to use if specific meta field of a multi-column table')
 
 
 Options:

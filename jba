@@ -39,7 +39,8 @@ if (!exists("opt"))
   )
   parseobj = OptionParser(usage = "jba [options] JUNCTIONS COVERAGE
  \tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
- \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .txt file that is coercible to a granges, use --field=FIELD argument if using specific field of a multi-column table')", option_list=option_list)
+ \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges
+       (use --field=FIELD argument so specify which column to use if specific meta field of a multi-column table')", option_list=option_list)
                                         #        parseobj = OptionParser(option_list=option_list)
   args = tryCatch(parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE),
                   error = function(e) {message(jbastr); print_help(parseobj); NULL})
