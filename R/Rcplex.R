@@ -2,6 +2,7 @@
 ## The following function solves a linear or quadratic program (LP|QP).
 
 #' @name Rcplex2
+#' @rdname internal
 #' @title Rcplex2
 #' @description
 #'

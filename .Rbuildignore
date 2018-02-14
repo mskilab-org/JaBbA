@@ -4,4 +4,4 @@
 ^cran-comments\.md$ # Comments for CRAN submission
 ^NEWS\.md$          # A news file written in Markdown
 ^\.travis\.yml$     # Used for continuous integration testing with travis
-internal.Rd         # keep internal functions out of dcumentation
+internal.Rd         # keep internal functions out of documentation

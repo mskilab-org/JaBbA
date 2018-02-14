@@ -865,6 +865,8 @@ jabba_stub = function(
 ##############################
 
 #' karyograph
+#' @name karyograph
+#' @rdname internal
 karyograph_stub = function(seg.file, ## path to rds file of initial genome partition (values on segments are ignored)
      cov.file, ## path to rds file GRanges of coverage with meta data field "field"
      nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
@@ -1139,6 +1141,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 }
 
 ## diagnostic function used by karyograph_stub
+#' @name .plot_ppfit
+#' @rdname internal
 .plot_ppfit = function(kag, xlim = c(-Inf, Inf))
 {
     tmp = kag$segstats  ## only plot seg that we haven't fixed SD for and that have normal cn 1, to minimize confusion
@@ -1155,6 +1159,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 }
 
 #' run ramip
+#' @name .ramip_stub
+#' @rdname internal
 ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem = 16, tilim = 1200, slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
@@ -1297,6 +1303,8 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
 }
 
 ##############################
+#' @name .ramip_stub
+#' @rdname internal
 #' segstats is a step in the JaBbA pipeline
 #'
 #' @details
@@ -1477,10 +1485,14 @@ segstats = function(target,
     return(target)
 }
 
+#' @name jmessage
+#' @rdname internal
 jmessage = function(..., pre = 'JaBbA')
   message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
 
 ####################################################################
+#' @name jbaMIP
+#' @rdname internal
 #' jbaMIP
 #'
 #' @details
@@ -2577,6 +2589,8 @@ jbaMIP = function(
 
 
 ##############################################################
+#' @name karyoMIP.to.path
+#' @rdname internal
 #' karyoMIP.to.path
 #'
 #' for a karyoMIP solution and associated K matrix of n x e elementary paths  (input to karyoMIP), and v x e edge signed incidence matrix
@@ -2693,6 +2707,8 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 }
 
 ###############################################################
+#' @name karyoMIP
+#' @rdname internal
 #' karyoMIP
 #'
 #' MIP to locally compute walks in an existing JaBbA reconstruction, note: usually many optimal solutions to a given run.
@@ -2842,6 +2858,8 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
   }
 
 ####################################################################
+#' @name JaBbA.digest
+#' @rdname internal
 #' JaBbA.digest
 #'
 #' @details
@@ -3134,6 +3152,8 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   }
 
 ####################################################################
+#' @name jbaMIP.process
+#' @rdname internal
 #' jbaMIP.process
 #'
 #' process jbaMIP solution "sol" given original graph "g" (karyograph() list output)
@@ -3252,6 +3272,8 @@ jbaMIP.process = function(
   }
 
 #################################################
+#' @name jbaMIP.allelic
+#' @rdname internal
 #' jbaMIP.allelic
 #'
 #' Takes adj and segstats from output from jbaMIP and
@@ -3805,6 +3827,8 @@ jbaMIP.allelic = function(
   }
 
 ####################
+#' @name jabba.alleles
+#' @rdname internal
 #' jabba.alleles
 #'
 #' Populates allelic value s for JaBbA object.  This does not explicitly impose junction balance constraints on alleles, but rather just computes
@@ -4145,6 +4169,8 @@ jabba.alleles = function(
 
 
 ##############################
+#' @name pp.nll
+#' @rdname internal
 #' pp.nll
 #'
 #' computes neg log likelihood ($nll) for purity, ploidy combo and mle abs copy numbers ($v), returns as list
@@ -4194,6 +4220,8 @@ pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, fie
 
 
 #############################################################
+#' @name munlist
+#' @rdname internal
 #' munlist
 #'
 #' unlists a list of vectors, matrices, data frames into a n x k matrix
@@ -4242,6 +4270,8 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 ##
 ##
+#' @name .correct.slack
+#' @rdname internal
 .correct.slack = function(ra.sol)
   {
     adj = ra.sol$adj
@@ -4305,6 +4335,8 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 
 
+#' @name gr.tile.map
+#' @rdname internal
 #' gr.tile.map
 #'
 #' Given two tilings of the genome (eg at different resolution)
@@ -4400,6 +4432,8 @@ vaggregate = function(...)
     return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
   }
 
+#' @name write.tab
+#' @rdname internal
 write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
   {
       if (!is.data.frame(x))
@@ -4450,6 +4484,8 @@ ra_tier = function(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10, min.t
 
 
 ##############################################################
+#' @name jbaMIP.summarize
+#' @rdname internal
 #' jbaMIP.summarize
 #'
 #' summarizes miqp result (i.e. multiple solutions) outputting data frame
@@ -4474,6 +4510,8 @@ jbaMIP.summarize = function(sol)
 }
 
 ############################
+#' @name rel2abs
+#' @rdname internal
 #' rel2abs
 #'
 #' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
@@ -4520,7 +4558,8 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
 
 
-############################
+#' @name abs2rel
+#' @rdname internal
 #' abs2rel
 #'
 #' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
@@ -4564,6 +4603,8 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
 
 #################################################
+#' @name adj2inc
+#' @rdname internal
 #' adj2inc
 #'
 #' converts adjacency matrix (of directed graph) into incidence matrix - ie
@@ -4579,6 +4620,8 @@ adj2inc = function(A)
 
 
 ######################################################
+#' @name mmatch
+#' @rdname internal
 #' mmatch
 #'
 #' Low level utility function to match rows of matrix A to matrix B
@@ -4645,6 +4688,8 @@ mmatch = function(A, B, dir = 1)
   }
 
 #####################################################
+#' @name all.paths
+#' @rdname internal
 #' all.paths
 #'
 #' Low level function to enumerate all elementary paths and cycles through graph
@@ -4754,6 +4799,8 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
   }
 
 ###############################################
+#' @name collapse.paths
+#' @rdname internal
 #' collapse.paths
 #'
 #' collapse simple paths in a graph G (adjacency matrix or igraph object)
@@ -4905,6 +4952,8 @@ collapse.paths = function(G, verbose = T)
 
 
 ###############################################
+#' @name sparse_subset
+#' @rdname internal
 #' sparse_subset
 #'
 #' given k1 x n matrix A and k2 x n matrix B
@@ -4991,7 +5040,10 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     return(kclass)
   }
 
+
 ##################################
+#' @name convex.basis
+#' @rdname internal
 #' convex.basis
 #'
 #' Outputs a matrix K of the convex basis of matrix A
@@ -5286,9 +5338,9 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 
 
 
-#' @name anno.hops
+#' @name anno.hop
 #' @rdname internal
-#' @title anno.hops
+#' @title anno.hop
 #' @description
 #'
 #' Adds simple annotations to GRangesList of walks including
@@ -5338,7 +5390,8 @@ anno.hop = function(walks)
 }
 
 
-###############################################
+#' @name annotate.walks
+#' @rdname internal
 #' annotate.walks
 #'
 #' Low level function to annotate walks (GRanges list) with cds / promoter annotations
@@ -5827,7 +5880,8 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 
 
 
-#####################################
+#' @name fusions
+#' @rdname internal
 #' fusions
 #'
 #' annotates all gene fusions given an n x n adjacency matrix A of n genomic segments seg and grl of transcripts (eg output of read_RefGene)
@@ -6067,7 +6121,8 @@ fusions = function(junctions = NULL, jab = NULL, cds = NULL, promoters = NULL, q
 
 
 
-#################################################
+#' @name junction.paths
+#' @rdname internal
 #' junction.paths
 #'
 #' Applies "pigeonhole principle" to enumerate all junction paths
@@ -6288,6 +6343,8 @@ junction.paths = function(cn, adj)
 
 
 #################################################
+#' @name loose.ends
+#' @rdname internal
 #' loose.ends
 #'
 #' takes jbaMIP output and outputs a vector of ranges
@@ -6522,6 +6579,10 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 
 
 ############################################
+#' @name read.junctions
+#' @rdname internal
+#' @title read.jucntions
+#' @description
 #' read.junctions
 #'
 #' takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
@@ -6529,8 +6590,6 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 #'
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
 #'
-#' @name read.junctions
-#' @rdname internal
 #' @import VariantAnnotation
 #' @export
 ############################################
@@ -6976,6 +7035,9 @@ jgraph = function(jab, thresh_cl = 1e6, all = FALSE, thresh_r = 1e3, clusters = 
 
 
 ##########
+
+#' @name karyograph
+#' @rdname internal
 #' karyograph
 #'
 #' @details
@@ -7428,6 +7490,8 @@ karyotrack = function(kag, paths = NULL, col = 'red', pad = 0)
 
 
 ####################################################################
+#' @name jabba.melt
+#' @rdname internal
 #' jabba.melt
 #'
 #' @details
@@ -7615,6 +7679,8 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
     }
 
 ####################################################
+#' @name jabba.hood
+#' @rdname internal
 #' jabba.hood
 #'
 #' Given JaBbA  object
@@ -7687,6 +7753,8 @@ jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, 
 
 
 ######################################################
+#' @name jabba.dist
+#' @rdname internal
 #' jabba.dist
 #'
 #' Computes distance between pairs of intervals on JaBbA graph
@@ -7971,6 +8039,8 @@ jabba.dist = function(jab, gr1, gr2,
 
 
 ########################################
+#' @name jabba2vcf
+#' @rdname internal
 #' jabba2vcf
 #'
 #' Converts jabba output to vcf file according to 4.2 "BND" syntax
@@ -8302,6 +8372,8 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
     }
 
 #################################################
+#' @name chromoplexy
+#' @rdname internal
 #' chromoplexy
 #'
 #' Determines chromoplexy paths from standard JaBbA output
@@ -8591,6 +8663,8 @@ chromoplexy = function(kag = NULL, # output of karyograph
 
 
 ###########################
+#' @name proximity
+#' @rdname internal
 #' proximity
 #'
 #' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
@@ -8854,6 +8928,8 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 
 
 ####################################################
+#' @name jabba.gwalk
+#' @rdname internal
 #' jabba.walk
 #'
 #' Computes walks around all aberrant edges in JABbA object

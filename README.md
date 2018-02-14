@@ -83,7 +83,7 @@ JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jbaout
 ```
 
 
-Usage (command line)
+Usage (jba command line executable)
 ------------
 
 
