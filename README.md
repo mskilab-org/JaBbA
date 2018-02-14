@@ -63,7 +63,8 @@ $ export PATH="$PATH:$PWD/JaBbA"
 8. test run jba executable on provided data
 ```{bash}
 
-$ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt -w -u -v
+$ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt 
+
  _____         ___    _      _____ 
 (___  )       (  _`\ ( )    (  _  )
     | |   _ _ | (_) )| |_   | (_) |
