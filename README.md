@@ -1,16 +1,8 @@
 [![Build Status](https://travis-ci.org/mskilab/JaBbA.svg?branch=master)](https://travis-ci.org/mskilab/JaBbA)
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/JaBbA.svg)](https://codecov.io/github/mskilab/JaBbA?branch=master)
 
-```
- _____         ___    _      _____ 
-(___  )       (  _`\ ( )    (  _  )
-    | |   _ _ | (_) )| |_   | (_) |
- _  | | /'_` )|  _ <'| '_`\ |  _  |
-( )_| |( (_| || (_) )| |_) )| | | |
-`\___/'`\__,_)(____/'(_,__/'(_) (_)
-
-(Junction     Balance     Analysis)
-```
+JaBbA
+(Junction Balance Analysis)
 
 Inferring balanced cancer genome graphs with mixed-integer programming analysis
 of read depth and junction patterns in WGS data. 
@@ -58,21 +50,20 @@ devtools::install_github('mskilab/JaBbA)
 ```
 
 
-Installation (command line version)
+Installation (command line)
 ------------
 
-7. Pull JaBbA git
+7. Pull JaBbA git and add pulled directory to PATH
 
 ```{bash}
 $ git clone git@github:mskilab/JaBbA
 $ export PATH="$PATH:$PWD/JaBbA"
 ```
 
-7. run jba executable on test dataa
+8. test run jba executable on provided data
 ```{bash}
 
 $ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt -w -u -v
-
  _____         ___    _      _____ 
 (___  )       (  _`\ ( )    (  _  )
     | |   _ _ | (_) )| |_   | (_) |
@@ -90,11 +81,9 @@ JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jbaout
 
 ```
 
-8. command line documentation
+9. command line documentation
 
 ```{bash}
-
-
  _____         ___    _      _____ 
 (___  )       (  _`\ ( )    (  _  )
     | |   _ _ | (_) )| |_   | (_) |
