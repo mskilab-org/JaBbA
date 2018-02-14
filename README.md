@@ -10,7 +10,6 @@
 `\___/'`\__,_)(____/'(_,__/'(_) (_)
 
 (Junction     Balance     Analysis)
-
 ```
 
 Inferring balanced cancer genome graphs with mixed-integer programming analysis
