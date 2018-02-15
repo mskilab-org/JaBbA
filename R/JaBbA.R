@@ -1249,7 +1249,8 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
             jmessage(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
           }
       }
-      adj.ub = this.kag$adj*0+Inf
+      adj.ub = this.kag$adj*0
+      adj.ub[Matrix::which(this.kag$adj!=0, arr.ind = TRUE)] = Inf
       adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0
       adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0
     }
