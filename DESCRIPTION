@@ -24,8 +24,7 @@ Imports:
   grDevices,
   stats,
   utils
-Suggests:
-    gurobi(>= 7.0),  
+Suggests:  
     testthat (>= 2.0)    
 License: GPL-2
 LazyData: true
