@@ -19,6 +19,7 @@ install:
 - ./travis-tool.sh install_github mskilab/gTrack
 - ./travis-tool.sh install_github mskilab/gGnome
 - ./travis-tool.sh install_github mskilab/pPurple
+- ./travis-tool.sh install_github mskilab/bamUtils
 
 script: ./travis-tool.sh run_tests
 after_failure:
