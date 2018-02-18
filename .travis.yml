@@ -9,11 +9,11 @@ before_install:
 - echo $PWD
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
 - tar -xzf /home/travis/build/mskilab/JaBbA/cool.tar.gz
+
 install:
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
-##- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/cplex"
-##  Rcplex_0.3-3.tar.gz
+##- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/cplex"  Rcplex_0.3-3.tar.gz
 - ./travis-tool.sh install_github r-lib/testthat
 - ./travis-tool.sh install_github mskilab/gUtils
 - ./travis-tool.sh install_github mskilab/gTrack
@@ -33,6 +33,7 @@ r_packages:
 after_success:
 - Rscript -e 'library(covr); codecov()'
 env:
+- CPLEX_DIR="/home/travis/build/mskilab/JaBbA/cplex"
   global:
   - secure: Q5KLtcjpPN9mUuNbKLqPUoa6giSo0lt47+SbbG1YbEa78JLcarJDovTBtLK9arDe3UgAcQGAKb55D/rVNNt0N8RMlKwZGsPTNqRB5/3Q9HdKn3ArTJSQt3SprjTyrAMy/1lK9MLVa0ZkorsMQlLpGwZok07shKQoTyCbO0i7ZV5jQNMeYVU1J+LnTPIkCWXi5nUUd01OyWuyBrtQbe6EFR7gC/K2NFCsrNz7e2SQQEHeBBntaoBNGEjmoK2RORaMvPkWursRJYE+Y0Tbxr2mSQlT8I6P7Tbym+F0+N8JFHz37+3/RcTF8bU68eDNWsAVMQwLKndPgk3+EqxB4yotK1onDrtUNov21fJ4jPqBpCqV/4vCHRvlFfQNya19+cA6DsgRuZSHH3sSYg+o+5THpW7sgKEX5RAhF0f0Y6//FbXAdGm46rW7iRKBHzDBFnX+51qahZRz1Z1QOUXlcdUxPxZi5sObhqMOe5KIItG74JQbKRuW3V0Uv2KjOeEn1yhWlgh9dfzr95SeSWEFKKG26E77SaihSlmvpg5MG2hAfxwEcpiHhD6bkAIeWmBJWTiZd9cABVYMWH/BuLdLR8LSg5RLK3HuLJNuL3kjIKr4xcTUfxvcJQKZxTiNHBcBpHyXH4mrzPasxzrpPOdlFLwiwR0VrcKvWZJ08alhdrnKnCk=
   - secure: ZM6+mRHytA12IBo+mgIIJnyGRr6jfQyHM+k2MopH3aeTFbQbnhqdHKsOoJDdEDuJI0Z8xfXx/zOuMJjOodvP1zP3Nq5EEBh4r8/MlCSiU7O1SzYW217Is19E1S93m4y+Gg2oCpmfoUgZYZYxNVle3O8EKS0pkHftrzuBI2wq95ujZjgUA5pU1FMgCtyrLaZG3P50qat6LcGeSrFG7+CjWt0D0x/H35/uB2VqRQqyByq/zH8lskb3iacxkkbMmfI3ezHuFFup0UbiGyhAE5mD30h9JjjGEpHvI69KSiWbGfrCA2zmi99NyqeVeKUsPS7gwAWoj16UFifWWja7lPGhvDNRAUWQGGGCNjNkR9bsrDWOUqKmfSJjYm+VJc00/6k63kKZ3FaFFR/9atVFOELP9TcovooNePfc5WbR29dj4fB5n0dNUG8biZWGC38N5iOr3pJWoQNsEwh5keqyLkqwZpNl7re1HVlqkMs+8V3pHH19Fcvam+7KIwFqqKpU7rdYK57kKyBJWJv9asgutzoXQNK0bAYvUUrVjmFYl6VPDIj8e9wG9UOuM9+u8ufdbJzdSP26oBmaiWTH/aWClebsx+SfKrHoTjZ3A/ecK3f2NbLp0C2eWpUTqLOCROv4Ar4bXpbficZA/7hbnI/eNJ+mvNfpRl0jwbCOykQRyk0p3XA=
