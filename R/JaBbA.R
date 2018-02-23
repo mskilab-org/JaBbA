@@ -1003,8 +1003,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n)) ## old format, apply het filter ourselves
     {
-      hets.gr$ref.frac.n = hets.gr$alt.count.n / (hets.gr$alt.count.n + hets.gr$ref.count.n)
-      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
+      hets$ref.frac.n = hets$alt.count.n / (hets$alt.count.n + hets$ref.count.n)
+      ##      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
+      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
       hets.gr$alt = hets.gr$alt.count.t
       hets.gr$ref = hets.gr$ref.count.t
     }
@@ -1755,7 +1756,8 @@ jbaMIP = function(
           args$partition = F
           args$nsolutions = 1
           args$ploidy.min = 0 ## no ploidy constraints
-          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
+          ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
+          args$ploidy.max = Inf
 
           if (verbose)
             jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
@@ -2462,7 +2464,6 @@ jbaMIP = function(
       varmeta[type == 'residual', mipstart := eps_hat]
     }
   }
-
 
   # setup MIP
   if (use.gurobi) # translate into gurobi
