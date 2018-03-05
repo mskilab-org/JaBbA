@@ -25,7 +25,8 @@ Imports:
   stats,
   utils
 Suggests:  
-    testthat (>= 2.0)    
+    testthat (>= 2.0), 
+    slam  
 License: GPL-2
 LazyData: true
 RoxygenNote: 6.0.1
