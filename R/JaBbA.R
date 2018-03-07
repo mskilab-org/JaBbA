@@ -653,7 +653,7 @@ jabba_stub = function(
     balanced.jix = c()
     if (length(juncs)>0) {
       balanced.jix = chromoplexy(kag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
-      dp.jix = which(ra.duplicated(juncs, pad=1500))
+      dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
       balanced.jix = setdiff(balanced.jix, dp.jix)
     }
     edgenudge = edgenudge * as.numeric(1:length(juncs) %in% balanced.jix) ## only adds edge nudge to the balanced junctions
@@ -1095,15 +1095,16 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
   ##       }
   ##   }
 
-  sw = as.numeric(width(ss.tmp))
-  mu = values(this.cov)[, field]
+  mu = this.kag$segstats$mean
   mu[is.infinite(mu)] = NA
-  w = as.numeric(width(this.cov))
+  w = as.numeric(width(this.kag$segstats))
   w[is.na(mu)] = NA
   sw = sum(w, na.rm = T)
+  ncn = this.kag$segstats$ncn
+  ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
   mutl = sum(mu * w, na.rm = T)
-  pp$beta = ((1-pp$purity)*2 + pp$purity*pp$ploidy) * sw / (pp$purity * mutl)
-  pp$gamma = 1*(1-pp$purity)/pp$purity
+  pp$beta = ((1-pp$purity)*ploidy_normal + pp$purity*pp$ploidy) * sw / (pp$purity * mutl)
+  pp$gamma = 2*(1-pp$purity)/pp$purity
 
   saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
 
@@ -3874,7 +3875,7 @@ jabba.alleles = function(
         ## outputs are re.seg$low and re.seg$high
         ## test deviations of observed BAF from expected by beta distribution
         if (verbose)
-          cat('Processing', length(het.sites),
+          jmessage('Processing', length(het.sites),
               'het sites using fields', baf.field, '\n')
 
       }
@@ -4552,7 +4553,6 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
     if (is.na(beta))
         beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
                                         #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
-
 
                                         # return(beta * mu - gamma)
     return(beta * mu - ncn * gamma / 2)
