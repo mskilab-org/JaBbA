@@ -7680,6 +7680,9 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
         return(out)
     }
 
+
+
+
 ####################################################
 #' @name jabba.hood
 #' @rdname internal
@@ -7699,70 +7702,77 @@ jabba.melt = function(jab, anti = FALSE, verbose = FALSE, mc.cores = 1, max.del 
 #########x############################################
 jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE, verbose = FALSE)
 {
-    if (ignore.strand)
+
+    if (ignore.strand){
         win = gr.stripstrand(win)
+    }
+    ## use distance
+    if (is.null(k)){
 
-    if (is.null(k)) ## use distance
-        {
+        ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
 
-            ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
-
-            if (is.null(ss))
-                ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
-
-            if (ignore.strand)
-                ss = gr.stripstrand(ss)
-
-            ss = disjoin(ss)
-            win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
-
-            seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
-            seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
-            D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
-            D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
-
-            min.s = apply(D.s, 2, min, na.rm = TRUE)
-            min.e = apply(D.e, 2, min, na.rm = TRUE)
-            s.close = min.s<=d
-            e.close = min.e<=d
-
-            ## now for all "left close" starts we add whatever distance to that point + pad
-            gr.start(ss)[s.close]
-
-            out = GRanges()
-            if (any(s.close))
-                out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
-
-            if (any(e.close))
-                out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
-
-            if (!bagel)
-                out = streduce(c(win[, c()], out[, c()]))
-
-            return(streduce(out, pad))
+        if (is.null(ss)){
+            ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
         }
-    else ## use graph connections
-        {
-            G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
 
-            ix = which(jab$segstats %^% win)
-            if (is.null(G)) ## sometimes igraph doesn't like Matrix
-                G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
-            vix = unique(unlist(neighborhood(G, ix, order = k)))
-            return(streduce(jab$segstats[vix], pad))
+        if (ignore.strand){
+            ss = gr.stripstrand(ss)
         }
+
+        ss = disjoin(ss)
+        win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
+
+        seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
+        seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
+        D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
+        D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
+
+        min.s = apply(D.s, 2, min, na.rm = TRUE)
+        min.e = apply(D.e, 2, min, na.rm = TRUE)
+        s.close = min.s<=d
+        e.close = min.e<=d
+
+        ## now for all "left close" starts we add whatever distance to that point + pad
+        gr.start(ss)[s.close]
+
+        out = GRanges()
+        if (any(s.close)){
+            out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
+        }
+
+        if (any(e.close)){
+           out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
+        }
+
+        if (!bagel){
+            out = streduce(c(win[, c()], out[, c()]))
+        }
+
+        return(streduce(out, pad))
+    } else {  
+        ## use graph connections
+        G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
+
+        ix = which(jab$segstats %^% win)
+        ## sometimes igraph doesn't like Matrix
+        if (is.null(G)){
+            G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
+        }
+        vix = unique(unlist(neighborhood(G, ix, order = k)))
+        return(streduce(jab$segstats[vix], pad))
+    }
 }
 
 
 ######################################################
 #' @name jabba.dist
 #' @rdname internal
+#'
 #' jabba.dist
 #'
 #' Computes distance between pairs of intervals on JaBbA graph
 #'
 #' Given "jabba" object and input granges gr1 and gr2 of (signed) intervals
-#'
 #'
 #' @param jab JaBbA object
 #' @param gr1 interval set 1 GRanges
@@ -7932,7 +7942,6 @@ jabba.dist = function(jab, gr1, gr2,
 
         ## then we do the same thing but flipping uix1r vs uix
 
-
         if (verbose){
             jmessage('Finished computing distances')
             print(Sys.time() -now)
@@ -8039,322 +8048,294 @@ jabba.dist = function(jab, gr1, gr2,
 #' @return returns character string or writes to file if specified
 #########################################
 jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE){
-      if (is.null(hg)){
-          hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
-      }
+    if (is.null(hg)){
+        hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
+    }
 
-      vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
+    vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
 
-        ## convert all aberrant connections into pairs of VCF rows
-        if (!cnv)
-            {
-                jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
-                abs = rbind(jab$ab.edges[jix,1:2,1])
-                rabs = rbind(jab$ab.edges[jix,1:2,2])
-                rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
+    ## convert all aberrant connections into pairs of VCF rows
+    if (!cnv){
+        jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
+        abs = rbind(jab$ab.edges[jix,1:2,1])
+        rabs = rbind(jab$ab.edges[jix,1:2,2])
+        rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
 
-                adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
-                adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
-                adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
+        adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
+        adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
+        adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
 
-                if (any(jab$segstatsloose))
-                    {
-                        adj.ref[jab$segstats$loose, ] = 0
-                        adj.ref[,jab$segstats$loose] = 0
-                    }
+        if (any(jab$segstatsloose)){
+            adj.ref[jab$segstats$loose, ] = 0
+            adj.ref[,jab$segstats$loose] = 0
+        }
 
-                if (length(jix)>0)
-                    {
-                        jcn = jab$adj[abs]
-                        gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
-                        gr1$jid = jix
-                        gr1$nid = abs[,1]
-                        gr1$acn = jcn
-                        gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])
-                        gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
+        if (length(jix)>0){
+            jcn = jab$adj[abs]
+            gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
+            gr1$jid = jix
+            gr1$nid = abs[,1]
+            gr1$acn = jcn
+            gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])
+            gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
 
-                        gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
-                        gr2$jid = jix
-                        gr2$nid = abs[,2]
-                        gr2$acn = jcn
-                        gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
-                        gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
+            gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
+            gr2$jid = jix
+            gr2$nid = abs[,2]
+            gr2$acn = jcn
+            gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
+            gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
 
-                        gr1$mid = gr2$ID
-                        gr2$mid = gr1$ID
+            gr1$mid = gr2$ID
+            gr2$mid = gr1$ID
 
-                        gr1$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr1))), error = function(e) 'N')
-                        gr1$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(gr1$REF, '[', seqnames(gr2), ':', start(gr2), '[', sep = ''),
-                            ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr1$REF, ']', seqnames(gr2), ':', start(gr2), ']', sep = ''),
-                                   ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr2), ':', start(gr2), '[', gr1$REF, sep = ''),
-                                          paste(']', seqnames(gr2), ':', start(gr2), ']', gr1$REF, sep = '')))) ## last one is A- --> B-
+            gr1$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr1))), error = function(e) 'N')
+            gr1$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(gr1$REF, '[', seqnames(gr2), ':', start(gr2), '[', sep = ''),
+                ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr1$REF, ']', seqnames(gr2), ':', start(gr2), ']', sep = ''),
+                    ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr2), ':', start(gr2), '[', gr1$REF, sep = ''),
+                        paste(']', seqnames(gr2), ':', start(gr2), ']', gr1$REF, sep = '')))) ## last one is A- --> B-
 
-                        gr2$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr2))), error = function(e) 'N')
-                        gr2$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(']', seqnames(gr1), ':', start(gr1), ']', gr2$REF, sep = ''),
-                            ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr1), ':', start(gr1), '[', gr2$REF, sep = ''),
-                                   ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
-                                          paste(gr2$REF, '[', seqnames(gr1), ':', start(gr1), '[', sep = '')))) ## last one is B- --> A-
+            gr2$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr2))), error = function(e) 'N')
+            gr2$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(']', seqnames(gr1), ':', start(gr1), ']', gr2$REF, sep = ''),
+                ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr1), ':', start(gr1), '[', gr2$REF, sep = ''),
+                    ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
+                        paste(gr2$REF, '[', seqnames(gr1), ':', start(gr1), '[', sep = '')))) ## last one is B- --> A-
+            gr1$FILTER = gr2$FILTER = ifelse(gr2$acn != 0, "PASS", "NINC")
+            gr2$FORMAT = gr1$FORMAT = "GT:CN:RCN:SCN"
+            gr1$GENO = paste(ifelse(gr1$rcn>0, '0/1', '1'), gr1$acn, gr1$rcn, gr1$cn, sep = ":")
+            gr2$GENO = paste(ifelse(gr2$rcn>0, '0/1', '1'), gr2$acn, gr2$rcn, gr2$cn, sep = ":")
 
+            gr2$CHROM = as.character(seqnames(gr2))
+            gr1$CHROM = as.character(seqnames(gr1))
 
-                        gr1$FILTER = gr2$FILTER = ifelse(gr2$acn != 0, "PASS", "NINC")
-                        gr2$FORMAT = gr1$FORMAT = "GT:CN:RCN:SCN"
-                        gr1$GENO = paste(ifelse(gr1$rcn>0, '0/1', '1'), gr1$acn, gr1$rcn, gr1$cn, sep = ":")
-                        gr2$GENO = paste(ifelse(gr2$rcn>0, '0/1', '1'), gr2$acn, gr2$rcn, gr2$cn, sep = ":")
+            gr2$POS = as.character(start(gr2))
+            gr1$POS = as.character(start(gr1))
 
-                        gr2$CHROM = as.character(seqnames(gr2))
-                        gr1$CHROM = as.character(seqnames(gr1))
+            gr1$QUAL = gr2$QUAL = '.'
+            gr1$INFO = paste("SVTYPE=BND", ";MATEID=", gr1$mid, ";CNADJ=", gr1$acn, ";CNRADJ=", gr1$rcn, ";CN=", gr1$cn,
+                ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", 1:length(gr1), sep = '')
+            gr2$INFO = paste("SVTYPE=BND", ";MATEID=", gr2$mid, ";CNADJ=", gr2$acn, ";CNRADJ=", gr2$rcn, ";CN=", gr2$cn,
+                ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", 1:length(gr2), sep = '')
 
-                        gr2$POS = as.character(start(gr2))
-                        gr1$POS = as.character(start(gr1))
+            gr1 = gr1[, vcffields]
+            gr2 = gr2[, vcffields]
+        } else {
+            gr1 = GRanges()
+            gr2 = GRanges()
+        }
 
-                        gr1$QUAL = gr2$QUAL = '.'
-                        gr1$INFO = paste("SVTYPE=BND", ";MATEID=", gr1$mid, ";CNADJ=", gr1$acn, ";CNRADJ=", gr1$rcn, ";CN=", gr1$cn,
-                            ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", 1:length(gr1), sep = '')
-                        gr2$INFO = paste("SVTYPE=BND", ";MATEID=", gr2$mid, ";CNADJ=", gr2$acn, ";CNRADJ=", gr2$rcn, ";CN=", gr2$cn,
-                            ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", 1:length(gr2), sep = '')
+        ## now loose ends
+        lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
 
-                        gr1 = gr1[, vcffields]
-                        gr2 = gr2[, vcffields]
-                    }
-                else
-                    {
-                        gr1 = GRanges()
-                        gr2 = GRanges()
-                    }
+        if (length(lix)>0){
+            gr.loose = gr.start(jab$segstats[lix, 'cn']) ## loose ends should be width 1, but just in case
+            gr.loose$jid = NA
+            gr.loose$nid = lix
+            gr.loose$acn = gr.loose$cn
 
-                ## now loose ends
-                lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
-                if (length(lix)>0)
-                    {
-                        gr.loose = gr.start(jab$segstats[lix, 'cn']) ## loose ends should be width 1, but just in case
-                        gr.loose$jid = NA
-                        gr.loose$nid = lix
-                        gr.loose$acn = gr.loose$cn
+            ## query parents / children of loose ends
+            tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (i.e. is a parent)
+            tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (i.e. is child)
 
-                        ## query parents / children of loose ends
-                        tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (i.e. is a parent)
-                        tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (i.e. is child)
+            isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
+            pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
 
-                        isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
-                        pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
+            gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
-##                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            gr.loose$cn = jab$segstats$cn[pcid]
+            ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
+            gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
+            gr.loose$mid = NA
+            gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
 
-                        gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            ## again, same rationale as above, parent = left loose end, child = right loose end
+            gr.loose$ALT = ifelse(isp, paste('.', gr.loose$REF, sep = ''), paste(gr.loose$REF, '.', sep = ''))
+            gr.loose$FORMAT = "GT:CN:RCN:SCN"
+            gr.loose$GENO = paste(ifelse(gr.loose$rcn>0, '0/1', '1'), gr.loose$acn, gr.loose$rcn, gr.loose$cn, sep = ":")
+            gr.loose$CHROM = as.character(seqnames(gr.loose))
+            gr.loose$POS = start(gr.loose)
+            gr.loose$FILTER = "LOOSEEND"
+            gr.loose$QUAL = '.'
+            gr.loose$INFO = paste("SVTYPE=BND", ";CNADJ=", gr.loose$acn, ";CNRADJ=", gr.loose$rcn, ";CN=", gr.loose$cn, ";JABID=", lix, ";RJABID=", rcix[lix], sep = '')
+            gr.loose = gr.loose[, vcffields]
+        } else{
+            gr.loose = GRanges()
+        }
+        
+        ## make header
+        sl = seqlengths(jab$segstats)
+        header = '##fileformat=VCFv4.2'
+        header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
+        header = c(header, '##source=JaBbAV0.1')
 
+        if (inherits(hg, "BSgenome")){
+            header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+        } else{
+            header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+        }
 
-                        gr.loose$cn = jab$segstats$cn[pcid]
-                        ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
-                        gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
-                        gr.loose$mid = NA
-                        gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
+        header = c(header,
+            '##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">',
+            '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">',
+            '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
+            '##INFO=<ID=CNADJ,Number=.,Type=Integer,Description="Copy number of variant adjacency at breakend">',
+            '##INFO=<ID=CNRADJ,Number=1,Type=Integer,Description="Copy number of reference adjacency at breakend">',
+            '##INFO=<ID=CN,Number=1,Type=Integer,Description="Copy number of segment containing breakend">',
+            '##INFO=<ID=JUNCID,Number=.,Type=Integer,Description="Index of allele(s) in JaBbA junction input pile">',
+            '##INFO=<ID=JABID,Number=.,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
+            '##INFO=<ID=RJABID,Number=.,Type=Integer,Description="Index of the reverse complement containing interval allele(s) in JaBbA reconstruction">',
+            '##FILTER=<ID=PASS,Description="Junction incorporated into JaBbA MIP reconstruction at nonzero copy number">',
+            '##FILTER=<ID=LOOSEEND,Description="Loose end incorporated into JaBbA MIP reconstruction at unexplained copy break">',
+            '##FILTER=<ID=NINC,Description="Not Incorporated into JaBbA MIP reconstruction: either subclonal or false positive">',
+            '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+            '##FORMAT=<ID=CN,Number=.,Type=String,Description="Copy number of variant adjacencies">',
+            '##FORMAT=<ID=RCN,Number=1,Type=String,Description="Copy number of reference adjacency at breakend">',
+            '##FORMAT=<ID=SCN,Number=1,Type=String,Description="Copy number of segment containing breakend">')
 
-                        ## again, same rationale as above, parent = left loose end, child = right loose end
-                        gr.loose$ALT = ifelse(isp, paste('.', gr.loose$REF, sep = ''), paste(gr.loose$REF, '.', sep = ''))
-                        gr.loose$FORMAT = "GT:CN:RCN:SCN"
-                        gr.loose$GENO = paste(ifelse(gr.loose$rcn>0, '0/1', '1'), gr.loose$acn, gr.loose$rcn, gr.loose$cn, sep = ":")
-                        gr.loose$CHROM = as.character(seqnames(gr.loose))
-                        gr.loose$POS = start(gr.loose)
-                        gr.loose$FILTER = "LOOSEEND"
-                        gr.loose$QUAL = '.'
-                        gr.loose$INFO = paste("SVTYPE=BND", ";CNADJ=", gr.loose$acn, ";CNRADJ=", gr.loose$rcn, ";CN=", gr.loose$cn, ";JABID=", lix, ";RJABID=", rcix[lix], sep = '')
-                        gr.loose = gr.loose[, vcffields]
-                    }
-                else
-                    gr.loose = GRanges()
+        if ((length(gr1) + length(gr.loose))>0){
+            body = as.data.frame(values(c(gr1, gr2, gr.loose)))
+            body$ord = NA
+            body$ord[order(gr.stripstrand(c(gr1, gr2, gr.loose)))] = 1:nrow(body)
+            body = as.data.table(body)
+            setkeyv(body, c('CHROM', 'POS'))
 
-                                        # make header
-                sl = seqlengths(jab$segstats)
-                header = '##fileformat=VCFv4.2'
-                header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
-                header = c(header, '##source=JaBbAV0.1')
-                if (inherits(hg, "BSgenome"))
-                    {
-                        header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
-                    }
-                else
-                    {
-                        header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
-                    }
-
-                header = c(header,
-                    '##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">',
-                    '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">',
-                    '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
-                    '##INFO=<ID=CNADJ,Number=.,Type=Integer,Description="Copy number of variant adjacency at breakend">',
-                    '##INFO=<ID=CNRADJ,Number=1,Type=Integer,Description="Copy number of reference adjacency at breakend">',
-                    '##INFO=<ID=CN,Number=1,Type=Integer,Description="Copy number of segment containing breakend">',
-                    '##INFO=<ID=JUNCID,Number=.,Type=Integer,Description="Index of allele(s) in JaBbA junction input pile">',
-                    '##INFO=<ID=JABID,Number=.,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
-                    '##INFO=<ID=RJABID,Number=.,Type=Integer,Description="Index of the reverse complement containing interval allele(s) in JaBbA reconstruction">',
-                    '##FILTER=<ID=PASS,Description="Junction incorporated into JaBbA MIP reconstruction at nonzero copy number">',
-                    '##FILTER=<ID=LOOSEEND,Description="Loose end incorporated into JaBbA MIP reconstruction at unexplained copy break">',
-                    '##FILTER=<ID=NINC,Description="Not Incorporated into JaBbA MIP reconstruction: either subclonal or false positive">',
-                    '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-                    '##FORMAT=<ID=CN,Number=.,Type=String,Description="Copy number of variant adjacencies">',
-                    '##FORMAT=<ID=RCN,Number=1,Type=String,Description="Copy number of reference adjacency at breakend">',
-                    '##FORMAT=<ID=SCN,Number=1,Type=String,Description="Copy number of segment containing breakend">'
-                           )
-
-                if ((length(gr1) + length(gr.loose))>0)
-                    {
-                        body = as.data.frame(values(c(gr1, gr2, gr.loose)))
-                        body$ord = NA
-                        body$ord[order(gr.stripstrand(c(gr1, gr2, gr.loose)))] = 1:nrow(body)
-                        body = as.data.table(body)
-                        setkeyv(body, c('CHROM', 'POS'))
-
-                        ## useful for merging info records in painful coordinate deduping process below
-                        .infomelt = function(str)
-                            {
-                                z = lapply(strsplit(str, ";"), function(x) {y = matrix(unlist(strsplit(x, "=")), ncol = 2, byrow = T); return(structure(y[,2], names = y[,1]))})
-                                unames = unique(unlist(sapply(z, names)))
-                                mfields = c("MATEID", "CNADJ", "JUNCID", "JABID", "RJABID")
-                                mergeix = unames %in% mfields
-                                out = sapply(1:length(unames), function(i) {
-                                    x = unames[i]
-                                    tmp = sapply(z, function(y) y[x])
-                                    if (mergeix[i])
-                                        {
-                                            if (any(is.na(tmp))) tmp[is.na(tmp)] = '.';
-                                            return(paste(tmp, collapse = ','))
-                                        }
-                                    else
-                                        return(tmp[!is.na(tmp)][1])})
-                                names(out) = unames
-                                return(paste(names(out), "=", out, collapse = ";", sep = ''))
-                            }
-
-                        .genomelt = function(geno, format)
-                            {
-                                if (length(geno)==1)
-                                    return(genos)
-                                genos = strsplit(geno, ":")
-                                formats = strsplit(format[1], ":")[[1]]
-
-                                mergeix = formats == "CN"
-                                gtix = formats == "GT" ## should be only one such entry
-                                out = genos[[1]] ## pick the first one as the default - this should be a vector length(formats)
-                                if (any(gtix))
-                                    out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
-
-
-                                if (any(mergeix))
-                                    out[mergeix] = sapply(which(mergeix), function(x)
-                                        paste(sapply(genos, function(y) y[[x]]), collapse = ','))
-                                return(paste(out, collapse = ":"))
-                            }
-
-                        ## dedup and collapse breakends that share coordinates into single variant sites with several alleles
-                        body = body[, list(
-                            ID = ID[1],
-                            REF = REF[1],
-                            ALT = if (length(ALT)>1) paste(ALT, collapse = ',') else ALT,
-                            QUAL = QUAL[1],
-                            FILTER = if (length(FILTER)>1) paste(FILTER, collapse = ";") else FILTER,
-                            INFO = if (length(INFO)>1) .infomelt(INFO) else INFO,
-                            FORMAT = FORMAT[1], ## assume everything is same format
-                            GENO = if (length(GENO)>1) .genomelt(GENO, FORMAT) else GENO,
-                            ord = ord[1]
-                        ), by = c("CHROM", "POS")]
-
-                        setkey(body, "ord")
-
-                        body = as.data.frame(body)[, vcffields]
-                        names(body)[ncol(body)] = sampleid
-                        names(body)[1] = '#CHROM'
-                    }
-                else
-                    {
-                        body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
-                        names(body)[1] = '#CHROM'
-                        names(body)[ncol(body)] = sampleid
-                    }
+            ## useful for merging info records in painful coordinate deduping process below
+            .infomelt = function(str){
+                z = lapply(strsplit(str, ";"), function(x) {y = matrix(unlist(strsplit(x, "=")), ncol = 2, byrow = T); return(structure(y[,2], names = y[,1]))})
+                unames = unique(unlist(sapply(z, names)))
+                mfields = c("MATEID", "CNADJ", "JUNCID", "JABID", "RJABID")
+                mergeix = unames %in% mfields
+                out = sapply(1:length(unames), function(i) {
+                    x = unames[i]
+                    tmp = sapply(z, function(y) y[x])
+                    if (mergeix[i]){
+                        if (any(is.na(tmp))){
+                            tmp[is.na(tmp)] = '.';
+                        } 
+                        return(paste(tmp, collapse = ','))
+                    } else{
+                        return(tmp[!is.na(tmp)][1]) 
+                    }})
+                names(out) = unames
+                return(paste(names(out), "=", out, collapse = ";", sep = ''))
             }
-        else ## CNV mode
-            {
-                sl = seqlengths(jab$segstats)
-                header = '##fileformat=VCFv4.2'
-                header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
-                header = c(header, '##source=JaBbAV0.1 CNV')
 
-                if (inherits(hg, "BSgenome"))
-                    {
-                        header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
-                    }
-                else if (inherits(hg, "ffTrack"))
-                {
-                    header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
-                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+            .genomelt = function(geno, format){
+                if (length(geno)==1){
+                    return(genos)
                 }
-                else
-                {
-                    header = c(header, sprintf("##reference=NA"))
-                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+                genos = strsplit(geno, ":")
+                formats = strsplit(format[1], ":")[[1]]
+
+                mergeix = formats == "CN"
+                gtix = formats == "GT" ## should be only one such entry
+                out = genos[[1]] ## pick the first one as the default - this should be a vector length(formats)
+                if (any(gtix)){
+                    out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
                 }
+                if (any(mergeix)){
+                    out[mergeix] = sapply(which(mergeix), function(x)
+                        paste(sapply(genos, function(y) y[[x]]), collapse = ','))
+                }
+                return(paste(out, collapse = ":"))
+            }
 
-                header = c(header,
-                    '##ALT=<ID=DEL,Description="Decreased copy number relative to reference">',
-                    '##ALT=<ID=DUP,Description="Increased copy number relative to reference">',
-                    '##ALT=<ID=DIP,Description="Normal diploid copy number">',
-                    '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
-                    '##INFO=<ID=START,Number=1,Type=Integer,Description="Start of copy number annotated interval">',
-                    '##INFO=<ID=END,Number=1,Type=Integer,Description="End of copy number annotated interval">',
-                    '##INFO=<ID=JABID,Number=1,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
-                    '##INFO=<ID=RJABID,Number=1,Type=Integer,Description="Index of the reverse complement  interval allele(s) in JaBbA reconstruction">',
-                    '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-                    '##FORMAT=<ID=CN,Number=1,Type=String,Description="Copy number">'
-                           )
+            ## dedup and collapse breakends that share coordinates into single variant sites with several alleles
+            body = body[, list(
+                ID = ID[1],
+                REF = REF[1],
+                ALT = if (length(ALT)>1) paste(ALT, collapse = ',') else ALT,
+                QUAL = QUAL[1],
+                FILTER = if (length(FILTER)>1) paste(FILTER, collapse = ";") else FILTER,
+                INFO = if (length(INFO)>1) .infomelt(INFO) else INFO,
+                FORMAT = FORMAT[1], ## assume everything is same format
+                GENO = if (length(GENO)>1) .genomelt(GENO, FORMAT) else GENO,
+                ord = ord[1]
+            ), by = c("CHROM", "POS")]
 
-                rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
-                six = which(!is.na(jab$segstats$cn) & !jab$segstats$loose & as.character(strand(jab$segstats))=='+')
-                ss = jab$segstats[six]
+            setkey(body, "ord")
 
-                if (length(ss)>0)
-                {
-                  REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))), error = function(e) NULL)
-                  if (is.null(REF))
-                  {
+            body = as.data.frame(body)[, vcffields]
+            names(body)[ncol(body)] = sampleid
+            names(body)[1] = '#CHROM'
+        } else {
+            body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
+            names(body)[1] = '#CHROM'
+            names(body)[ncol(body)] = sampleid
+        }
+            }
+        else { 
+            ## CNV mode
+            sl = seqlengths(jab$segstats)
+            header = '##fileformat=VCFv4.2'
+            header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
+            header = c(header, '##source=JaBbAV0.1 CNV')
+
+            if (inherits(hg, "BSgenome")){
+                header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
+                header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+            } else if (inherits(hg, "ffTrack")){
+                header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+                header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+            } else{
+                header = c(header, sprintf("##reference=NA"))
+                header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+            }
+
+            header = c(header,
+                '##ALT=<ID=DEL,Description="Decreased copy number relative to reference">',
+                '##ALT=<ID=DUP,Description="Increased copy number relative to reference">',
+                '##ALT=<ID=DIP,Description="Normal diploid copy number">',
+                '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
+                '##INFO=<ID=START,Number=1,Type=Integer,Description="Start of copy number annotated interval">',
+                '##INFO=<ID=END,Number=1,Type=Integer,Description="End of copy number annotated interval">',
+                '##INFO=<ID=JABID,Number=1,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
+                '##INFO=<ID=RJABID,Number=1,Type=Integer,Description="Index of the reverse complement  interval allele(s) in JaBbA reconstruction">',
+                '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+                '##FORMAT=<ID=CN,Number=1,Type=String,Description="Copy number">')
+
+            rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
+            six = which(!is.na(jab$segstats$cn) & !jab$segstats$loose & as.character(strand(jab$segstats))=='+')
+            ss = jab$segstats[six]
+
+            if (length(ss)>0){
+                REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))), error = function(e) NULL)
+                if (is.null(REF)){
                     REF = 'N'
-                  }
-                  body = data.frame("CHROM" = as.character(seqnames(ss)), POS = start(ss),
-                                    ID = paste(sampleid, '_seg', six, sep = ''),
-                                    REF = REF,
-                                    ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
-                                    QUAL = ".",
-                                    FILTER = "PASS",
-                                    INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
-                                                 ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
-                                    FORMAT = "GT:CN",
-                                    GENO = paste("./.", ss$cn, sep = ':'))
-                  names(body)[1] = '#CHROM'
-                  names(body)[ncol(body)] = sampleid
                 }
-                else
-              {
+                body = data.frame("CHROM" = as.character(seqnames(ss)), 
+                    POS = start(ss),
+                    ID = paste(sampleid, '_seg', six, sep = ''),
+                    REF = REF,
+                    ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
+                    QUAL = ".",
+                    FILTER = "PASS",
+                    INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
+                        ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
+                    FORMAT = "GT:CN",
+                    GENO = paste("./.", ss$cn, sep = ':'))
+                names(body)[1] = '#CHROM'
+                names(body)[ncol(body)] = sampleid
+            } else {
                 body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
                 names(body)[1] = '#CHROM'
                 names(body)[ncol(body)] = sampleid
-              }
             }
+        }
 
-        if (!is.null(fn))
-            {
-                writeLines(header, fn)
-                suppressWarnings(write.table(body, fn, sep = '\t', quote = F, row.names = F, append = T))
-            }
-        else
-            {
-                t = textConnection("out", 'w')
-                writeLines(header, t)
-                suppressWarnings(write.table(body, t, sep = '\t', quote = F, row.names = F, append = T))
-                close(t)
-                return(out)
-            }
-    }
+        if (!is.null(fn)){
+            writeLines(header, fn)
+            suppressWarnings(write.table(body, fn, sep = '\t', quote = F, row.names = F, append = T))
+        } else{
+            t = textConnection("out", 'w')
+            writeLines(header, t)
+            suppressWarnings(write.table(body, t, sep = '\t', quote = F, row.names = F, append = T))
+            close(t)
+            return(out)
+        }
+}
 
 #################################################
 #' @name chromoplexy
@@ -8409,7 +8390,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
     G = kag$G
 
     if (is.null(kag$tile)){
-       kag$tile = kag$segstats
+        kag$tile = kag$segstats
     }
 
     nnab = which(rowSums(is.na(rbind(kag$ab.edges[, 1:2, 1])))==0)
@@ -8512,7 +8493,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
     if (!is.null(sol)){
         amp.bridge = amp.bridge.candidate[(sol$segstats$cn[v1.parent] < sol$segstats$cn[v1] & sol$segstats$cn[v2.child] < sol$segstats$cn[v2]) | D[quasi.pairs][amp.bridge.candidate] < cn.dist]
     } else{
-      amp.bridge = amp.bridge.candidate
+        amp.bridge = amp.bridge.candidate
     }
 
     ## now put together all surviving edges into a graph and try to find cycles
@@ -8542,101 +8523,79 @@ chromoplexy = function(kag = NULL, # output of karyograph
         good.ix = which(comp$membership %in% good.comp)
         return(unique(ab.edges[good.ix, 3]))
     } else {
-      if (verbose)
-        if (paths)
-          cat(sprintf('Running with paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
-        else
-          cat(sprintf('Running without paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
+        if (verbose){
+            if (paths){
+                cat(sprintf('Running with paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
+            } else{
+                cat(sprintf('Running without paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
+            }
+        }
 
-      if (prod(dim(adj.bp))>0)
-      {
-        ## want to exclude any paths involving breaks and their pairs
+        if (prod(dim(adj.bp))>0){
+            ## want to exclude any paths involving breaks and their pairs
                                         #        tmp = split(1:nrow(ab.edges), ab.edges[,'junc.id'])
                                         #        exclude.ij = cbind(ab.edges[,3], unlist(tmp))
                                         #        exclude = sparseMatrix(exclude.ij[,1], exclude.ij[,2], x = 1)
-        exclude = NULL
-        ## dedup junctions with equiv connections (TODO: why are there dups?) to prevent blowup .. in this case only choosing one "path" for each dup edge
-        dt = data.table(i = 1:nrow(adj.bp), j = mmatch(adj.bp, adj.bp[!duplicated(as.matrix(adj.bp)), , drop = F]), key = 'j')
-        dtu = dt[!duplicated(j), ]
-        pc = all.paths(adj.bp[dtu$i, dtu$i, drop = FALSE], all = paths, verbose = verbose, interval = interval, chunksize = chunksize, exclude = exclude)
-        if (length(pc$cycles)>0)
-          pc$cycles = lapply(pc$cycles, function(x) dtu[x, ]$i)
-        if (length(pc$paths)>0)
-          pc$paths = lapply(pc$paths, function(x) dtu[x, ]$i)
-      }
-      else
-        return(list(paths = c(), cycles = c()))
+            exclude = NULL
+            ## dedup junctions with equiv connections (TODO: why are there dups?) to prevent blowup .. in this case only choosing one "path" for each dup edge
+            dt = data.table(i = 1:nrow(adj.bp), j = mmatch(adj.bp, adj.bp[!duplicated(as.matrix(adj.bp)), , drop = F]), key = 'j')
+            dtu = dt[!duplicated(j), ]
+            pc = all.paths(adj.bp[dtu$i, dtu$i, drop = FALSE], all = paths, verbose = verbose, interval = interval, chunksize = chunksize, exclude = exclude)
+            if (length(pc$cycles)>0){
+                pc$cycles = lapply(pc$cycles, function(x) dtu[x, ]$i)
+            }
+            if (length(pc$paths)>0){
+                pc$paths = lapply(pc$paths, function(x) dtu[x, ]$i)
+            }
+        } else{
+            return(list(paths = c(), cycles = c()))
+        }
 
-      ## if there are other possible "bridge links" between members of a cycle that do not involve
-      ## members of the cycle.  Fix: Best way to fix this would be actually recompute shortest paths after removing
-      ## edges cresponding to edges in the path.
-      .check.pc = function(x, is.cycle = F)
-      {
-        if (is.cycle)
-          tmp.edges = cbind(x, c(x[-1], x[1]))
-        else
-          tmp.edges = cbind(x[-length(x)], x[-1])
-        tmp.D.which = D.which[tmp.edges]  ## D.which keeps track of whether we linked these edges via D1 or D2
-        if (any(ix <- tmp.D.which==1)) ## if 1 then we are looking for path from col 2 to col 1, so flip
-          tmp.edges[ix,] = tmp.edges[ix, c(2:1)]
-        tmp.ab.edges = cbind(ab.edges[cbind(tmp.edges[,1], tmp.D.which)], ab.edges[cbind(tmp.edges[,2], ifelse(tmp.D.which == 1, 2, 1))])
-        tmp.sp = lapply(1:nrow(tmp.ab.edges), function(i)
-          get.shortest.paths(G, tmp.ab.edges[i,1], tmp.ab.edges[i,2], weights = E(G)$weights.source, mode = 'out')$vpath[[1]])
-        if (any(ix <- tmp.D.which==1))
-          tmp.sp[ix] = lapply(tmp.sp[ix], function(x) x[-c(1, length(x))])
-        bp.id = unique(unlist(lapply(tmp.sp, function(x) E(G, path = x)$bp.id)))
-        return(any(x %in% bp.id))
-                                        # test distance to make sure
-        ## sapply(tmp.sp, function(x, w) sum(w[x[-length(x)]]), as.numeric(width(kag$tile))) - width(kag$tile)[tmp.ab.edges[cbind(1:length(tmp.D.which), tmp.D.which)]]*ifelse(tmp.D.which == 1, 1, -1)
-      }
-
-
-      ## xtYao modified: mclapply to replace lapply and sapply
-      ## CHANGE
-      if (length(pc$cycles)>0)
-      {
-        ## pc$cycles = pc$cycles[!sapply(pc$cycles, .check.pc, is.cycle = T)]
-        pc$cycles = pc$cycles[!unlist(mclapply(pc$cycles, .check.pc, is.cycle = T, mc.cores=mc.cores))]
-        pc$cycles = mclapply(pc$cycles, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores=mc.cores)
-        pc$cycles = pc$cycles[!duplicated(unlist(mclapply(pc$cycles, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores=mc.cores)))]
-        pc$cycles = pc$cycles[order(-unlist(mclapply(pc$cycles, length, mc.cores = mc.cores)))]
-      }
-
-      if (length(pc$paths)>0)
-      {
-        pc$paths = pc$paths[!unlist(mclapply(pc$paths, .check.pc, is.cycle = F, mc.cores = mc.cores))]
-        pc$paths = mclapply(pc$paths, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores = mc.cores)
-        pc$paths = pc$paths[!duplicated(unlist(mclapply(pc$paths, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores = mc.cores)))]
-        pc$paths = pc$paths[order(-unlist(mclapply(pc$paths, length, mc.cores = mc.cores)))]
-      }
-
-      ## if (length(pc$cycles)>0)
-      ##   {
-      ##     pc$cycles = pc$cycles[!sapply(pc$cycles, .check.pc, is.cycle = T)]
-      ##     pc$cycles = lapply(pc$cycles, function(x) sign(emap[x])*edge.ix[abs(emap[x])])
-      ##     pc$cycles = pc$cycles[!duplicated(sapply(pc$cycles, function(x) paste(unique(sort(x)), collapse = ' ')))]
-      ##     pc$cycles = pc$cycles[order(-sapply(pc$cycles, length))]
-      ##   }
-
-      ## if (length(pc$paths)>0)
-      ##   {
-      ##     pc$paths = pc$paths[!sapply(pc$paths, .check.pc, is.cycle = F)]
-      ##     pc$paths = lapply(pc$paths, function(x) sign(emap[x])*edge.ix[abs(emap[x])])
-      ##     pc$paths = pc$paths[!duplicated(sapply(pc$paths, function(x) paste(unique(sort(x)), collapse = ' ')))]
-      ##     pc$paths = pc$paths[order(-sapply(pc$paths, length))]
-      ##   }
+        ## if there are other possible "bridge links" between members of a cycle that do not involve
+        ## members of the cycle.  Fix: Best way to fix this would be actually recompute shortest paths after removing
+        ## edges cresponding to edges in the path.
+        .check.pc = function(x, is.cycle = FALSE){
+            if (is.cycle){
+                tmp.edges = cbind(x, c(x[-1], x[1]))
+            } else{
+                tmp.edges = cbind(x[-length(x)], x[-1])
+            }
+            tmp.D.which = D.which[tmp.edges]  ## D.which keeps track of whether we linked these edges via D1 or D2
+            ## if 1 then we are looking for path from col 2 to col 1, so flip
+            if (any(ix <- tmp.D.which==1)){
+                tmp.edges[ix,] = tmp.edges[ix, c(2:1)]
+            }
+            tmp.ab.edges = cbind(ab.edges[cbind(tmp.edges[,1], tmp.D.which)], ab.edges[cbind(tmp.edges[,2], ifelse(tmp.D.which == 1, 2, 1))])
+            tmp.sp = lapply(1:nrow(tmp.ab.edges), function(i)
+                get.shortest.paths(G, tmp.ab.edges[i,1], tmp.ab.edges[i,2], weights = E(G)$weights.source, mode = 'out')$vpath[[1]])
+            if (any(ix <- tmp.D.which==1)){
+                tmp.sp[ix] = lapply(tmp.sp[ix], function(x) x[-c(1, length(x))])
+            }
+            bp.id = unique(unlist(lapply(tmp.sp, function(x) E(G, path = x)$bp.id)))
+            return(any(x %in% bp.id))
+        }
 
 
-      return(pc)
+        ## xtYao modified: mclapply to replace lapply and sapply
+        ## CHANGE
+        if (length(pc$cycles)>0){
+            ## pc$cycles = pc$cycles[!sapply(pc$cycles, .check.pc, is.cycle = T)]
+            pc$cycles = pc$cycles[!unlist(mclapply(pc$cycles, .check.pc, is.cycle = T, mc.cores=mc.cores))]
+            pc$cycles = mclapply(pc$cycles, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores=mc.cores)
+            pc$cycles = pc$cycles[!duplicated(unlist(mclapply(pc$cycles, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores=mc.cores)))]
+            pc$cycles = pc$cycles[order(-unlist(mclapply(pc$cycles, length, mc.cores = mc.cores)))]
+        }
 
-#    return(list(
-#                paths = lapply(pc$paths[sapply(pc$paths, length)>1], function(x) cbind(bp.df$e1[x], bp.df$e2[x[length(x)]]), NA),
-#                cycles = lapply(pc$cycles, function(x) c(bp.df$e1[x], bp.df$e2[x[length(x)]])),
-#                paths = lapply(pc$paths[sapply(pc$paths, length)>1], function(x) bp.df[x, ]),
-#                cycles = lapply(pc$cycles, function(x) bp.df[x, ])
-#                ))
+        if (length(pc$paths)>0){
+            pc$paths = pc$paths[!unlist(mclapply(pc$paths, .check.pc, is.cycle = F, mc.cores = mc.cores))]
+            pc$paths = mclapply(pc$paths, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores = mc.cores)
+            pc$paths = pc$paths[!duplicated(unlist(mclapply(pc$paths, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores = mc.cores)))]
+            pc$paths = pc$paths[order(-unlist(mclapply(pc$paths, length, mc.cores = mc.cores)))]
+        }
+      
+        return(pc)
     }
-  }
+}
 
 
 ###########################
@@ -8665,35 +8624,35 @@ chromoplexy = function(kag = NULL, # output of karyograph
 #' NOTE: values x_ij in these matrices should be interpreted with a 1e-9 offset to yield the actual value y_ij
 #' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
 ############################################
-proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F, mc.cores = 1,
-  max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
-  )
-  {
-    if (!is.null(jab))
-    {
+proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = FALSE, mc.cores = 1, max.dist = 1e6)
+{
+    if (!is.null(jab)){
         nnab = which(!ifelse(is.na(jab$ab.edges[,3,1]), TRUE, jab$ab.edges[,3,1]==0))
         ix = nnab[which(jab$adj[jab$ab.edges[nnab,1:2,1]]>0)]
-        if (length(ix)>0)
-          {
+        if (length(ix)>0){
             ra1 = gr.flipstrand(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
             ra2 = gr.start(jab$segstats[jab$ab.edges[ix,2,1]], 1, ignore.strand = F)
             ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
             ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
             ra = grl.pivot(GRangesList(ra1,ra2))
-          }
-      }
+        }
+    }
 
-    if (length(ra)==0)
+    if (length(ra)==0){
       return(list())
+    }
 
-    if (length(query)==0 | length(subject)==0)
+    if (length(query)==0 | length(subject)==0){
         return(list())
+    }
 
-    if (is.null(names(query)))
+    if (is.null(names(query))){
         names(query) = 1:length(query)
+    }
 
-    if (is.null(names(subject)))
+    if (is.null(names(subject))){
         names(subject) = 1:length(subject)
+    }
 
     query.nm = names(query);
     subject.nm = names(subject);
@@ -8710,8 +8669,9 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
     subject = subject[six.filt]
 
-    if (length(query)==0 | length(subject)==0)
+    if (length(query)==0 | length(subject)==0){
         return(list())
+    }
 
     query$type = 'query'
     subject$type = 'subject'
@@ -8732,22 +8692,21 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
     gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
 
-    if (any(nix <<- is.na(gr$node.start)))
+    if (any(nix <<- is.na(gr$node.start))){
         gr$node.start[nix] = tip[nearest(gr.start(gr[nix],2), gr.start(kg$tile[tip]))]
+    }
 
-    if (any(nix <<- is.na(gr$node.end)))
+    if (any(nix <<- is.na(gr$node.end))){
         gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tip]))]
+    }
 
+    if (any(nix <<- is.na(gr$node.end.n))){
+        gr$node.end.n[nix] = tin[nearest(gr.start(gr[nix],2), gr.start(kg$tile[tin]))]
+    }
 
-    if (any(nix <<- is.na(gr$node.end.n)))
-      gr$node.end.n[nix] = tin[nearest(gr.start(gr[nix],2), gr.start(kg$tile[tin]))]
-
-    if (any(nix <<- is.na(gr$node.start.n)))
+    if (any(nix <<- is.na(gr$node.start.n))){
         gr$node.start.n[nix] = tin[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(kg$tile[tin]))]
-
-
-#    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
-#    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(kg$tile)))
+    }
 
     ## so now we build distance matrices from query ends to subject starts
     ## and subject ends to query starts
@@ -8778,10 +8737,10 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 
     EPS = 1e-9
 
-    tmp = mclapply(ix.query, function(i)
-      {
-        if (verbose)
-          cat('starting interval', i, 'of', length(ix.query), '\n')
+    tmp = mclapply(ix.query, function(i){
+        if (verbose){
+            cat('starting interval', i, 'of', length(ix.query), '\n')
+        }
 
         ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
         ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
@@ -8819,26 +8778,25 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
         ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
         ## (easier to do a simple range query here)
         ix.zero = gr.in(subject[ix], query[i])
-        if (any(ix.zero))
-          {
+        if (any(ix.zero)){
             D.ra[i, ix[ix.zero]] = 0
             D.ref[i, ix[ix.zero]] = 0
-          }
+        }
 
         D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
 
-        if (verbose)
-           cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+        if (verbose){
+            cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+        }
 
         return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+
        }, mc.cores = mc.cores)
 
-    for (i in 1:length(tmp))
-    {
-        if (class(tmp[[i]]) != 'list')
+    for (i in 1:length(tmp)){
+        if (class(tmp[[i]]) != 'list'){
             warning(sprintf('Query %s failed', ix.query[i]))
-        else
-        {
+        } else{
             D.rel = D.rel + tmp[[i]]$D.rel
             D.ra = D.ra + tmp[[i]]$D.ra
             D.ref = D.ref + tmp[[i]]$D.ref
@@ -8847,8 +8805,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     }
 
     ## "full" size matrix
-    rel = ra = ref = ra.which =
-      Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+    rel = ra = ref = ra.which = Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
     rel[qix.filt, six.filt] = D.rel
     ra[qix.filt, six.filt] = D.ra
     ref[qix.filt, six.filt] = D.ref
@@ -8859,11 +8816,13 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     colnames(tmp) = c('i', 'j');
     sum = as.data.frame(tmp)
 
-    if (!is.null(query.nm))
-      sum$query.nm = query.nm[sum$i]
+    if (!is.null(query.nm)){
+        sum$query.nm = query.nm[sum$i]
+    }
 
-    if (!is.null(subject.nm))
-      sum$subject.nm = subject.nm[sum$j]
+    if (!is.null(subject.nm)){
+        sum$subject.nm = subject.nm[sum$j]
+    }
 
     sum$rel = rel[tmp]
     sum$ra = ra[tmp]
@@ -8879,29 +8838,30 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
 
 
-    if (nrow(sum)==0)
+    if (nrow(sum)==0){
         return(NULL)
+    }
 
-    sum.paths = mcmapply(function(x, y, i)
-    {
-        if (verbose)
-        jmessage('path ', i, ' of ', nrow(sum), '\n')
-        if ((ra.which[x, y]) == 1)
-            get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
-        else if ((ra.which[x, y]) == 2)
-            rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
-        else if ((ra.which[x, y]) == 3)
-            get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
-        else if ((ra.which[x, y]) == 4)
-            rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+    sum.paths = mcmapply(function(x, y, i){
+        if (verbose){
+            jmessage('path ', i, ' of ', nrow(sum), '\n')
+            if ((ra.which[x, y]) == 1){
+                get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+            } else if ((ra.which[x, y]) == 2){
+                rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+            } else if ((ra.which[x, y]) == 3){
+                get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+            } else if ((ra.which[x, y]) == 4){
+                rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+            }
+        }
     }, sum$i, sum$j, 1:nrow(sum), SIMPLIFY = F, mc.cores = mc.cores)
 
-#    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
     sum$paths = sum.paths
     sum$ab.edges = lapply(sum.paths, function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
 
     return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
-  }
+}
 
 
 ####################################################
@@ -9454,19 +9414,18 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                                          weight,
                                          edges,
                                          verbose = TRUE,
-                                         mip = TRUE
-                                         )
+                                         mip = TRUE)
 {
 
     if (is.null(allD)){
-      allD = shortest.paths(G, mode="out", weights = weight)
+        allD = shortest.paths(G, mode="out", weights = weight)
     }
 
     v = as.numeric(v)
     to = as.numeric(to)
 
     if (is.infinite(allD[v, to]) | allD[v, to]==0){
-      return(NULL)
+        return(NULL)
     }
 
     edges$cn = cn.adj[cbind(edges$from, edges$to)]
@@ -9581,7 +9540,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 #' @author Marcin Imielinski
 #' @author Xiaotong Yao
 jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE){
-  
+
     cn.adj = jab$adj
     adj = as.matrix(cn.adj)
     adj.new = adj*0
@@ -10111,7 +10070,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE){
         ## concatenate back with nodes that precede a non reference junction
         tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nix, seqnames, start, end, strand, loose)],
                      collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
-       setkeyv(tmp.dt, c('pid', 'nix'))
+        setkeyv(tmp.dt, c('pid', 'nix'))
 
         tmp.gr = dt2gr(tmp.dt)
         tmp.segs = unique(tmp.gr)
@@ -10122,9 +10081,7 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE){
         names(tmp.paths) = ifelse(grepl('\\-', names(tmp.paths)), -1, 1)*as.numeric(gsub('\\D', '', names(tmp.paths)))
 
         ##      gw = gGnome::gWalks$new(segs=tmp.segs,
-        gw = gWalks$new(segs=tmp.segs,
-                      paths=tmp.paths,
-                      metacols=tmp.vals)
+        gw = gWalks$new(segs=tmp.segs, paths=tmp.paths, metacols=tmp.vals)
         return(gw)
     }
 
