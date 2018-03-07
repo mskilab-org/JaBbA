@@ -6,8 +6,8 @@ Description: JaBbA simultaneously infers integer copy numbers for genomic segmen
 Depends:
   R (>= 3.3.0),
   Matrix (>= 1.2),
-  gUtils (>= 0.2),  
-  gGnome (>= 0.1),
+  gUtils (>= 0.2), 
+  gGnome (>= 0.1), 
   gplots (>= 3.0),
   GenomicRanges (>= 1.3),  
   optparse (>= 1.4.4),
@@ -25,7 +25,8 @@ Imports:
   stats,
   utils
 Suggests:  
-    testthat (>= 2.0)    
+    testthat (>= 2.0), 
+    slam  
 License: GPL-2
 LazyData: true
 RoxygenNote: 6.0.1
