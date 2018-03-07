@@ -4715,33 +4715,36 @@ collapse.paths = function(G, verbose = TRUE)
 #' a (+/- strict) subset of the nonzero components of row j of B
 #'
 ###############################################
-sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
-  {
+sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE){
+
     nz = Matrix::colSums(as.matrix(A)!=0, 1)>0
 
-    if (is.null(dim(A)) | is.null(dim(B)))
-      return(NULL)
+    if (is.null(dim(A)) | is.null(dim(B))){
+        return(NULL)
+    }
 
     C = sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
 
-    for (i in seq(1, nrow(A), chunksize))
-      {
+    for (i in seq(1, nrow(A), chunksize)){
         ixA = i:min(nrow(A), i+chunksize-1)
-        for (j in seq(1, nrow(B), chunksize))
-          {
+        for (j in seq(1, nrow(B), chunksize)){
             ixB = j:min(nrow(B), j+chunksize-1)
 
-            if (length(ixA)>0 & length(ixB)>0 & !quiet)
-              cat(sprintf('\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n', ixA[1], ixA[length(ixA)], nrow(A), ixB[1], ixB[length(ixB)], nrow(B)))
-            if (strict)
-              C[ixA, ixB] = (sign((A[ixA, , drop = FALSE]!=0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))) * (sign((A[ixA, , drop = FALSE]==0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))>0)
-            else
-              C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE]!=0) %*% sign(t(B[ixB, nz, drop = FALSE]==0)))==0
-          }
-      }
+            if (length(ixA)>0 & length(ixB)>0 & !quiet){
+                cat(sprintf('\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n', ixA[1], ixA[length(ixA)], nrow(A), ixB[1], ixB[length(ixB)], nrow(B)))
+            }
+
+            if (strict){
+                C[ixA, ixB] = (sign((A[ixA, , drop = FALSE]!=0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))) * (sign((A[ixA, , drop = FALSE]==0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))>0)
+            } else{
+                C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE]!=0) %*% sign(t(B[ixB, nz, drop = FALSE]==0)))==0
+            }
+        }
+    }
 
     return(C)
-  }
+
+}
 
 
 
@@ -4753,23 +4756,24 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #' assigns id's to equivalent contigs
 #'
 ####################################
-.e2class = function(K, eclass)
-  {
+.e2class = function(K, eclass){
+
     eclass = factor(as.character(eclass))
 
-    if (length(eclass)!=nrow(K))
-      stop('eclass must be of the same length as number of rows in K')
+    if (length(eclass)!=nrow(K)){
+        stop('Error: eclass must be of the same length as number of rows in K')
+    }
 
     eclass = factor(as.character(eclass))
     class.count = table(eclass);
 
-    if (any(class.count)>2)
-      stop('Edge equivalence classes can have at most 2 members')
+    if (any(class.count)>2){
+        stop('Error: Edge equivalence classes can have at most 2 members')
+    }
 
     biclasses = names(class.count)[class.count==2];  # classes with two edges
 
-    if (length(biclasses)>0)
-      {
+    if (length(biclasses)>0){
         # edge class rotation matrix
         R = diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
 
@@ -4787,12 +4791,13 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
         kclass[pairs[,1]] = 1:nrow(pairs);
         kclass[pairs[,2]] = 1:nrow(pairs);
         kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
-      }
-    else
-      kclass = 1:ncol(K)
+    } else{
+        kclass = 1:ncol(K)
+    }
 
     return(kclass)
-  }
+}
+
 
 
 ##################################
@@ -4819,35 +4824,33 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #'
 #'
 ##################################
-convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL, exclude.range = NULL, maxchunks = Inf,
-  verbose = F)
-  {
+convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL, exclude.range = NULL, maxchunks = Inf, verbose = FALSE)
+{
     ZERO = 1e-8;
     remaining = 1:nrow(A);
     iter = 0;
     i = 0;
-#    order = c()
+
     numelmos = c()
     K_i = I = as(diag(rep(1, ncol(A))), 'sparseMatrix');
-#    A_i = as(A %*% K_i, 'sparseMatrix');
     K_i = I = diag(rep(1, ncol(A)))
     A_i = A %*% K_i
 
-    if (!is.null(exclude.basis))
-      {
+    if (!is.null(exclude.basis)){
         exclude.basis = sign(exclude.basis)
         exclude.basis = exclude.basis[rowSums(exclude.basis)>0, ]
-        if (nrow(exclude.basis) == 0)
-          exclude.basis = NULL
-      }
+        if (nrow(exclude.basis) == 0){
+            exclude.basis = NULL
+        }
+    }
 
-    if (!is.null(exclude.range))
-      {
+    if (!is.null(exclude.range)){
         exclude.range = sign(exclude.range)
         exclude.range = exclude.range[rowSums(exclude.range)>0, ]
-        if (nrow(exclude.range) == 0)
-          exclude.range = NULL
-      }
+        if (nrow(exclude.range) == 0){
+            exclude.range = NULL
+        }
+    }
 
     # vector to help rescale matrix (avoid numerical issues)
     mp  = apply(abs(A), 1, min); # minimum value of each column
@@ -4855,24 +4858,26 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 
     st = Sys.time()
     # iterate through rows of A, "canceling" them out
-    while (length(remaining)>0)
-      {
-        if (nrow(K_i)==0 | ncol(K_i)==0) ## TODO figure out why we have to check this so many times
-          return(matrix())
+    while (length(remaining)>0){
+        ## TODO figure out why we have to check this so many times
+        if (nrow(K_i)==0 | ncol(K_i)==0){
+            return(matrix())
+        }
 
         iter = iter+1;
         K_last = K_i;
 
-        if (verbose)
-          print(Sys.time() - st)
+        if (verbose){
+            print(Sys.time() - st)
+        }
 
-        if (verbose)
-          cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(Matrix::rowSums(K_i!=0)), "\n")
+        if (verbose){
+            cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(Matrix::rowSums(K_i!=0)), "\n")
+        }
 
         i = remaining[which.min(Matrix::rowSums(A_i[remaining,, drop = FALSE]>=ZERO)*Matrix::rowSums(A_i[remaining,, drop = FALSE]<=(-ZERO)))]  # chose "cheapest" rows
 
         remaining = setdiff(remaining, i);
-#        order = c(order, i);
 
         zero_elements = which(abs(A_i[i, ]) <= ZERO);
         K_i1 = K_last[zero_elements, , drop = FALSE];  ## K_i1 = rows of K_last that are already orthogonal to row i of A
@@ -4881,13 +4886,13 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
         pos_elements = which(A_i[i, ]>ZERO)
         neg_elements = which(A_i[i, ]<(-ZERO))
 
-        if (verbose)
-          cat('Iter ', iter, " Row ", i, ":", length(zero_elements), " zero elements ", length(pos_elements), " pos elements ", length(neg_elements), " neg elements \n")
+        if (verbose){
+            cat('Iter ', iter, " Row ", i, ":", length(zero_elements), " zero elements ", length(pos_elements), " pos elements ", length(neg_elements), " neg elements \n")
+        }
 
         if (length(pos_elements)>0 & length(neg_elements)>0)
           for (m in seq(1, length(pos_elements), interval))
-            for (l in seq(1, length(neg_elements), interval))
-              {
+            for (l in seq(1, length(neg_elements), interval)){
                 ind_pos = c(m:min(c(m+interval, length(pos_elements))))
                 ind_neg = c(l:min(c(l+interval, length(neg_elements))))
 
@@ -4895,7 +4900,6 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                   rep(neg_elements[ind_neg], each = length(ind_pos))); # cartesian product of ind_pos and ind_neg
                 pix = rep(1:nrow(indpairs), 2)
                 ix = c(indpairs[,1], indpairs[,2])
-#                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
                 coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
                 combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
                 combs[cbind(pix, ix)] = coeff;
@@ -4906,26 +4910,24 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                 H = H[!duplicated(as.matrix(H)>ZERO), ];
 
                 # remove rows in H that have subsets in H (with respect to sparsity) ..
-                if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
-                  {
+                if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks){
                     print('Exceeding maximum number of chunks in convex.basis computation')
-                    stop('Exceeding maximum number of chunks in convex.basis computation')
-                  }
+                    stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+                }
                 keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
                 H = H[keep, , drop = FALSE]
 
                 # remove rows in H that have subsets in K_i2
-                if (!is.null(K_i2))
-                  if (nrow(K_i2)>0)
-                    {
-                      if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks)
-                        {
-                          print('Exceeding maximum number of chunks in convex.basis computation')
-                          stop('Exceeding maximum number of chunks in convex.basis computation')
+                if (!is.null(K_i2)){
+                    if (nrow(K_i2)>0){
+                        if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks){
+                            print('Exceeding maximum number of chunks in convex.basis computation')
+                            stop('Error: Exceeding maximum number of chunks in convex.basis computation')
                         }
-                      keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
-                      H = H[keep, , drop = FALSE]
+                        keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
+                        H = H[keep, , drop = FALSE]
                     }
+                }
 
                 # remove rows in H that have subsets in K_i1
                 if (!is.null(K_i1))
@@ -4934,58 +4936,58 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                       if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks)
                         {
                           print('Exceeding maximum number of chunks in convex.basis computation')
-                          stop('Exceeding maximum number of chunks in convex.basis computation')
+                          stop('Error: Exceeding maximum number of chunks in convex.basis computation')
                         }
                       keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
                       H = H[keep, , drop = FALSE]
                     }
 
                 # maintain numerical stability
-                if ((iter %% 10)==0)
-                  H = diag(1/apply(abs(H), 1, max)) %*% H
+                if ((iter %% 10)==0){
+                    H = diag(1/apply(abs(H), 1, max)) %*% H
+                }
 
-#                K_i2 = rBind(K_i2, H)
                 K_i2 = rbind(K_i2, as.matrix(H))
               }
 
-#        K_i = rBind(K_i1, K_i2)
         K_i = rbind(K_i1, K_i2) ## new basis set
 
-        if (nrow(K_i)==0)
-          return(matrix())
+        if (nrow(K_i)==0){
+            return(matrix())
+        }
 
-        if (!is.null(exclude.basis)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-          {
-            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks)
-              {
+        if (!is.null(exclude.basis)){
+            ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks){
                 print('Exceeding maximum number of chunks in convex.basis computation')
                 stop('Exceeding maximum number of chunks in convex.basis computation')
-              }
+            }
             keep = Matrix::colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
-            if (verbose)
-              cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
+            if (verbose){
+                cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
+            }
             K_i = K_i[keep, , drop = F]
-          }
+        }
 
-        if (!is.null(exclude.range)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-          {
+        if (!is.null(exclude.range)){
+            ## only keep vectors that fail to intersect all vectors "exclude" in matrix
             A_i_abs = abs(A) %*% t(K_i)
-            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks)
-              {
+            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks){
                 print('Exceeding maximum number of chunks in convex.basis computation')
                 stop('Exceeding maximum number of chunks in convex.basis computation')
-              }
+            }
             keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
-            if (verbose)
-              cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
+            if (verbose){
+                cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
+            }
             K_i = K_i[keep, , drop = F]
-          }
+        }
 
         A_i = A %*% t(K_i)
-      }
+    }
 
     return(t(K_i))
-  }
+}
 
 
 ############################################################################################################################
@@ -5010,34 +5012,27 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 {
     gw = gr2dt(grl.unlist(gwalks))
-    gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) |
-                          (strand[-1] != strand[-length(strand)]), Inf,
-                   ifelse(strand[-1]=='+',
-                          start[-1]-end[-length(end)],
-                          start[-length(end)]-end[-1]))
-                 , Inf), by = grl.ix]
+    gw[, dist := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]) | (strand[-1] != strand[-length(strand)]), Inf,
+                   ifelse(strand[-1]=='+', start[-1]-end[-length(end)], start[-length(end)]-end[-1])) , Inf), by = grl.ix]
     gw[, dist.nostrand := c(ifelse((seqnames[-1] != seqnames[-length(seqnames)]), Inf,
-                   ifelse(strand[-1]=='+',
-                          start[-1]-end[-length(end)],
-                          start[-length(end)]-end[-1]))
-                 , Inf), by = grl.ix]
+                   ifelse(strand[-1]=='+', start[-1]-end[-length(end)], start[-length(end)]-end[-1])) , Inf), by = grl.ix]
     gw[, dist := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
-    gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist),
-       by = grl.ix]
+    gw[, dist.nostrand := ifelse((1:length(grl.iix) %in% length(grl.iix)), as.numeric(NA), dist), by = grl.ix]
 
 
     gw$ab.id = as.numeric(NA)
-    gw[dist>=min.ab, ab.id := as.numeric(1)]
+    gw[dist >= min.ab, ab.id := as.numeric(1)]
     gw[, ab.chunk := cumsum(!is.na(ab.id)),  by = grl.ix]
 
 
     ## get rid of little dels ie short ab junctions
     ## gw[which(dist<min.ab & dist>0), ab.id := NA]
 
-    gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1],
-                           start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
+    gwu = gw[, .(wid = sum(width), ab.id = ab.id[!is.na(ab.id)][1], start = grl.iix[1], end = grl.iix[length(grl.iix)]), by = .(ab.chunk, grl.ix)]
 
-    .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA)
+    .labrun = function(x){
+        ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA)
+    }
 
     ## every run of "trues" i.e. wid<something is labeled
     gwu[, runtag := as.numeric(.labrun(wid<pad)), by = grl.ix]
@@ -5049,9 +5044,9 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
     ## choose only chunk s with min run of abs
     kidnapped = gwu[!is.na(runlab) & runlen>=min.run, ]
 
-    if (nrow(kidnapped) == 0)
+    if (nrow(kidnapped) == 0){
         return(GRangesList())
-
+    }
 
     ## expand chunks back out
     kidnapped[, first := (1:length(start))==1, by = .(runlab)]
@@ -5081,11 +5076,11 @@ jabba.kid = function(gwalks, pad = 5e5, min.ab = 5e5, min.run = 2)
 
     kidnapped$runlab = as.character(kidnapped$runlab)
     setkey(kidnapped, 'runlab')
-    if (is.null(kidnapped$pair))
-      kidnapped$pair = NA
+    if (is.null(kidnapped$pair)){
+        kidnapped$pair = NA
+    }
 
-    values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1],
-                                                   len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])
+    values(walks.kn) = as.data.frame(kidnapped[ ,.(pair = pair[1], grl.ix = grl.ix[1], len = length(setdiff(unique(ab.id), NA))), keyby = runlab][names(walks.kn), ])
 
     return(walks.kn)
 }
