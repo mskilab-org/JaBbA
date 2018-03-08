@@ -2,11 +2,9 @@
 
 export(JaBbA)
 export(Rcplex2)
-export(read.junctions)
 import(DNAcopy)
 import(GenomicRanges)
 import(Matrix)
-import(VariantAnnotation)
 import(data.table)
 import(gTrack)
 import(gUtils)

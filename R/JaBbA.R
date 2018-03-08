@@ -1537,8 +1537,7 @@ jbaMIP = function(
     #####
     # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
     #####
-    if (partition & !is.na(gamma.guess) & !is.na(beta.guess))
-    {
+    if (partition & !is.na(gamma.guess) & !is.na(beta.guess)){
 
         m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
         cnmle = round(m) ## MLE estimate for CN
@@ -1589,887 +1588,809 @@ jbaMIP = function(
             fromfix = c()
         }
 
-      if (length(fix)>0){
+        if (length(fix)>0){
            fixtofix = Matrix::which(adj[fix, fix]!=0, arr.ind = TRUE)
-      }
+        } else{
+           fixtofix = c()
+        }
 
-      else{
-        fixtofix = c()
-      }
+        if (length(tofix)>0){
+            e.tofix = edges(as.vector(rbind(unfix[tofix[,1]], paste('to', fix[tofix[,2]]))))
+        } else{
+            e.tofix = edges()
+        }
 
-      if (length(tofix)>0)
-        e.tofix = edges(as.vector(rbind(unfix[tofix[,1]], paste('to', fix[tofix[,2]]))))
-      else
-        e.tofix = edges()
+        if (length(fromfix)>0){
+            e.fromfix = edges(rbind(paste('from', fix[fromfix[,1]]), unfix[fromfix[,2]]))
+        } else{
+            e.fromfix = edges()
+        }
 
-      if (length(fromfix)>0)
-        e.fromfix = edges(rbind(paste('from', fix[fromfix[,1]]), unfix[fromfix[,2]]))
-      else
-        e.fromfix = edges()
+        if (length(fixtofix)>0){
+            e.fixtofix = edges(rbind(paste('from', fix[fixtofix[,1]]), paste('to', fix[fixtofix[,2]])))
+        } else{
+            e.fixtofix = edges()
+        }
 
-      if (length(fixtofix)>0)
-        e.fixtofix = edges(rbind(paste('from', fix[fixtofix[,1]]), paste('to', fix[fixtofix[,2]])))
-      else
-        e.fixtofix = edges()
+        ## add edges to graph from fixed to unfixed, unfixed to fix, and fixed to fixed node sides
+        G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
 
-      ## add edges to graph from fixed to unfixed, unfixed to fix, and fixed to fixed node sides
-      G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
+        ## find connected components in these graphs
+        cl = clusters(G.unfix, 'weak')
+        cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
 
-      ## find connected components in these graphs
-      cl = clusters(G.unfix, 'weak')
-      cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
+        ## combine components with their reverse complement components
+        ## (only intervals that have a (fixed node free) path from their positive to their negative strand
+        ## will be part of the same component .. all other intervals will be separated from their
+        ## reverse complement.  However, in the MIP we always optimize
+        ## over both strands, and thus must merge components with their reverse complement
+        pos.ix = which( as.logical( strand(segstats)=='+') )
+        neg.ix = which( as.logical( strand(segstats)=='-') )
 
-      ## combine components with their reverse complement components
-      ## (only intervals that have a (fixed node free) path from their positive to their negative strand
-      ## will be part of the same component .. all other intervals will be separated from their
-      ## reverse complement.  However, in the MIP we always optimize
-      ## over both strands, and thus must merge components with their reverse complement
-      pos.ix = which( as.logical( strand(segstats)=='+') )
-      neg.ix = which( as.logical( strand(segstats)=='-') )
+        ## maps segments and reverse complements
+        seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
 
-      ## maps segments and reverse complements
-      seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
+        cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
+        dup.ix = match(cll.m, unique(cll.m))
+        cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
 
-      cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
-      dup.ix = match(cll.m, unique(cll.m))
-      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
+        ord.ix = order(-sapply(cll, length))
+        cll = cll[ord.ix]
 
-      ord.ix = order(-sapply(cll, length))
-      cll = cll[ord.ix]
+        if (verbose){
+            jmessage('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
+                paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
+        }
 
-      if (verbose){
-          jmessage('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
-                   paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
-      }
+        cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
 
-      cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
+        ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
+        args = as.list(match.call())[-1]
+        args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
 
-      ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
-      args = as.list(match.call())[-1]
-      args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
+        sols = mclapply(1:length(cll), function(k, args){
 
-      sols = mclapply(1:length(cll), function(k, args)
-        {
+            ix = node.map[cll[[k]]] ## indices in the original graph
+            uix = unique(ix)
+            fr.ix = grepl('from', cll[[k]])
+            to.ix = grepl('to', cll[[k]])
 
+            ## we want to make sure that fixed nodes that straddle
+            ## two clusters will only have the "correct"
+            ## half included in this run
+            fronly.ix = setdiff(ix[fr.ix], ix[to.ix])
+            toonly.ix = setdiff(ix[to.ix], ix[fr.ix])
 
-          ix = node.map[cll[[k]]] ## indices in the original graph
-          uix = unique(ix)
-          fr.ix = grepl('from', cll[[k]])
-          to.ix = grepl('to', cll[[k]])
+            ## now we want to make sure that fronly.ix don't have incoming edges
+            tmp.adj = adj[uix, uix, drop = F]
 
-          ## we want to make sure that fixed nodes that straddle
-          ## two clusters will only have the "correct"
-          ## half included in this run
-          fronly.ix = setdiff(ix[fr.ix], ix[to.ix])
-          toonly.ix = setdiff(ix[to.ix], ix[fr.ix])
+            if (length(fronly.ix)>0){
+                tmp.adj[, as.character(as.integer(fronly.ix))] = 0
+            }
 
-          ## now we want to make sure that fronly.ix don't have incoming edges
-          tmp.adj = adj[uix, uix, drop = F]
+            ## and toonly.ix don't have outgoing edges
+            if (length(toonly.ix)>0){
+                tmp.adj[as.character(as.integer(toonly.ix)), ] = 0
+            }
+            args$adj = tmp.adj
 
-          if (length(fronly.ix)>0)
-            tmp.adj[, as.character(as.integer(fronly.ix))] = 0
+            if (!is.null(mipstart)){
+                args$mipstart = mipstart[uix, uix]
+            }
+            args$adj.nudge = adj.nudge[uix, uix, drop = F]
+            args$na.node.nudge = na.node.nudge
+            args$adj.lb = adj.lb[uix, uix, drop = F]
+            args$segstats = segstats[uix]
+            args$cn.fix = cn.fix[uix]
+            args$cn.lb = cn.lb[uix]
+            args$cn.ub = cn.ub[uix]
+            args$partition = F
+            args$nsolutions = 1
+            args$ploidy.min = 0 ## no ploidy constraints
+            ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
+            args$ploidy.max = Inf
 
-          ## and toonly.ix don't have outgoing edges
-          if (length(toonly.ix)>0)
-            tmp.adj[as.character(as.integer(toonly.ix)), ] = 0
+            if (verbose){
+                jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
+                    round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ', length(unique(seqnames((segstats[uix])))),
+                    ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
+                    length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
+            }
 
-          args$adj = tmp.adj
+            out = do.call('jbaMIP', args)
+  
+            gc() ## garbage collect .. not sure why this needs to be done
 
-          if (!is.null(mipstart))
-            args$mipstart = mipstart[uix, uix]
-          args$adj.nudge = adj.nudge[uix, uix, drop = F]
-          args$na.node.nudge = na.node.nudge
-          args$adj.lb = adj.lb[uix, uix, drop = F]
-          args$segstats = segstats[uix]
-          args$cn.fix = cn.fix[uix]
-          args$cn.lb = cn.lb[uix]
-          args$cn.ub = cn.ub[uix]
-          args$partition = F
-          args$nsolutions = 1
-          args$ploidy.min = 0 ## no ploidy constraints
-          ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
-          args$ploidy.max = Inf
-
-          if (verbose)
-            jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
-                     round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ', length(unique(seqnames((segstats[uix])))),
-                     ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
-                     length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
-
-          out = do.call('jbaMIP', args)
-
-          gc() ## garbage collect .. not sure why this needs to be done
-
-          return(out)
+            return(out)
         }, args, mc.cores = mc.cores)
 
-      out = list()
-      for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'cn.prior', 'slack.prior')) ## scalar fields --> length(cluster) vector
-        out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
-
-      for (f in c('ploidy.constraints', 'beta.constraints')) ## length 2 fields --> length(cluster) x 2 matrix
-        out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
-
-      ## adjacency matrix
-      out$adj = 0 * adj
-      for (i in 1:length(sols))
-        {
-          ix1 = as.numeric(rownames(sols[[i]]$adj))
-          out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
+        out = list()
+        ## scalar fields --> length(cluster) vector
+        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'cn.prior', 'slack.prior')){
+            out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
         }
 
-      ## segstats
-      sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
-      out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
+        for (f in c('ploidy.constraints', 'beta.constraints')){
+            ## length 2 fields --> length(cluster) x 2 matrix
+            out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
+        }
 
-      ## annotate segstats keep to keep track and "fixed nodes"
-      out$segstats$fixed = 1:length(out$segstats) %in% fix
-      out$segstats$cn.fix = cn.fix
-      out$segstats$cl  = NA
-      out$segstats$id = 1:length(out$segstats)
+        ## adjacency matrix
+        out$adj = 0 * adj
+        for (i in 1:length(sols)){
+            ix1 = as.numeric(rownames(sols[[i]]$adj))
+            out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
+        }
+  
+        ## segstats
+        sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
+        out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
 
-      ## keep track of which clusters segments originated
-      sol.ixul = munlist(sol.ix)
-      tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
-      out$segstats$cl = NA
-      out$segstats$cl[as.numeric(names(tmp))] = tmp
+        ## annotate segstats keep to keep track and "fixed nodes"
+        out$segstats$fixed = 1:length(out$segstats) %in% fix
+        out$segstats$cn.fix = cn.fix
+        out$segstats$cl  = NA
+        out$segstats$id = 1:length(out$segstats)
 
-      out$purity = 2/(2+gamma.guess)
-      v = out$segstats$cn; w = as.numeric(width(out$segstats))
-      out$ploidy = sum((v*w)[!is.na(v)]) / sum(w[!is.na(v)])
-      out$beta = beta.guess;
-      out$gamma = gamma.guess;
+        ## keep track of which clusters segments originated
+        sol.ixul = munlist(sol.ix)
+        tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
+        out$segstats$cl = NA
+        out$segstats$cl[as.numeric(names(tmp))] = tmp
 
-      target.less = Matrix::rowSums(adj, na.rm = T)==0
-      source.less = Matrix::colSums(adj, na.rm = T)==0
-      out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
-      out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
+        out$purity = 2/(2+gamma.guess)
+        v = out$segstats$cn; w = as.numeric(width(out$segstats))
+        out$ploidy = sum((v*w)[!is.na(v)]) / sum(w[!is.na(v)])
+        out$beta = beta.guess;
+        out$gamma = gamma.guess;
 
-      out$segstats$ecn.out =  Matrix::rowSums(out$adj)
-      out$segstats$ecn.in =  Matrix::colSums(out$adj)
+        target.less = Matrix::rowSums(adj, na.rm = T)==0
+        source.less = Matrix::colSums(adj, na.rm = T)==0
+        out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
+        out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
 
-      out$segstats$edges.in = sapply(1:length(out$segstats),
-        function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-      out$segstats$edges.out = sapply(1:length(out$segstats),
-        function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+        out$segstats$ecn.out =  Matrix::rowSums(out$adj)
+        out$segstats$ecn.in =  Matrix::colSums(out$adj)
+  
+        out$segstats$edges.in = sapply(1:length(out$segstats), function(x) {
+            ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+        out$segstats$edges.out = sapply(1:length(out$segstats), function(x) {
+            ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+  
+        ###
+        ###
+        ncn = rep(2, length(segstats))
+        if (!is.null(field.ncn)){
+            if (field.ncn %in% names(values(segstats))){
+                ncn = values(segstats)[, field.ncn]
+            }
+        }
 
-      ###
-      ###
-      ncn = rep(2, length(segstats))
-      if (!is.null(field.ncn))
-        if (field.ncn %in% names(values(segstats)))
-          ncn = values(segstats)[, field.ncn]
+        nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
 
 
-      nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
+        ### new obj allowing variable normal copy number
+        out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
+            1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only
+        out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
+        out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
+        out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
+        out$sols = sols
 
-      ##       out$obj = 1/4*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
-#        1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only
-      ##
-
-      ### new obj allowing variable normal copy number
-      out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
-        1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only
-      out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-      out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-      out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
-      out$sols = sols
-
-      return(out)
+        return(out)
     }
 
-  # map intervals to their reverse complement to couple their copy number (and edge variables)
-  pos.ix = which( as.logical( strand(segstats)=='+') )
-  neg.ix = which( as.logical( strand(segstats)=='-') )
+    # map intervals to their reverse complement to couple their copy number (and edge variables)
+    pos.ix = which( as.logical( strand(segstats)=='+') )
+    neg.ix = which( as.logical( strand(segstats)=='-') )
 
-  ## "original vertices"
-  og.ix = pos.ix
+    ## "original vertices"
+    og.ix = pos.ix
 
-  ## map flipping positive to negative vertices
-  rev.ix = match(segstats, gr.flipstrand(segstats))
+    ## map flipping positive to negative vertices
+    rev.ix = match(segstats, gr.flipstrand(segstats))
 
-  ## "duplicates" of og.ix i.e. revcomp vertices
-  dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
+    ## "duplicates" of og.ix i.e. revcomp vertices
+    dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
 
-  if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
-    stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
-
-  edges = Matrix::which(adj!=0, arr.ind = T)
-
-  if (verbose)
-    {
-#      jmessage('Setting up matrices ..')
+    if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix])){
+        stop('Error: Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
     }
 
-
-  varmeta = data.frame() ## store meta data about variables to keep track
-  consmeta = data.frame() ## store meta data about constraints to keep track
-  n = 2*nrow(adj) + nrow(edges) + 2;  # number of vertices + slack variables, number of edges, and beta, gamma parameters.
-  v.ix = 1:nrow(adj)
-  s.ix = length(v.ix) + v.ix
-
-  varmeta = data.frame(id = v.ix, subid = 1:length(v.ix), label = paste('interval', 1:length(v.ix), sep = ''), type = 'interval',
-    stringsAsFactors = F)
-  varmeta = rbind(varmeta, data.frame(id = s.ix, subid = 1:length(s.ix), label = paste('residual', 1:length(s.ix), sep = ''),
-    type = 'residual', stringsAsFactors = F))
+    edges = Matrix::which(adj!=0, arr.ind = T)
 
 
-#  s.ix = length(v.ix) + v.ix + 1
-  if (nrow(edges)>0)
-    {
-      e.ix = max(s.ix) + (1:nrow(edges))
-      varmeta = rbind(varmeta, data.frame(id = e.ix, subid = 1:length(e.ix), label = paste('edge', 1:length(e.ix), sep = ''),
-        type = 'edge', stringsAsFactors = F))
+    varmeta = data.frame() ## store meta data about variables to keep track
+    consmeta = data.frame() ## store meta data about constraints to keep track
+    n = 2*nrow(adj) + nrow(edges) + 2;  # number of vertices + slack variables, number of edges, and beta, gamma parameters.
+    v.ix = 1:nrow(adj)
+    s.ix = length(v.ix) + v.ix
+
+    varmeta = data.frame(id = v.ix, subid = 1:length(v.ix), label = paste('interval', 1:length(v.ix), sep = ''), type = 'interval',
+        stringsAsFactors = FALSE)
+    varmeta = rbind(varmeta, data.frame(id = s.ix, subid = 1:length(s.ix), label = paste('residual', 1:length(s.ix), sep = ''),
+        type = 'residual', stringsAsFactors = FALSE))
+
+    if (nrow(edges)>0){
+        e.ix = max(s.ix) + (1:nrow(edges))
+        varmeta = rbind(varmeta, data.frame(id = e.ix, subid = 1:length(e.ix), label = paste('edge', 1:length(e.ix), sep = ''),
+            type = 'edge', stringsAsFactors = FALSE))
+    } else{
+        e.ix = integer();
     }
-  else
-    e.ix = integer();
+    gamma.ix = max(c(s.ix, e.ix))+1;
+    beta.ix = max(c(s.ix, e.ix))+2;
+    varmeta = rbind(varmeta, data.frame(id = c(gamma.ix, beta.ix), subid = rep(1, 2), label = c('gamma', 'beta'), type = 'global', stringsAsFactors = FALSE))
 
-  gamma.ix = max(c(s.ix, e.ix))+1;
-  beta.ix = max(c(s.ix, e.ix))+2;
-  varmeta = rbind(varmeta, data.frame(id = c(gamma.ix, beta.ix), subid = rep(1, 2), label = c('gamma', 'beta'), type = 'global', stringsAsFactors = F))
-
-  ## add cn prior variables
-  if (!is.na(cn.prior))
-    {
-      d.ix = v.ix + n;
-      varmeta = rbind(varmeta, data.frame(id = d.ix, subid = 1:length(d.ix), label = paste('cn.prior', 1:length(d.ix), sep = ''), type = 'cn.prior', stringsAsFactors = F))
-      ploidy.ix = max(d.ix)+1;
-      n = length(v.ix)+n+1;
-      varmeta = rbind(varmeta, data.frame(id = ploidy.ix, subid = 1, label = c('ploidy.prior'), type = 'global', stringsAsFactors = F))
+    ## add cn prior variables
+    if (!is.na(cn.prior)){
+        d.ix = v.ix + n;
+        varmeta = rbind(varmeta, data.frame(id = d.ix, subid = 1:length(d.ix), label = paste('cn.prior', 1:length(d.ix), sep = ''), type = 'cn.prior', stringsAsFactors = FALSE))
+        ploidy.ix = max(d.ix)+1;
+        n = length(v.ix)+n+1;
+        varmeta = rbind(varmeta, data.frame(id = ploidy.ix, subid = 1, label = c('ploidy.prior'), type = 'global', stringsAsFactors = FALSE))
     }
 
-  if (!any(is.na(purity.prior)))
-    {
-      pd.ix = n + 1; ## measure our deviation from the purity prior target
-      n = n + 1
-      varmeta = rbind(varmeta, data.frame(id = pd.ix, subid = 1, label = c('purity.prior'), type = 'global', stringsAsFactors = F))
+    if (!any(is.na(purity.prior))){
+        pd.ix = n + 1; ## measure our deviation from the purity prior target
+        n = n + 1
+        varmeta = rbind(varmeta, data.frame(id = pd.ix, subid = 1, label = c('purity.prior'), type = 'global', stringsAsFactors = FALSE))
     }
 
-  if (edge.slack) # slack on edge consistency constraints
-    {
-      es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
-      varmeta = rbind(varmeta, data.frame(id = es.s.ix, subid = 1:length(es.s.ix), label = paste('source.slack', 1:length(es.s.ix), sep = ''), type = 'source.slack', stringsAsFactors = F))
-      es.t.ix = n+(length(v.ix) + 1:length(v.ix))
-      varmeta = rbind(varmeta, data.frame(id = es.t.ix, subid = 1:length(es.t.ix), label = paste('target.slack', 1:length(es.t.ix), sep = ''), type = 'target.slack', stringsAsFactors = F))
-      n = n+2*length(v.ix);
+    if (edge.slack) {
+        ## slack on edge consistency constraints
+        es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
+        varmeta = rbind(varmeta, data.frame(id = es.s.ix, subid = 1:length(es.s.ix), label = paste('source.slack', 1:length(es.s.ix), sep = ''), type = 'source.slack', stringsAsFactors = F))
+        es.t.ix = n+(length(v.ix) + 1:length(v.ix))
+        varmeta = rbind(varmeta, data.frame(id = es.t.ix, subid = 1:length(es.t.ix), label = paste('target.slack', 1:length(es.t.ix), sep = ''), type = 'target.slack', stringsAsFactors = F))
+        n = n+2*length(v.ix);
     }
 
-  vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I'
-  lb = rep(0, n); lb[s.ix] = -Inf;
+    vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I'
+    lb = rep(0, n); lb[s.ix] = -Inf;
 
-  if (nrow(edges)>0)
-    lb[e.ix] = adj.lb[edges]
+    if (nrow(edges)>0){
+        lb[e.ix] = adj.lb[edges]
+    }
 
-  if (any(ix <<- !is.na(cn.fix)))
-    if (verbose>1)
-      {
-        jmessage('Fixing copy states on ', sum(ix), ' vertices')
-      }
+    if (any(ix <<- !is.na(cn.fix))){
+        if (verbose>1){
+            jmessage('Fixing copy states on ', sum(ix), ' vertices')
+        }
+    }
 
-### implement lower bounds and fixes
-  if (any(!is.na(cn.lb)))
-    lb[v.ix[!is.na(cn.lb)]] = cn.lb[!is.na(cn.lb)]
+    ### implement lower bounds and fixes
+    if (any(!is.na(cn.lb))){
+        lb[v.ix[!is.na(cn.lb)]] = cn.lb[!is.na(cn.lb)]
+    }
 
-  ub = rep(Inf, n);
+    ub = rep(Inf, n);
 
-  if (any(!is.na(cn.ub)))
-    ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
+    if (any(!is.na(cn.ub))){
+        ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
+    }
 
-  ## add these vars to varmeta TODO: convert everything to data frame
-  varmeta$vtype = vtype
-  varmeta$lb = vtype
-  varmeta$ub = ub
-
-
-  if (!is.na(gamma.guess) & !is.na(beta.guess))
-    cn.prior = cn.sd = NA
-
-  if (edge.slack)
-    vtype[c(es.s.ix, es.t.ix)] = 'I'
-
-  Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
-
-  # vertices that will actually have constraints (i.e. those that have non NA segstats )
-  v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
-
-  v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
-
-  # weighted mean across vertices contributing to mean
-  if (length(v.ix.c))
-    mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) / sum(as.numeric(width(segstats)[v.ix.c]))
-  else
-    mu.all = NA
+    ## add these vars to varmeta TODO: convert everything to data frame
+    varmeta$vtype = vtype
+    varmeta$lb = vtype
+    varmeta$ub = ub
 
 
+    if (!is.na(gamma.guess) & !is.na(beta.guess)){
+        cn.prior = cn.sd = NA
+    }
 
-  if (length(v.ix.c)>0)
-    {
-      ## take into account (variable) normal cn
-      ncn = rep(2, length(segstats))
-      if (!is.null(field.ncn))
-        if (field.ncn %in% names(values(segstats)))
-          ncn = values(segstats)[, field.ncn]
+    if (edge.slack){
+        vtype[c(es.s.ix, es.t.ix)] = 'I'
+    }
 
-      normal_ploidy = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
+    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
 
-      ## copy number constraints
-      Acn = Zero[rep(1, length(v.ix.c)+1), ]
-      Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
-      Acn[cbind(1:length(v.ix.c), s.ix[v.ix.c])] = 1
-##      Acn[cbind(1:length(v.ix.c), gamma.ix)] = 1  ## replacing with below
-      Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
-      Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
+    # vertices that will actually have constraints (i.e. those that have non NA segstats )
+    v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
 
-      ## final "conservation" constraint
-      Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
+    v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
+
+    # weighted mean across vertices contributing to mean
+    if (length(v.ix.c)){
+        mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) / sum(as.numeric(width(segstats)[v.ix.c]))
+    } else{
+        mu.all = NA
+    }
+
+    if (length(v.ix.c)>0){
+        ## take into account (variable) normal cn
+        ncn = rep(2, length(segstats))
+        if (!is.null(field.ncn)){
+            if (field.ncn %in% names(values(segstats))){
+                ncn = values(segstats)[, field.ncn]
+            }
+        }
+        normal_ploidy = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
+ 
+        ## copy number constraints
+        Acn = Zero[rep(1, length(v.ix.c)+1), ]
+        Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
+        Acn[cbind(1:length(v.ix.c), s.ix[v.ix.c])] = 1
+        ##      Acn[cbind(1:length(v.ix.c), gamma.ix)] = 1  ## replacing with below
+        Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
+        Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
+
+        ## final "conservation" constraint
+        Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
                                         #  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
-##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
-      Acn[length(v.ix.c)+1, gamma.ix] = normal_ploidy/2; ## taking into account (normal) variable cn
-      Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
-      bcn = rep(0, nrow(Acn))
-      sensecn = rep("E", length(bcn))
+        ##     Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
+        Acn[length(v.ix.c)+1, gamma.ix] = normal_ploidy/2; ## taking into account (normal) variable cn
+        Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
+        bcn = rep(0, nrow(Acn))
+        sensecn = rep("E", length(bcn))
 
-      consmeta = rbind(consmeta, data.frame(type = 'Copy', label = paste('Copy', 1:nrow(Acn)), sense = 'E', b = bcn, stringsAsFactors = F))
+        consmeta = rbind(consmeta, data.frame(type = 'Copy', label = paste('Copy', 1:nrow(Acn)), sense = 'E', b = bcn, stringsAsFactors = F))
 
-      if (ignore.cons | T)
-        {
-          Acn[nrow(Acn), ] = 0
-          bcn[length(bcn)] = 0
+        if (ignore.cons | TRUE){
+            Acn[nrow(Acn), ] = 0
+            bcn[length(bcn)] = 0
         }
-    }
-  else
-    { ## abort abort!
-      sol = list()
-      sol$residual = NA
-      sol$beta = beta.guess
-      sol$gamma = gamma.guess
-      sol$purity = NA
-      sol$ploidy = NA
-      sol$adj = adj*NA
-      sol$nll.cn = NA
-      sol$nll.opt = NA
-      sol$gap.cn = NA
-      sol$segstats = segstats[, c('mean', 'sd')]
-      sol$segstats$cn = NA
-      sol$segstats$ecn.in = NA
-      sol$segstats$ecn.out = NA
-      segstats$ncn = NA
-      sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats))
-      if (edge.slack)
-        {
-          sol$segstats$eslack.in = NA
-          sol$segstats$eslack.out = NA
+    } else { 
+        ## abort abort!
+        sol = list()
+        sol$residual = NA
+        sol$beta = beta.guess
+        sol$gamma = gamma.guess
+        sol$purity = NA
+        sol$ploidy = NA
+        sol$adj = adj*NA
+        sol$nll.cn = NA
+        sol$nll.opt = NA
+        sol$gap.cn = NA
+        sol$segstats = segstats[, c('mean', 'sd')]
+        sol$segstats$cn = NA
+        sol$segstats$ecn.in = NA
+        sol$segstats$ecn.out = NA
+        segstats$ncn = NA
+        sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats))
+        if (edge.slack){
+            sol$segstats$eslack.in = NA
+            sol$segstats$eslack.out = NA
         }
-      sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-      sol$beta.constraints = c(beta.min, beta.max)
-      sol$cn.prior = cn.prior
-      sol$slack.prior = slack.prior
-      return(sol)
+        sol$ploidy.constraints = c(ploidy.min, ploidy.max)
+        sol$beta.constraints = c(beta.min, beta.max)
+        sol$cn.prior = cn.prior
+        sol$slack.prior = slack.prior
+        return(sol)
     }
 
-  # dup constraints on vertices
-  # constrain every vertex to get the same copy number as its reverse complement
-  Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
-  Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
-  Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
-  dcn = rep(0, nrow(Dcn))
-  sensedcn = rep("E", nrow(Dcn))
+    ## dup constraints on vertices
+    ## constrain every vertex to get the same copy number as its reverse complement
+    Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
+    Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
+    Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
+    dcn = rep(0, nrow(Dcn))
+    sensedcn = rep("E", nrow(Dcn))
 
-  consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
+    consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
 
-  if (edge.slack)
-    {
+    if (edge.slack){
+        # dup constraints on (reverse complement) edge.slack
+        # (these make sure that reverse complement edge.slacks are
+        # given the same solution as their reverse complement)
+        Ecn = Zero[rep(1, length(dup.ix)*2),, drop = F];
+        Ecn[cbind(1:nrow(Ecn), c(es.s.ix[dup.ix], es.t.ix[dup.ix]))] = 1
+        Ecn[cbind(1:nrow(Ecn), c(es.t.ix[og.ix], es.s.ix[og.ix]))] = -1
+        ecn = rep(0, nrow(Ecn))
+        Dcn = rBind(Dcn, Ecn)
+        dcn = c(dcn, ecn);
+        sensedcn = c(sensedcn, rep("E", nrow(Ecn)))
 
-
-      # dup constraints on (reverse complement) edge.slack
-      # (these make sure that reverse complement edge.slacks are
-      # given the same solution as their reverse complement)
-      Ecn = Zero[rep(1, length(dup.ix)*2),, drop = F];
-      Ecn[cbind(1:nrow(Ecn), c(es.s.ix[dup.ix], es.t.ix[dup.ix]))] = 1
-      Ecn[cbind(1:nrow(Ecn), c(es.t.ix[og.ix], es.s.ix[og.ix]))] = -1
-      ecn = rep(0, nrow(Ecn))
-      Dcn = rBind(Dcn, Ecn)
-      dcn = c(dcn, ecn);
-      sensedcn = c(sensedcn, rep("E", nrow(Ecn)))
-
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeSlack', label = paste('EdgeSlack', 1:nrow(Ecn)), sense = 'E', b = ecn, stringsAsFactors = F))
+        consmeta = rbind(consmeta, data.frame(type = 'EdgeSlack', label = paste('EdgeSlack', 1:nrow(Ecn)), sense = 'E', b = ecn, stringsAsFactors = F))
     }
 
-  Acn = rBind(Acn, Dcn)
-  bcn = c(bcn, dcn)
-  sensecn = c(sensecn, sensedcn)
+    Acn = rBind(Acn, Dcn)
+    bcn = c(bcn, dcn)
+    sensecn = c(sensecn, sensedcn)
 
-  if (!is.na(cn.prior))
-    {
-      if (verbose)
-        cat('cn prior .. \n')
-      Pcn = Zero[rep(1, length(v.ix)+1), ]
-      Pcn[cbind(v.ix, v.ix)] = 1
-      Pcn[v.ix, ploidy.ix] = -1
-      Pcn[cbind(v.ix, d.ix)] = -1
-      Pcn[length(v.ix)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)))
-      Pcn[length(v.ix)+1, ploidy.ix] = -1;
-      bpcn = rep(0, nrow(Pcn))
-      Acn = rBind(Acn, Pcn)
-      bcn = c(bcn, bpcn)
-      sensecn = c(sensecn, rep("E", length(bpcn)))
-      lb[d.ix] = -Inf;
+    if (!is.na(cn.prior)){
+        if (verbose){
+            cat('cn prior .. \n')
+        }
+        Pcn = Zero[rep(1, length(v.ix)+1), ]
+        Pcn[cbind(v.ix, v.ix)] = 1
+        Pcn[v.ix, ploidy.ix] = -1
+        Pcn[cbind(v.ix, d.ix)] = -1
+        Pcn[length(v.ix)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)))
+        Pcn[length(v.ix)+1, ploidy.ix] = -1;
+        bpcn = rep(0, nrow(Pcn))
+        Acn = rBind(Acn, Pcn)
+        bcn = c(bcn, bpcn)
+        sensecn = c(sensecn, rep("E", length(bpcn)))
+        lb[d.ix] = -Inf;
 
-      consmeta = rbind(consmeta, data.frame(type = 'CNPrior', label = paste('CNPrior', 1:nrow(Pcn)), sense = 'E', b = bpcn, stringsAsFactors = F))
+        consmeta = rbind(consmeta, data.frame(type = 'CNPrior', label = paste('CNPrior', 1:nrow(Pcn)), sense = 'E', b = bpcn, stringsAsFactors = F))
     }
 
-  if (!any(is.na(purity.prior)))
-    {
-      if (verbose)
-        cat('purity prior .. \n')
-
-      Ppd = Zero[1, , drop = FALSE]
-      Ppd[1, gamma.ix] = 1
-      Ppd[1, pd.ix] = -1
-      bpd = 2/purity.prior[1] - 2
-      Acn = rBind(Acn, Ppd)
-      bcn = c(bcn, bpd)
-      sensecn = c(sensecn, 'E')
-      lb[pd.ix] = -Inf;
-      ub[pd.ix] = -Inf;
-
-      consmeta = rbind(consmeta, data.frame(type = 'PurityPrior', label = paste('PurityPrior', 1:nrow(Ppd)), sense = 'E', b = bpd, stringsAsFactors = F))
-    }
-
-  # ploidy constraints
-  Aineq = Zero[rep(1, 2), , drop = F];
-  Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
-  bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
-  senseineq = c("G", "L")
-
-
-  # override gamma
-  if (!is.na(gamma))
-    lb[gamma.ix] = ub[gamma.ix] = gamma;
-
-  # override beta
-  if (!is.na(beta))
-    lb[beta.ix] = ub[beta.ix] = beta.guess;
-
-  # beta.max
-  if (!is.na(beta.max))
-    ub[beta.ix] = beta.max
-
-  # beta.max
-  if (!is.na(beta.min))
-    lb[beta.ix] = beta.min
-
-  # gamma.max
-  if (!is.na(gamma.min))
-    lb[gamma.ix] = gamma.min
-
-  # gamma.max
-  if (!is.na(gamma.max))
-    ub[gamma.ix] = gamma.max
-
-  if (!ignore.edge & nrow(edges)>0)
-    {
-      if (verbose)
-        {
-#          jmessage('edge consistency matrix .. ')
+    if (!any(is.na(purity.prior))){
+        if (verbose){
+            cat('purity prior .. \n')
         }
 
-      ## add edge consistency criteria
-      ## for every node that is source of an edge
-      ## ensure that sum of weights on outgoing edges
-      ## = node weight
-      ## do the same for nodes that are targets of edges
+        Ppd = Zero[1, , drop = FALSE]
+        Ppd[1, gamma.ix] = 1
+        Ppd[1, pd.ix] = -1
+        bpd = 2/purity.prior[1] - 2
+        Acn = rBind(Acn, Ppd)
+        bcn = c(bcn, bpd)
+        sensecn = c(sensecn, 'E')
+        lb[pd.ix] = -Inf;
+        ub[pd.ix] = -Inf;
 
-      v.ix.s = unique(edges[,1])
-      v.ix.t = unique(edges[,2])
-      Bs = Zero[v.ix.s, , drop = F]
-      Bt = Zero[v.ix.t, , drop = F]
+        consmeta = rbind(consmeta, data.frame(type = 'PurityPrior', label = paste('PurityPrior', 1:nrow(Ppd)), sense = 'E', b = bpd, stringsAsFactors = F))
+    }
 
-      Bs[cbind(1:nrow(Bs), v.ix.s)] = 1
-      Bt[cbind(1:nrow(Bt), v.ix.t)] = 1
-      Bs[cbind(match(edges[,1], v.ix.s), e.ix)] = -1
-      Bt[cbind(match(edges[,2], v.ix.t), e.ix)] = -1
+    # ploidy constraints
+    Aineq = Zero[rep(1, 2), , drop = F];
+    Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
+    bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
+    senseineq = c("G", "L")
 
-      if (edge.slack)
-      {
-        Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1  # provide "fake" edges bringing flux into and out of vertex
-        Bt[cbind(1:nrow(Bt), es.t.ix[v.ix.t])] = -1
-      }
-                                        # B = rbind(as.matrix(Bs), as.matrix(Bt))
-      B = rBind(Bs, Bt)
 
-      if (verbose)
-      {
-                                        #        jmessage('populating linear constraints ..')
-      }
+    # override gamma
+    if (!is.na(gamma)){
+        lb[gamma.ix] = ub[gamma.ix] = gamma;
+    }
 
-      consmeta =
-        rbind(consmeta,
-              data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
-                         sense = 'E', b = 0, stringsAsFactors = F),
-              data.frame(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)),
-                         sense = 'E', b = 0, stringsAsFactors = F))
+    # override beta
+    if (!is.na(beta)){
+        lb[beta.ix] = ub[beta.ix] = beta.guess;
+    }
+
+    # beta.max
+    if (!is.na(beta.max)){
+        ub[beta.ix] = beta.max
+    }
+
+    # beta.max
+    if (!is.na(beta.min)){
+        lb[beta.ix] = beta.min
+    }
+
+    # gamma.max
+    if (!is.na(gamma.min)){
+        lb[gamma.ix] = gamma.min
+    }
+
+    # gamma.max
+    if (!is.na(gamma.max)){
+        ub[gamma.ix] = gamma.max
+    }
+
+    if (!ignore.edge & nrow(edges)>0){
+        ## add edge consistency criteria
+        ## for every node that is source of an edge
+        ## ensure that sum of weights on outgoing edges
+        ## = node weight
+        ## do the same for nodes that are targets of edges
+
+        v.ix.s = unique(edges[,1])
+        v.ix.t = unique(edges[,2])
+        Bs = Zero[v.ix.s, , drop = F]
+        Bt = Zero[v.ix.t, , drop = F]
+
+        Bs[cbind(1:nrow(Bs), v.ix.s)] = 1
+        Bt[cbind(1:nrow(Bt), v.ix.t)] = 1
+        Bs[cbind(match(edges[,1], v.ix.s), e.ix)] = -1
+        Bt[cbind(match(edges[,2], v.ix.t), e.ix)] = -1
+
+        if (edge.slack){
+            Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1  # provide "fake" edges bringing flux into and out of vertex
+            Bt[cbind(1:nrow(Bt), es.t.ix[v.ix.t])] = -1
+        }
+
+        B = rBind(Bs, Bt)
+
+        consmeta = rbind(consmeta,
+                    data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
+                        sense = 'E', b = 0, stringsAsFactors = FALSE),
+                    data.frame(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)),
+                        sense = 'E', b = 0, stringsAsFactors = FALSE))
       
-      ## populate linear constraints
-      Aed = B;
-      bed = rep(0, nrow(B))
-      senseed = rep("E", length(bed))
+        ## populate linear constraints
+        Aed = B;
+        bed = rep(0, nrow(B))
+        senseed = rep("E", length(bed))
 
-                                        #      Amat = rbind(as.matrix(Acn), as.matrix(Aed), as.matrix(Aineq));
-      Amat = rBind(Acn, Aed, Aineq);
-      b = c(bcn, bed, bineq);
-      sense = c(sensecn, senseed, senseineq);
-    }
-  else
-    {
-      Amat = rBind(Acn, Aineq);
-      b = c(bcn, bineq);
-      sense = c(sensecn, senseineq);
+        Amat = rBind(Acn, Aed, Aineq);
+        b = c(bcn, bed, bineq);
+        sense = c(sensecn, senseed, senseineq);
+    } else {
+        Amat = rBind(Acn, Aineq);
+        b = c(bcn, bineq);
+        sense = c(sensecn, senseineq);
     }
 
-  consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F))
+    consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F))
 
-  ## ecn.out.ub constraints (if any)
-  if (any(!is.na(ecn.out.ub)))
-    {
-      ix = which(!is.na(ecn.out.ub))
+    ## ecn.out.ub constraints (if any)
+    if (any(!is.na(ecn.out.ub))) {
+        ix = which(!is.na(ecn.out.ub))
 
-      Aineq_eout = Zero[ix, , drop = F]
-      bineq_eout = ecn.out.ub[ix]
-      senseineq_eout = rep('L', length(ix))
+        Aineq_eout = Zero[ix, , drop = F]
+        bineq_eout = ecn.out.ub[ix]
+        senseineq_eout = rep('L', length(ix))
 
-      for (i in 1:length(ix))
-        if (any(iy <<- edges[,1] %in% ix[i]))
-          Aineq_eout[i, e.ix[iy]] = 1 ## constrain the sum of edges exiting this vertex
-
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeOutUB', label = paste('EdgeOutUB', ix), sense = 'L', b = bineq_eout, stringsAsFactors = F))
-
-      Amat = rBind(Amat, Aineq_eout)
-      b = c(b, bineq_eout)
-      sense = c(sense, senseineq_eout)
-    }
-
-  ## ecn.in.ub constraints (if any)
-  if (any(!is.na(ecn.in.ub)))
-    {
-      ix = which(!is.na(ecn.in.ub))
-
-      Aineq_ein = Zero[ix, , drop = F]
-      bineq_ein = ecn.in.ub[ix]
-      senseineq_ein = rep('L', length(ix))
-
-      for (i in 1:length(ix))
-        if (any(iy <<- edges[,2] %in% ix[i]))
-          Aineq_ein[i, e.ix[iy]] = 1  ## constrain the sum of edges entering this vertex
-
-      consmeta = rbind(consmeta, data.frame(type = 'EdgeInUB', label = paste('EdgeInUB', ix), sense = 'L', b = bineq_ein, stringsAsFactors = F))
-
-      Amat = rBind(Amat, Aineq_ein)
-      b = c(b, bineq_ein)
-      sense = c(sense, senseineq_ein)
-    }
-
-  # quadratic portion of objective function
-  Qobj = Zero;
-
-  if (length(v.ix.c>0))
-      Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
-
-  EPS = 0.000000000001
-  if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
-    if (length(v.ix.na)>0)
-    {
-      if (verbose)
-        jmessage('NA nudging node!!')
-      Qobj[cbind(v.ix.na, v.ix.na)] = EPS
-    }
-
-#  if (!ignore.cons)
-#    Qobj[s.ix[length(s.ix)], s.ix[length(s.ix)]] = 1
-
-  # linear portion of objective function
-  cvec = Zero[,1]
-
-  if (nrow(edges)>0)
-    {
-      if (verbose)
-      {
-#        jmessage('Adding ', sum(adj.nudge[edges]), " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
-      }
-
-      cvec[e.ix] = -adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
-    }
-
-  if (!is.na(cn.prior))
-    Qobj[cbind(d.ix, d.ix)] = 1/cn.prior^2
-
-  ## the slack prior will determine the degree of "coupling" enforced between neighboring copy states
-  ## this should be high if we think that our rearrangement annotation is quite complete
-  ## in the end, there will be tension between enforcing edge consistency and consistency with means / sd
-  ## abundances at intervals
-  if (edge.slack)
-    {
-      cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
-
-      ## let any specified "loose ends" have unpenalized slack
-      if (length(loose.ends)>0)
-      {
-        if (verbose)
-        {
-#          jmessage('Relaxing slack penalty on', length(loose.ends), 'loose ends\n')
-        }
-          cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
+        for (i in 1:length(ix)){
+            if (any(iy <<- edges[,1] %in% ix[i])){
+                Aineq_eout[i, e.ix[iy]] = 1 ## constrain the sum of edges exiting this vertex
+            }
         }
 
-      if (verbose>1)
-      {
-        jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
-      }
+        consmeta = rbind(consmeta, data.frame(type = 'EdgeOutUB', label = paste('EdgeOutUB', ix), sense = 'L', b = bineq_eout, stringsAsFactors = F))
 
-
+        Amat = rBind(Amat, Aineq_eout)
+        b = c(b, bineq_eout)
+        sense = c(sense, senseineq_eout)
     }
 
-  if (!any(is.na(purity.prior)))
-    Qobj[cbind(pd.ix, pd.ix)] = 1/purity.prior[2]^2
+    ## ecn.in.ub constraints (if any)
+    if (any(!is.na(ecn.in.ub))){
+        ix = which(!is.na(ecn.in.ub))
 
-  if (verbose)
-    {
-#      jmessage('Beginning optimization ..')
-    }
+        Aineq_ein = Zero[ix, , drop = F]
+        bineq_ein = ecn.in.ub[ix]
+        senseineq_ein = rep('L', length(ix))
 
-  if (!is.null(mipstart))
-  {
-    if (is.na(gamma.guess) | is.na(beta.guess))
-    {
-      warning("Can't do JaBbA mipstart without setting purity and ploidy ... ignoring mipstart")
-    } else
-    {
-      mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
-      setnames(mips.dt, c("row", "col"))
-      mips.dt[, cn := mipstart[cbind(row, col)]]
-      setkeyv(mips.dt, c("row", "col"))
-
-      ## convert everything to data.tables
-      varmeta = as.data.table(varmeta)
-      consmeta = as.data.table(consmeta)
-      consmeta[, id := 1:.N]
-      varmeta[, id := 1:.N]
-      varmeta[, mipstart := as.numeric(0)]
-
-      ## first mipstart the node copy number n_hat by rounding
-      ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.mipstart-ncn/2*gamma.mipstart, 0)
-      ix = varmeta[type == 'interval', id]
-      ## n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
-      cnr = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
-      cnc = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
-      varmeta[type == 'interval', mipstart := cnc[.(subid), cn]]
-      varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[.(subid), cn], na.rm = TRUE)]
-      varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
-
-      varmeta[type == 'edge', mipstart := mips.dt[.(as.data.table(edges[subid, ])), cn]]
-      varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
-
-      ## ## mipstart each edge copy number by iterating through edges and peeling off the min copy number of source
-      ## ## and sink
-      ## 
-      ## e_done = rep(FALSE, length(e_hat))
-      ## rev.eix = mmatch(edges, cbind(rev.ix[edges[,2]], rev.ix[edges[,1]])) ## match edges to their reverse complements
-      ## jmessage('Computing initial mipstart on edge weight')
-      ## for (i in 1:nrow(edges))
-      ## {
-      ##   if (!e_done[i]) ## specify both edge and its reverse complement (so if e_hat[i] is non NA, it has already been filled)
-      ##   {
-      ##     if (edges[i, 1] == edges[i, 2]) ## be careful overdrawing fold back edges, otherwise can generate strand imbalance
-      ##       e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], floor(min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE)/2))
-      ##     else
-      ##       e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE))
-      ##     ## make sure to also change reverse complement
-      ##     n_hat[rev.ix[edges[i,1]]] = n_hat[edges[i,1]] = n_hat[edges[i,1]] - e_hat[i]
-      ##     n_hat[rev.ix[edges[i,2]]] = n_hat[edges[i,2]] = n_hat[edges[i,2]] - e_hat[i]
-      ##     e_done[i] = e_done[rev.eix[i]] = TRUE
-      ##   }
-      ## }
-
-      ## now mipstart each target and source slack
-      ## which is just the difference between the copy number at
-      ## c_i and the incoming / outgoing edges
-
-      e_hat = varmeta[type == 'edge', mipstart]
-      n_hat = varmeta[type == 'interval', mipstart]
-      ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
-      Bs = Amat[consmeta[type == 'EdgeSource', id],]
-      six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-      s_slack_hat = rep(0, length(n_hat))
-      if (length(varmeta[type == "edge", id])>0)
-        s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
-      s_slack_hat[is.na(s_slack_hat)] = 0
-      varmeta[type == 'source.slack', mipstart := s_slack_hat]
-
-      ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
-      Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-      tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-      t_slack_hat = rep(0, length(n_hat))
-      if (length(varmeta[type == "edge", id])>0)
-        t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
-      t_slack_hat[is.na(t_slack_hat)] = 0
-
-      varmeta[type == 'target.slack', mipstart := t_slack_hat]
-      varmeta[label == 'beta', mipstart := beta.guess]
-      varmeta[label == 'gamma', mipstart := gamma.guess]
-
-      ## ## fix negative loose ends, by adding copy number to the node and then slack at the other end
-      ## ## (these occur from nonzero lower bounds on junctions)
-      ## ## i.e. for negative source slack add copy number to node, and positive target slack
-      ## if (any(neg.source <- varmeta[type == 'source.slack', which(mipstart<0)]))
-      ## {
-      ##   tmp = varmeta[type == 'source.slack', mipstart[neg.source]]
-      ##   varmeta[type == 'source.slack' & subid %in% neg.source, mipstart := 0]
-      ##   varmeta[type == 'interval' & subid %in% neg.source, mipstart := mipstart - tmp]
-      ##   varmeta[type == 'target.slack' & subid %in% neg.source , mipstart := mipstart - tmp]
-      ## }
-
-      ## if (any(neg.target <- varmeta[type == 'target.slack', which(mipstart<0)]))
-      ## {
-      ##   tmp = varmeta[type == 'target.slack', mipstart[neg.target]]
-      ##   varmeta[type == 'target.slack' & subid %in% neg.target, mipstart := 0]
-      ##   varmeta[type == 'interval' & subid %in% neg.target, mipstart := mipstart - tmp]
-      ##   varmeta[type == 'source.slack' & subid %in% neg.target , mipstart := mipstart - tmp]
-      ## }
-
-      ## now we have a lot of slacks
-      ## so we need to "straighten" out all high variance nodes
-      ## with respect to their nearest low variance node
-      ## we draw an arbitrary distinction between low and high variance using
-
-      ## m = rel2abs(segstats, gamma = gamma.mipstart, beta = beta.mipstart, field = 'mean', field.ncn = field.ncn)
-      ## cnmle = round(m) ## MLE estimate for CN
-      ## residual.min = ((m-cnmle)/(segstats$sd))^2
-      ## residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
-      ## residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
-      ## fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-      ## branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
-
-      ## ## path endpoints are either fix or branch
-      ## endpoints = union(fix, branch)
-
-      ## compute residual as difference between rounded and "mean" value
-      n_hat = varmeta[type == 'interval', mipstart]
-      mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
-      eps_hat = mu_hat - n_hat
-      varmeta[type == 'residual', mipstart := eps_hat]
-    }
-  }
-
-  # setup MIP
-  if (use.gurobi) # translate into gurobi
-  {
-    if (verbose)
-      {
-        jmessage('Running gurobi!')
-      }
-
-      model = list()
-      model$A = Amat
-      model$rhs = b;
-      model$sense = c('E'='=', 'G'='>=', 'L'='<=')[sense]
-      model$Q = Qobj;
-      model$obj = cvec;
-      model$lb = lb;
-      model$ub = ub;
-      model$vtype = vtype;
-      model$modelsense = 'min';
-
-      if (!is.na(gamma))
-        {
-          mu_hat = as.vector(round(((segstats$mean-gamma)/beta)));
-          model$start = rep(NA, n);
-          model$start[v.ix] = mu_hat;
-          model$start[s.ix] = segstats$mean-(mu_hat*beta+gamma);
-          model$start[gamma.ix] = gamma;
-          model$start[is.infinite(model$start)] = NA;
+        for (i in 1:length(ix)){
+            if (any(iy <<- edges[,2] %in% ix[i])){
+                Aineq_ein[i, e.ix[iy]] = 1  ## constrain the sum of edges entering this vertex
+            }
         }
 
-      sol = gurobi::gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
-      sol$xopt = sol$x;
+        consmeta = rbind(consmeta, data.frame(type = 'EdgeInUB', label = paste('EdgeInUB', ix), sense = 'L', b = bineq_ein, stringsAsFactors = F))
+
+        Amat = rBind(Amat, Aineq_ein)
+        b = c(b, bineq_ein)
+        sense = c(sense, senseineq_ein)
+    }  
+
+    # quadratic portion of objective function
+    Qobj = Zero;
+
+    if (length(v.ix.c>0)){
+        Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
     }
-  else
-  {
-    control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis))
-    if (!is.null(mipstart)) ## apply mipstart if provided
-      control$mipstart = varmeta$mipstart
-    sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = control)
+
+    EPS = 0.000000000001
+    if (na.node.nudge){
+        ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
+        if (length(v.ix.na)>0){
+            if (verbose){
+                jmessage('NA nudging node!!')
+            }
+            Qobj[cbind(v.ix.na, v.ix.na)] = EPS
+        }
     }
-  if (is.null(sol$xopt))
-    sol.l = sol
-  else
-    sol.l = list(sol);
 
-  adj = as(adj, 'sparseMatrix');
-  mu = segstats$mean
-  sd = segstats$sd
-  segstats = segstats[, c()]
-  segstats$mean = mu
-  segstats$sd = sd
-  segstats$ncn = ncn
+    ## linear portion of objective function
+    cvec = Zero[,1]
+
+    if (nrow(edges)>0){
+        cvec[e.ix] = -adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
+    }
+
+    if (!is.na(cn.prior)){
+        Qobj[cbind(d.ix, d.ix)] = 1/cn.prior^2
+    }
+
+    ## the slack prior will determine the degree of "coupling" enforced between neighboring copy states
+    ## this should be high if we think that our rearrangement annotation is quite complete
+    ## in the end, there will be tension between enforcing edge consistency and consistency with means / sd
+    ## abundances at intervals
+    if (edge.slack){
+        cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
+
+        ## let any specified "loose ends" have unpenalized slack
+        if (length(loose.ends)>0){
+            cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
+        }
+
+        if (verbose>1){
+            jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
+        }
+    }
+
+    if (!any(is.na(purity.prior))){
+        Qobj[cbind(pd.ix, pd.ix)] = 1/purity.prior[2]^2
+    }
+
+    if (!is.null(mipstart)){
+        if (is.na(gamma.guess) | is.na(beta.guess)){
+            warning("Can't do JaBbA mipstart without setting purity and ploidy ... ignoring mipstart")
+        } else{
+            mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
+            setnames(mips.dt, c("row", "col"))
+            mips.dt[, cn := mipstart[cbind(row, col)]]
+            setkeyv(mips.dt, c("row", "col"))
+
+            ## convert everything to data.tables
+            varmeta = as.data.table(varmeta)
+            consmeta = as.data.table(consmeta)
+            consmeta[, id := 1:.N]
+            varmeta[, id := 1:.N]
+            varmeta[, mipstart := as.numeric(0)]
+
+            ## first mipstart the node copy number n_hat by rounding
+            ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.mipstart-ncn/2*gamma.mipstart, 0)
+            ix = varmeta[type == 'interval', id]
+            ## n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
+            cnr = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
+            cnc = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
+            varmeta[type == 'interval', mipstart := cnc[.(subid), cn]]
+            varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[.(subid), cn], na.rm = TRUE)]
+            varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
+
+            varmeta[type == 'edge', mipstart := mips.dt[.(as.data.table(edges[subid, ])), cn]]
+            varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
+  
+            ## now mipstart each target and source slack
+            ## which is just the difference between the copy number at
+            ## c_i and the incoming / outgoing edges
+
+            e_hat = varmeta[type == 'edge', mipstart]
+            n_hat = varmeta[type == 'interval', mipstart]
+            ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
+            Bs = Amat[consmeta[type == 'EdgeSource', id],]
+            six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+            s_slack_hat = rep(0, length(n_hat))
+            if (length(varmeta[type == "edge", id])>0){
+                s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
+            }
+            s_slack_hat[is.na(s_slack_hat)] = 0
+            varmeta[type == 'source.slack', mipstart := s_slack_hat]
+    
+            ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
+            Bt = Amat[consmeta[type == 'EdgeTarget', id],]
+            tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+            t_slack_hat = rep(0, length(n_hat))
+            if (length(varmeta[type == "edge", id])>0){
+                t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
+            }
+            t_slack_hat[is.na(t_slack_hat)] = 0
+
+            varmeta[type == 'target.slack', mipstart := t_slack_hat]
+            varmeta[label == 'beta', mipstart := beta.guess]
+            varmeta[label == 'gamma', mipstart := gamma.guess]
+
+            ## now we have a lot of slacks
+            ## so we need to "straighten" out all high variance nodes
+            ## with respect to their nearest low variance node
+            ## we draw an arbitrary distinction between low and high variance using
+
+            ## m = rel2abs(segstats, gamma = gamma.mipstart, beta = beta.mipstart, field = 'mean', field.ncn = field.ncn)
+            ## cnmle = round(m) ## MLE estimate for CN
+            ## residual.min = ((m-cnmle)/(segstats$sd))^2
+            ## residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
+            ## residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
+            ## fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
+            ## branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
+
+            ## ## path endpoints are either fix or branch
+            ## endpoints = union(fix, branch)
+
+            ## compute residual as difference between rounded and "mean" value
+            n_hat = varmeta[type == 'interval', mipstart]
+            mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
+            eps_hat = mu_hat - n_hat
+            varmeta[type == 'residual', mipstart := eps_hat]
+        }
+    }
+
+    ## setup MIP
+    ## translate into gurobi
+    if (use.gurobi){
+        if (verbose){
+            jmessage('Running gurobi!')
+        }
+
+        model = list()
+        model$A = Amat
+        model$rhs = b;
+        model$sense = c('E'='=', 'G'='>=', 'L'='<=')[sense]
+        model$Q = Qobj;
+        model$obj = cvec;
+        model$lb = lb;
+        model$ub = ub;
+        model$vtype = vtype;
+        model$modelsense = 'min';
+  
+        if (!is.na(gamma)){
+            mu_hat = as.vector(round(((segstats$mean-gamma)/beta)));
+            model$start = rep(NA, n);
+            model$start[v.ix] = mu_hat;
+            model$start[s.ix] = segstats$mean-(mu_hat*beta+gamma);
+            model$start[gamma.ix] = gamma;
+            model$start[is.infinite(model$start)] = NA;
+        }
+
+        sol = gurobi::gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
+        sol$xopt = sol$x;
+    } else {
+        control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis))
+        if (!is.null(mipstart)){
+            ## apply mipstart if provided
+            control$mipstart = varmeta$mipstart
+        }
+        sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = control)
+    }
+
+    if (is.null(sol$xopt)){
+        sol.l = sol
+    } else{
+        sol.l = list(sol);
+    }
+
+    adj = as(adj, 'sparseMatrix');
+    mu = segstats$mean
+    sd = segstats$sd
+    segstats = segstats[, c()]
+    segstats$mean = mu
+    segstats$sd = sd
+    segstats$ncn = ncn
+  
+
+    sol.l = lapply(sol.l, function(sol){
+        vcn = round(sol$xopt[v.ix])
+        ecn = round(sol$xopt[e.ix])
+        sol$residual = round(sol$xopt[s.ix])
+        sol$beta = sol$xopt[beta.ix]
+        sol$gamma = sol$xopt[gamma.ix]
+        sol$purity = 2/(2+sol$gamma)
+        sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
+        sol$adj = adj*0;
+        if (length(v.ix.c)>0){
+            sol$nll.cn = (sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]]
+        } else{
+            sol$nll.cn = NA
+        }
+
+        if (length(v.ix.c)>0){
+            sol$nll.opt = pp.nll(segstats[v.ix.c], gamma = sol$gamma, beta = sol$beta, field = 'mean', field.ncn = field.ncn)$NLL
+        } else{
+            sol$nll.opt = NA
+        }
+
+        sol$gap.cn = as.numeric(1 - sol$nll.opt / sol$nll.cn)
+        sol$adj[edges] = ecn;
+        sol$segstats = segstats
+        sol$segstats$cn = round(vcn)
+        sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
+        sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
+        sol$segstats$edges.in = sapply(1:length(sol$segstats),
+            function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+        sol$segstats$edges.out = sapply(1:length(sol$segstats),
+            function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
+
+        if (edge.slack){
+            sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
+            sol$segstats$eslack.out = round(sol$xopt[es.s.ix])
+            sol$eslack.in = round(sol$xopt[es.t.ix])
+            sol$eslack.out = round(sol$xopt[es.s.ix])
+        }
+
+        sol$ploidy.constraints = c(ploidy.min, ploidy.max)
+        sol$beta.constraints = c(beta.min, beta.max)
+        sol$cn.prior = cn.prior
+        sol$slack.prior = slack.prior
 
 
-  sol.l = lapply(sol.l, function(sol)
-  {
-           vcn = round(sol$xopt[v.ix])
-           ecn = round(sol$xopt[e.ix])
-           sol$residual = round(sol$xopt[s.ix])
-           sol$beta = sol$xopt[beta.ix]
-           sol$gamma = sol$xopt[gamma.ix]
-           sol$purity = 2/(2+sol$gamma)
-           sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
-#           sol$mu.all = mu.all
-           sol$adj = adj*0;
-           if (length(v.ix.c)>0)
-             sol$nll.cn = (sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]]
-           else
-             sol$nll.cn = NA
+        return(sol)
+    });
 
-#           sol$nll.opt = pp.nll(segstats[v.ix.c], sol$purity, sol$ploidy, field = 'mean')$NLL
-           if (length(v.ix.c)>0)
-             sol$nll.opt = pp.nll(segstats[v.ix.c], gamma = sol$gamma, beta = sol$beta, field = 'mean', field.ncn = field.ncn)$NLL
-           else
-             sol$nll.opt = NA
+    sol.l = sol.l[order(sapply(sol.l, function(x) x$obj))]
 
-           sol$gap.cn = as.numeric(1 - sol$nll.opt / sol$nll.cn)
-           sol$adj[edges] = ecn;
-           sol$segstats = segstats
-           sol$segstats$cn = round(vcn)
-           sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
-           sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
-           sol$segstats$edges.in = sapply(1:length(sol$segstats),
-             function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-           sol$segstats$edges.out = sapply(1:length(sol$segstats),
-             function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
+    if (length(sol.l)==1){
+        sol.l = sol.l[[1]]
+    }
 
-           if (edge.slack)
-             {
-
-               sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
-               sol$segstats$eslack.out = round(sol$xopt[es.s.ix])
-               sol$eslack.in = round(sol$xopt[es.t.ix])
-               sol$eslack.out = round(sol$xopt[es.s.ix])
-             }
-
-           sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-           sol$beta.constraints = c(beta.min, beta.max)
-           sol$cn.prior = cn.prior
-           sol$slack.prior = slack.prior
-
-
-           return(sol)
-         });
-
-  sol.l = sol.l[order(sapply(sol.l, function(x) x$obj))]
-
-  if (length(sol.l)==1)
-    sol.l = sol.l[[1]]
-
-  return(sol.l)
+    return(sol.l)
 }
 
 
@@ -2681,7 +2602,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = TRUE, keep.all = TRUE)
         out$edges$col[loose.ix] = alpha('blue', 0.6)
         rh = 0.5 + runif(length(loose.ix)/2)
         out$edges$h[loose.ix] = rh[match(ed.id[loose.ix], unique(ed.id[loose.ix]))]
-        # out$edges$h = ifelse(out$edges$type == 'loose', rand(nrow(out$edges)), 1)
+        ## out$edges$h = ifelse(out$edges$type == 'loose', rand(nrow(out$edges)), 1)
     }
 
     if (nrow(out$edges)>0){
@@ -2759,7 +2680,7 @@ jbaMIP.process = function(
     ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object,
     ## corresponding to + and - strands of the same interval
     sol,
-    allelic = F
+    allelic = FALSE
 )
 {
     if (allelic){
@@ -2858,6 +2779,7 @@ jbaMIP.process = function(
 
     return(list(e = e, e.ij = ed.ij, B = Bs, eclass = eclass, etype = c(ifelse(grepl('slack', colnames(Bs)), 'slack', 'nonslack'))))
 }
+
 
 
 ####################
@@ -3242,6 +3164,7 @@ pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, fie
 }
 
 
+
 #############################################################
 #' @name munlist
 #' @rdname internal
@@ -3332,7 +3255,6 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
     return(ra.sol)
 }
-
 
 
 
@@ -3450,6 +3372,8 @@ vaggregate = function(...)
     return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
 }
 
+
+
 #' @name write.tab
 #' @rdname internal
 write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
@@ -3461,13 +3385,16 @@ write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
 
+
+
 alpha = function(col, alpha)
 {
-  col.rgb = col2rgb(col)
-  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-  names(out) = names(col)
-  return(out)
+    col.rgb = col2rgb(col)
+    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
 }
+
 
 
 #' @name ra_tier
@@ -3679,6 +3606,8 @@ mmatch = function(A, B, dir = 1)
     return(match(Atxt, Btxt))
 }
 
+
+
 #####################################################
 #' @name all.paths
 #' @rdname internal
@@ -3793,6 +3722,8 @@ all.paths = function(A,
 
     return(out)
 }
+
+
 
 ###############################################
 #' @name collapse.paths
@@ -4009,6 +3940,7 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 }
 
 
+
 ##################################
 #' @name convex.basis
 #' @rdname internal
@@ -4099,133 +4031,114 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
             cat('Iter ', iter, " Row ", i, ":", length(zero_elements), " zero elements ", length(pos_elements), " pos elements ", length(neg_elements), " neg elements \n")
         }
 
-        if (length(pos_elements)>0 & length(neg_elements)>0)
-          for (m in seq(1, length(pos_elements), interval))
-            for (l in seq(1, length(neg_elements), interval))
-              {
-                ind_pos = c(m:min(c(m+interval, length(pos_elements))))
-                ind_neg = c(l:min(c(l+interval, length(neg_elements))))
+        if (length(pos_elements)>0 & length(neg_elements)>0){
+            for (m in seq(1, length(pos_elements), interval)){
+                for (l in seq(1, length(neg_elements), interval)){
+                    ind_pos = c(m:min(c(m+interval, length(pos_elements))))
+                    ind_neg = c(l:min(c(l+interval, length(neg_elements))))
 
-                indpairs = cbind(rep(pos_elements[ind_pos], length(ind_neg)),
-                  rep(neg_elements[ind_neg], each = length(ind_pos))); # cartesian product of ind_pos and ind_neg
-                pix = rep(1:nrow(indpairs), 2)
-                ix = c(indpairs[,1], indpairs[,2])
-#                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
-                coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
-                combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
-                combs[cbind(pix, ix)] = coeff;
+                    indpairs = cbind(rep(pos_elements[ind_pos], length(ind_neg)), rep(neg_elements[ind_neg], each = length(ind_pos))); # cartesian product of ind_pos and ind_neg
+                    pix = rep(1:nrow(indpairs), 2)
+                    ix = c(indpairs[,1], indpairs[,2])
+                    coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
+                    combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
+                    combs[cbind(pix, ix)] = coeff;
 
-                H = combs %*% K_last;
+                    H = combs %*% K_last;
 
-                # remove duplicated rows in H (with respect to sparsity)
-                H = H[!duplicated(as.matrix(H)>ZERO), ];
+                    ## remove duplicated rows in H (with respect to sparsity)
+                    H = H[!duplicated(as.matrix(H)>ZERO), ];
 
-                # remove rows in H that have subsets in H (with respect to sparsity) ..
-                if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
-                  {
-                    print('Exceeding maximum number of chunks in convex.basis computation')
-                    stop('Exceeding maximum number of chunks in convex.basis computation')
-                  }
-                keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
-                H = H[keep, , drop = FALSE]
+                    # remove rows in H that have subsets in H (with respect to sparsity) ..
+                    if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks){
+                        print('Exceeding maximum number of chunks in convex.basis computation')
+                        stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+                    }
+                    keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
+                    H = H[keep, , drop = FALSE]
 
-                # remove rows in H that have subsets in K_i2
-                if (!is.null(K_i2))
-                  if (nrow(K_i2)>0)
-                    {
-                      if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks)
-                        {
-                          print('Exceeding maximum number of chunks in convex.basis computation')
-                          stop('Exceeding maximum number of chunks in convex.basis computation')
+                    ## remove rows in H that have subsets in K_i2
+                    if (!is.null(K_i2)){
+                        if (nrow(K_i2)>0){
+                            if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks){
+                                print('Exceeding maximum number of chunks in convex.basis computation')
+                                stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+                            }
+                            keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
+                            H = H[keep, , drop = FALSE]
                         }
-                      keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
-                      H = H[keep, , drop = FALSE]
                     }
 
-                # remove rows in H that have subsets in K_i1
-                if (!is.null(K_i1))
-                  if (nrow(K_i1)>0)
-                    {
-                      if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks)
-                        {
-                          print('Exceeding maximum number of chunks in convex.basis computation')
-                          stop('Exceeding maximum number of chunks in convex.basis computation')
+                    ## remove rows in H that have subsets in K_i1
+                    if (!is.null(K_i1)){
+                        if (nrow(K_i1)>0){
+                            if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks){
+                                print('Exceeding maximum number of chunks in convex.basis computation')
+                                stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+                            }
+                            keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
+                            H = H[keep, , drop = FALSE]
                         }
-                      keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
-                      H = H[keep, , drop = FALSE]
                     }
 
-                # maintain numerical stability
-                if ((iter %% 10)==0)
-                  H = diag(1/apply(abs(H), 1, max)) %*% H
+                    # maintain numerical stability
+                    if ((iter %% 10)==0){
+                        H = diag(1/apply(abs(H), 1, max)) %*% H
+                    }     
 
-                K_i2 = rbind(K_i2, as.matrix(H))
-              }
-
-
+                    K_i2 = rbind(K_i2, as.matrix(H))
+                }
+            }
+        }
+            
         K_i = rbind(K_i1, K_i2) ## new basis set
 
-        if (nrow(K_i)==0)
-          return(matrix())
+        if (nrow(K_i)==0){
+            return(matrix())
+        }
 
-        if (!is.null(exclude.basis)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-          {
-            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks)
-              {
+        if (!is.null(exclude.basis)) {
+            ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks){
                 print('Exceeding maximum number of chunks in convex.basis computation')
-                stop('Exceeding maximum number of chunks in convex.basis computation')
-              }
+                stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+            }
             keep = Matrix::colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
             if (verbose){
-              cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
+                cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
             }
             K_i = K_i[keep, , drop = F]
-          }
+        }
 
-        if (!is.null(exclude.range)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-          {
+        if (!is.null(exclude.range)) {
+            ## only keep vectors that fail to intersect all vectors "exclude" in matrix
             A_i_abs = abs(A) %*% t(K_i)
-            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks)
-              {
+            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks){
                 print('Exceeding maximum number of chunks in convex.basis computation')
-                stop('Exceeding maximum number of chunks in convex.basis computation')
-              }
+                stop('Error: Exceeding maximum number of chunks in convex.basis computation')
+            }
             keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
             if (verbose){
-              cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
+                cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
             }
             K_i = K_i[keep, , drop = F]
-          }
+        }
 
         A_i = A %*% t(K_i)
-      }
+    }
 
     return(t(K_i))
-  }
+}
 
 
 
 
-############################################
-#' @name read.junctions
-#' @rdname internal
-#' @title read.jucntions
-#' @description
-#'
-#' Takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
-#' and returns junctions in VCF format.
-#'
-#' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
-#'
-#' @import VariantAnnotation
-#' @export
-############################################
 read.junctions = function(rafile, 
-    keep.features = TRUE, 
-    seqlengths = hg_seqlengths(),
-    chr.convert = TRUE, 
+    keep.features = T, 
+    seqlengths = hg_seqlengths(), 
+    chr.convert = T, 
     snowman = FALSE, 
-    swap.header = NULL, 
+    swap.header = NULL,  
     breakpointer = FALSE, 
     seqlevels = NULL, 
     force.bnd = FALSE, 
@@ -4233,348 +4146,357 @@ read.junctions = function(rafile,
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
 )
 {
-    if (is.character(rafile))
-          {
-              if (grepl('(.bedpe$)', rafile))
-              {
-                      ra.path = rafile
-                      cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
+    if (is.character(rafile)){
+        if (grepl('(.bedpe$)', rafile)){
+            ra.path = rafile
+            cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
-                      ln = readLines(ra.path)
-                      if (is.na(skip))
-                      {
-                              nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-                              if (is.infinite(nh)){
-                                  nh = 1
-                              }
-                      } else{
-                          nh = skip
-                      }
+            ln = readLines(ra.path)
+            if (is.na(skip))
+            {
+                nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                if (is.infinite(nh)){
+                    nh = 1
+                }
+            }
+            else{
+                nh = skip
+            }
 
 
-                      if ((length(ln)-nh)==0){
-                          if (get.loose){
-                              return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-                          } else{
-                              return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-                          }
-                      }
+            if ((length(ln)-nh)==0){
+                if (get.loose){
+                    return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+                } else{
+                    return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
+                }
+            }
 
-                      if (nh ==0){
-                          rafile = fread(rafile, header = FALSE)
-                      } else{
-                              rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
-                              if (is.null(rafile)){
-                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
-                              }
-                              if (is.null(rafile)){
-                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
-                              }
-                              if (is.null(rafile)){
-                                  stop('Error reading bedpe')
-                              }
-                      }
-                      setnames(rafile, 1:length(cols), cols)
-                      rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
-                      rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
 
-              } else if (grepl('(vcf$)|(vcf.gz$)', rafile)) {
-                      vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-                      if (!('SVTYPE' %in% names(info(vcf)))) {
-                        warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-                          return(GRangesList());
+            if (nh ==0){
+                rafile = fread(rafile, header = FALSE)
+            } else {
+    
+                rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
+                if (is.null(rafile)){
+                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                }
+    
+                if (is.null(rafile)){
+                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                }
+
+                if (is.null(rafile)){
+                    stop('Error reading bedpe')
+                }
+            }
+            setnames(rafile, 1:length(cols), cols)
+            rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
+            rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
+
+        } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+            vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+            if (!('SVTYPE' %in% names(info(vcf)))) {
+                warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+                return(GRangesList());
+            }
+
+            ## vgr = rowData(vcf) ## parse BND format
+            vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
+
+            ## no events
+            if (length(vgr) == 0){
+                return (GRangesList())
+            }
+
+            ## fix mateids if not included
+            if (!"MATEID"%in%colnames(mcols(vgr))) {
+                nm <- vgr$MATEID <- names(vgr)
+                ix <- grepl("1$",nm)
+                vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
+                vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
+                vgr$SVTYPE="BND"
+            }
+
+            if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
+                stop("Error: MATEID or SVTYPE not included. Required")
+            }
+
+            vgr$mateid = vgr$MATEID
+
+            if (!is.character(vgr$mateid)){
+                vgr$mateid = unstrsplit(vgr$MATEID)
+                if (any(nix<-nchar(vgr$mateid)==0)){
+                    vgr$mateid[nix] = NA
+                }
+            }
+
+            if (is.null(vgr$SVTYPE)){
+                vgr$svtype = vgr$SVTYPE
+            } else{
+                vgr$svtype = vgr$SVTYPE
+            }
+
+            if (!is.null(info(vcf)$SCTG)){
+                vgr$SCTG = info(vcf)$SCTG
+            }
+
+            if (force.bnd){
+                vgr$svtype = "BND"
+            }
+
+            if (sum(vgr$svtype == 'BND')==0){
+                warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+            }
+
+            if (!all(vgr$svtype == 'BND')){
+                warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
+            }
+
+            bix = which(vgr$svtype == "BND")
+            vgr = vgr[bix]
+            alt <- sapply(vgr$ALT, function(x) x[1])
+            vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
+            vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
+            vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+            vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
+            vgr$mcoord = gsub('chr', '', vgr$mcoord)
+
+            if (all(is.na(vgr$mateid))){
+                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                    warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                    vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                } else if (!is.null(vgr$SCTG)){
+                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                    ucoord = unique(c(vgr$coord, vgr$mcoord))
+                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+
+                    if (any(duplicated(vgr$mateid))){
+                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                        bix = bix[!duplicated(vgr$mateid)]
+                        vgr = vgr[!duplicated(vgr$mateid)]
                     }
+                } else{
+                    stop('Error: MATEID tag missing')
+                }
+            }
 
-                      ## vgr = rowData(vcf) ## parse BND format
-                      vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
+            vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
-                      ## no events
-                      if (length(vgr) == 0)
-                        return (GRangesList())
+            pix = which(!is.na(vgr$mix))
 
-                      ## fix mateids if not included
-                      if (!"MATEID"%in%colnames(mcols(vgr))) {
-                        nm <- vgr$MATEID <- names(vgr)
-                        ix <- grepl("1$",nm)
-                        vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-                        vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-                        vgr$SVTYPE="BND"
-                      }
+            vgr.pair = vgr[pix]
 
-                      if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
-                        stop("MATEID or SVTYPE not included. Required")
+            if (length(vgr.pair)==0){
+                stop('Error: No mates found despite nonzero number of BND rows in VCF') 
+            }
+            vgr.pair$mix = match(vgr.pair$mix, pix)
+            vix = which(1:length(vgr.pair)<vgr.pair$mix )
+            vgr.pair1 = vgr.pair[vix]
+            vgr.pair2 = vgr.pair[vgr.pair1$mix]
 
-                      vgr$mateid = vgr$MATEID
+            ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
 
-                      if (!is.character(vgr$mateid))
-                          {
-                            vgr$mateid = unstrsplit(vgr$MATEID)
-                            if (any(nix<-nchar(vgr$mateid)==0))
-                              vgr$mateid[nix] = NA
-                          }
+            ## if "first" and "right" then we set this entry "-" and the second entry "+"
+            tmpix = vgr.pair1$first & vgr.pair1$right
+            if (any(tmpix)){
+                strand(vgr.pair1)[tmpix] = '-'
+                strand(vgr.pair2)[tmpix] = '+'
+            }
 
-                      if (is.null(vgr$SVTYPE))
-                          vgr$svtype = vgr$SVTYPE
-                      else
-                          vgr$svtype = vgr$SVTYPE
+            ## if "first" and "left" then "-", "-"
+            tmpix = vgr.pair1$first & !vgr.pair1$right
+            if (any(tmpix)){
+                strand(vgr.pair1)[tmpix] = '-'
+                strand(vgr.pair2)[tmpix] = '-'
+            }
+    
+            ## if "second" and "left" then "+", "-"
+            tmpix = !vgr.pair1$first & !vgr.pair1$right
+            if (any(tmpix)){
+                strand(vgr.pair1)[tmpix] = '+'
+                strand(vgr.pair2)[tmpix] = '-'
+            }
 
-                      if (!is.null(info(vcf)$SCTG))
-                          vgr$SCTG = info(vcf)$SCTG
+            ## if "second" and "right" then "+", "+"
+            tmpix = !vgr.pair1$first & vgr.pair1$right
+            if (any(tmpix)){
+                strand(vgr.pair1)[tmpix] = '+'
+                strand(vgr.pair2)[tmpix] = '+'
+            }
 
-                      if (force.bnd)
-                          vgr$svtype = "BND"
+            pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+            if (any(pos1)){
+                start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
+                end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
+            }
 
-                      if (sum(vgr$svtype == 'BND')==0)
-                          warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+            pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+            if (any(pos2)){
+                start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
+                end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
+            }
+            ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
 
-                      if (!all(vgr$svtype == 'BND'))
-                          warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
+            this.inf = values(vgr)[bix[pix[vix]], ]
 
-                      bix = which(vgr$svtype == "BND")
-                      vgr = vgr[bix]
-                      alt <- sapply(vgr$ALT, function(x) x[1])
-                      vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-                      vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-                      vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-                      vgr$mcoord = gsub('chr', '', vgr$mcoord)
+            if (is.null(this.inf$POS)){
+                this.inf = cbind(data.frame(POS = ''), this.inf)
+            }
+            if (is.null(this.inf$CHROM)){
+                this.inf = cbind(data.frame(CHROM = ''), this.inf)
+            }
 
-                      if (all(is.na(vgr$mateid)))
-                          if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                              }
-                          else if (!is.null(vgr$SCTG))
-                              {
-                                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+            if (is.null(this.inf$MATL)){
+                this.inf = cbind(data.frame(MALT = ''), this.inf)
+            }
 
-                                  if (any(duplicated(vgr$mateid)))
-                                      {
-                                          warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                                          bix = bix[!duplicated(vgr$mateid)]
-                                          vgr = vgr[!duplicated(vgr$mateid)]
-                                      }
-                              }
-                          else
-                              stop('MATEID tag missing')
+            this.inf$CHROM = seqnames(vgr.pair1)
+            this.inf$POS = start(vgr.pair1)
+            this.inf$MATECHROM = seqnames(vgr.pair2)
+            this.inf$MATEPOS = start(vgr.pair2)
+            this.inf$MALT = vgr.pair2$AL
 
-                      vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
+            values(ra) = this.inf
 
-                      pix = which(!is.na(vgr$mix))
+            if (is.null(values(ra)$TIER)){
+                values(ra)$tier = ifelse(values(ra)$FILTER == "PASS", 2, 3) ## baseline tiering of PASS vs non PASS variants
+            } else{
+                values(ra)$tier = values(ra)$TIER
+            }
 
-                      vgr.pair = vgr[pix]
+            if (!get.loose){
+                return(ra)
+            } else{
+                npix = is.na(vgr$mix)
+                vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
 
-                      if (length(vgr.pair)==0)
-                          stop('No mates found despite nonzero number of BND rows in VCF')
-                      vgr.pair$mix = match(vgr.pair$mix, pix)
-                      vix = which(1:length(vgr.pair)<vgr.pair$mix )
-                      vgr.pair1 = vgr.pair[vix]
-                      vgr.pair2 = vgr.pair[vgr.pair1$mix]
+                ## NOT SURE WHY BROKEN
+                tmp =  tryCatch( values(vgr)[bix[npix], ],
+                        error = function(e) NULL)
+                if (!is.null(tmp)){
+                    values(vgr.loose) = tmp
+                } else{
+                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+                }
 
-                      ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
+                return(list(junctions = ra, loose.ends = vgr.loose))
+            }
+        } else{
+            rafile = read.delim(rafile)
+        }
+    }
 
-                      ## if "first" and "right" then we set this entry "-" and the second entry "+"
-                      tmpix = vgr.pair1$first & vgr.pair1$right
-                      if (any(tmpix))
-                          {
-                              strand(vgr.pair1)[tmpix] = '-'
-                              strand(vgr.pair2)[tmpix] = '+'
-                          }
+    if (is.data.table(rafile)){
+        rafile = as.data.frame(rafile)
+    }
 
-                      ## if "first" and "left" then "-", "-"
-                      tmpix = vgr.pair1$first & !vgr.pair1$right
-                      if (any(tmpix))
-                          {
-                              strand(vgr.pair1)[tmpix] = '-'
-                              strand(vgr.pair2)[tmpix] = '-'
-                          }
-
-                      ## if "second" and "left" then "+", "-"
-                      tmpix = !vgr.pair1$first & !vgr.pair1$right
-                      if (any(tmpix))
-                          {
-                              strand(vgr.pair1)[tmpix] = '+'
-                              strand(vgr.pair2)[tmpix] = '-'
-                          }
-
-                      ## if "second" and "right" then "+", "+"
-                      tmpix = !vgr.pair1$first & vgr.pair1$right
-                      if (any(tmpix))
-                          {
-                              strand(vgr.pair1)[tmpix] = '+'
-                              strand(vgr.pair2)[tmpix] = '+'
-                          }
-
-                      pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-                      if (any(pos1))
-                          {
-                              start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
-                              end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
-                          }
-
-                      pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-                      if (any(pos2))
-                          {
-                              start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
-                              end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
-                          }
-                      ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
-
-                      this.inf = values(vgr)[bix[pix[vix]], ]
-
-                      if (is.null(this.inf$POS))
-                          this.inf = cbind(data.frame(POS = ''), this.inf)
-                      if (is.null(this.inf$CHROM))
-                          this.inf = cbind(data.frame(CHROM = ''), this.inf)
-
-                      if (is.null(this.inf$MATL))
-                          this.inf = cbind(data.frame(MALT = ''), this.inf)
-
-                      this.inf$CHROM = seqnames(vgr.pair1)
-                      this.inf$POS = start(vgr.pair1)
-                      this.inf$MATECHROM = seqnames(vgr.pair2)
-                      this.inf$MATEPOS = start(vgr.pair2)
-                      this.inf$MALT = vgr.pair2$AL
-
-                      ## NOT SURE WHY BROKEN
-                      ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
-                      ## if (!is.null(tmp))
-                      ##     values(ra) = tmp
-                      ## else
-                      ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
-
-                      values(ra) = this.inf
-
-                      if (is.null(values(ra)$TIER))
-                          values(ra)$tier = ifelse(values(ra)$FILTER == "PASS", 2, 3) ## baseline tiering of PASS vs non PASS variants
-                      else
-                          values(ra)$tier = values(ra)$TIER
-
-                      if (!get.loose)
-                          return(ra)
-                      else
-                          {
-                              npix = is.na(vgr$mix)
-                              vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
-
-                              ## NOT SURE WHY BROKEN
-                              tmp =  tryCatch( values(vgr)[bix[npix], ],
-                                  error = function(e) NULL)
-                              if (!is.null(tmp))
-                                  values(vgr.loose) = tmp
-                              else
-                                  values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
-
-                              return(list(junctions = ra, loose.ends = vgr.loose))
-                          }
-                  }
-              else
-                  rafile = read.delim(rafile)
-          }
-
-     if (is.data.table(rafile)){
-             rafile = as.data.frame(rafile)
-      }
-
-      out = GRangesList()
+    out = GRangesList()
 
     if (nrow(rafile)==0)
-        {
-            values(out) = rafile
-            return(out)
-        }
+    {
+        values(out) = rafile
+        return(out)
+    }
 
-    if (snowman) ## flip breaks so that they are pointing away from junction
-      {
+    if (snowman) {
+        ## flip breaks so that they are pointing away from junction
         rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
         rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
-      }
+    }
 
-    if (!is.null(seqlevels)) ## convert seqlevels from notation in tab delim file to actual
-      {
+    if (!is.null(seqlevels)){
+        ## convert seqlevels from notation in tab delim file to actual
         rafile$chr1 = seqlevels[rafile$chr1]
         rafile$chr2 = seqlevels[rafile$chr2]
-      }
+    }
 
 
-    if (is.null(rafile$str1))
-      rafile$str1 = rafile$strand1
+    if (is.null(rafile$str1)){
+        rafile$str1 = rafile$strand1
+    }
 
-    if (is.null(rafile$str2))
-      rafile$str2 = rafile$strand2
-     if (!is.null(rafile$pos1) & !is.null(rafile$pos2))
-         {
-             if (breakpointer)
-                 {
-                     rafile$pos1 = rafile$T_BPpos1
-                     rafile$pos2 = rafile$T_BPpos2
-                 }
+    if (is.null(rafile$str2)){
+        rafile$str2 = rafile$strand2
+    }
 
-             if (!is.numeric(rafile$pos1))
-                 rafile$pos1 = as.numeric(rafile$pos1)
+    if (!is.null(rafile$pos1) & !is.null(rafile$pos2)){
+        if (breakpointer){
+            rafile$pos1 = rafile$T_BPpos1
+            rafile$pos2 = rafile$T_BPpos2
+        }
 
-             if (!is.numeric(rafile$pos2))
-                 rafile$pos2 = as.numeric(rafile$pos2)
+        if (!is.numeric(rafile$pos1)){
+            rafile$pos1 = as.numeric(rafile$pos1)
+        }
 
-             ## clean the parenthesis from the string
+        if (!is.numeric(rafile$pos2)){
+            rafile$pos2 = as.numeric(rafile$pos2)
+        }
 
-             rafile$str1 <- gsub('[()]', '', rafile$str1)
-             rafile$str2 <- gsub('[()]', '', rafile$str2)
+        ## clean the parenthesis from the string
 
-             ## goal is to make the ends point <away> from the junction where - is left and + is right
-             if (is.character(rafile$str1) | is.factor(rafile$str1))
-                 rafile$str1 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str1))))
+        rafile$str1 <- gsub('[()]', '', rafile$str1)
+        rafile$str2 <- gsub('[()]', '', rafile$str2)
+        
+        ## goal is to make the ends point <away> from the junction where - is left and + is right
+        if (is.character(rafile$str1) | is.factor(rafile$str1)){
+            rafile$str1 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str1))))
+        }
 
-             if (is.character(rafile$str2) | is.factor(rafile$str2))
-                 rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-
-
-             if (is.numeric(rafile$str1))
-                 rafile$str1 = ifelse(rafile$str1>0, '+', '-')
-
-             if (is.numeric(rafile$str2))
-                 rafile$str2 = ifelse(rafile$str2>0, '+', '-')
-
-             rafile$rowid = 1:nrow(rafile)
-
-             bad.ix = is.na(rafile$chr1) | is.na(rafile$chr2) | is.na(rafile$pos1) | is.na(rafile$pos2) | is.na(rafile$str1) | is.na(rafile$str2) | rafile$str1 == '*'| rafile$str2 == '*' | rafile$pos1<0 | rafile$pos2<0
-
-             rafile = rafile[which(!bad.ix), ]
-
-             if (nrow(rafile)==0)
-                 return(GRanges())
-
-             seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
-                 data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
-
-             if (chr.convert)
-                 seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
-
-             out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
-             out = split(out, out$ra.index)
-         }
-     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2)){
-             ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-             ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-             out = grl.pivot(GRangesList(ra1, ra2))
-      }
+        if (is.character(rafile$str2) | is.factor(rafile$str2)){
+            rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+        }
 
 
-     if (keep.features){
-         values(out) = rafile[, ]
-     }
+        if (is.numeric(rafile$str1)){
+            rafile$str1 = ifelse(rafile$str1>0, '+', '-')
+        }
+    
+        if (is.numeric(rafile$str2)){
+            rafile$str2 = ifelse(rafile$str2>0, '+', '-')
+        }
 
-      if (!get.loose){
-          return(out)
-      } else{
-          return(list(junctions = out, loose.ends = GRanges()))
-      }
+        rafile$rowid = 1:nrow(rafile)
 
-     return(out)
- }
+        bad.ix = is.na(rafile$chr1) | is.na(rafile$chr2) | is.na(rafile$pos1) | is.na(rafile$pos2) | is.na(rafile$str1) | is.na(rafile$str2) | rafile$str1 == '*'| rafile$str2 == '*' | rafile$pos1<0 | rafile$pos2<0
+
+        rafile = rafile[which(!bad.ix), ]
+
+        if (nrow(rafile)==0){
+            return(GRanges())
+        }
+
+        seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
+            data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
+
+        if (chr.convert){
+            seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
+        }
+
+        out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
+        out = split(out, out$ra.index)
+    } else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2)){
+        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+        out = grl.pivot(GRangesList(ra1, ra2))
+    }
+
+    if (keep.features){
+        values(out) = rafile[, ]
+    }
+
+    if (!get.loose){
+        return(out)
+    } else{
+        return(list(junctions = out, loose.ends = GRanges()))
+    }
+
+    return(out)
+
+}
+
+
 
 
 
@@ -5247,21 +5169,21 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #' aberrant edges refer to edges described in kag$ab.edges matrix
 #####################################################
 chromoplexy = function(kag = NULL, # output of karyograph
-                      jab = NULL, ## optional alternate input, if NOT null then this will be used in place of kag
-                      sol = NULL, ## if sol is null, then copy state is ignored when determining amp or del bridges
-                      all = FALSE, ## if TRUE, will try to enumerate all possible cycles, otherwise will return (an arbitrary) minimal decomposition into the shortest "chains" of balanced rearrangements
-                      ref.only = FALSE, ## if T will only compute distance criteria on reference (i.e. won't use any subsequent rearrangements)
-                      filt.jab = TRUE, ## filter out 0 copy edges if input is a jabba object
-                      reciprocal = TRUE, ## aka deletion bridge
-                      hijacked = TRUE,  ## aka amplification bridge
-                      paths = FALSE,
-                      dist = 1e3,
-                      cn.dist = dist,
-                      verbose = FALSE,
-                      interval = 400,
-                      junc.only=TRUE,
-                      mc.cores = 1,
-                      chunksize = 5000)
+    jab = NULL, ## optional alternate input, if NOT null then this will be used in place of kag
+    sol = NULL, ## if sol is null, then copy state is ignored when determining amp or del bridges
+    all = FALSE, ## if TRUE, will try to enumerate all possible cycles, otherwise will return (an arbitrary) minimal decomposition into the shortest "chains" of balanced rearrangements
+    ref.only = FALSE, ## if T will only compute distance criteria on reference (i.e. won't use any subsequent rearrangements)
+    filt.jab = TRUE, ## filter out 0 copy edges if input is a jabba object
+    reciprocal = TRUE, ## aka deletion bridge
+    hijacked = TRUE,  ## aka amplification bridge
+    paths = FALSE,
+    dist = 1e3,
+    cn.dist = dist,
+    verbose = FALSE,
+    interval = 400,
+    junc.only=TRUE,
+    mc.cores = 1,
+    chunksize = 5000)
 {
     if (!is.null(jab)){
         if (filt.jab){
