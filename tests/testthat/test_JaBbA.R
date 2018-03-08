@@ -5,7 +5,7 @@ coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
 ## test_that("JaBbA", {
-##    set.seed(42);
+##  
 ##    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
 ##    expect_equal(all(jab$segstats$cn == c(2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 1, 2, 8, 15, 8, 13, 18, 19, 14, 19, 25, 13, 19, 15, 20, 16, 15, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 1, 2, 8, 15, 8, 13, 18, 19, 14, 19, 25, 13, 19, 15, 20, 16, 15, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)), TRUE)
 ##    expect_equal(abs(jab$ploidy-2.550274)<1e-6, TRUE)
