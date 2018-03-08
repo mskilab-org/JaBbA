@@ -5126,214 +5126,202 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @param cnv flag whether to dump in CNV format
 #' @return returns character string or writes to file if specified
 #########################################
-jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE)
-    {
-      if (is.null(hg))
+jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE){
+    if (is.null(hg)){
         hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
+    }
 
-        vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
+    vcffields = c('CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'GENO')
 
-        ## convert all aberrant connections into pairs of VCF rows
-        if (!cnv)
-            {
-                jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
-                abs = rbind(jab$ab.edges[jix,1:2,1])
-                rabs = rbind(jab$ab.edges[jix,1:2,2])
-                rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
+    ## convert all aberrant connections into pairs of VCF rows
+    if (!cnv){
+        jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
+        abs = rbind(jab$ab.edges[jix,1:2,1])
+        rabs = rbind(jab$ab.edges[jix,1:2,2])
+        rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
 
-                adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
-                adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
-                adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
+        adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
+        adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
+        adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
 
-                if (any(jab$segstatsloose))
-                    {
-                        adj.ref[jab$segstats$loose, ] = 0
-                        adj.ref[,jab$segstats$loose] = 0
-                    }
+        if (any(jab$segstatsloose)){
+            adj.ref[jab$segstats$loose, ] = 0
+            adj.ref[,jab$segstats$loose] = 0
+        }
+        
+        if (length(jix)>0){
+            jcn = jab$adj[abs]
+            gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
+            gr1$jid = jix
+            gr1$nid = abs[,1]
+            gr1$acn = jcn
+            gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])
+            gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
 
-                if (length(jix)>0)
-                    {
-                        jcn = jab$adj[abs]
-                        gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
-                        gr1$jid = jix
-                        gr1$nid = abs[,1]
-                        gr1$acn = jcn
-                        gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])
-                        gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
+            gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
+            gr2$jid = jix
+            gr2$nid = abs[,2]
+            gr2$acn = jcn
+            gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
+            gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
 
-                        gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
-                        gr2$jid = jix
-                        gr2$nid = abs[,2]
-                        gr2$acn = jcn
-                        gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
-                        gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
+            gr1$mid = gr2$ID
+            gr2$mid = gr1$ID
 
-                        gr1$mid = gr2$ID
-                        gr2$mid = gr1$ID
+            gr1$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr1))), error = function(e) 'N')
+            gr1$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(gr1$REF, '[', seqnames(gr2), ':', start(gr2), '[', sep = ''),
+                ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr1$REF, ']', seqnames(gr2), ':', start(gr2), ']', sep = ''),
+                    ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr2), ':', start(gr2), '[', gr1$REF, sep = ''),
+                        paste(']', seqnames(gr2), ':', start(gr2), ']', gr1$REF, sep = '')))) ## last one is A- --> B-
 
-                        gr1$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr1))), error = function(e) 'N')
-                        gr1$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(gr1$REF, '[', seqnames(gr2), ':', start(gr2), '[', sep = ''),
-                            ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr1$REF, ']', seqnames(gr2), ':', start(gr2), ']', sep = ''),
-                                   ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr2), ':', start(gr2), '[', gr1$REF, sep = ''),
-                                          paste(']', seqnames(gr2), ':', start(gr2), ']', gr1$REF, sep = '')))) ## last one is A- --> B-
-
-                        gr2$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr2))), error = function(e) 'N')
-                        gr2$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(']', seqnames(gr1), ':', start(gr1), ']', gr2$REF, sep = ''),
-                            ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr1), ':', start(gr1), '[', gr2$REF, sep = ''),
-                                   ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
-                                          paste(gr2$REF, '[', seqnames(gr1), ':', start(gr1), '[', sep = '')))) ## last one is B- --> A-
+            gr2$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr2))), error = function(e) 'N')
+            gr2$ALT = ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='+'), paste(']', seqnames(gr1), ':', start(gr1), ']', gr2$REF, sep = ''),
+                ifelse(as.logical(strand(gr1)=='-') & as.logical(strand(gr2)=='+'), paste('[', seqnames(gr1), ':', start(gr1), '[', gr2$REF, sep = ''),
+                    ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
+                        paste(gr2$REF, '[', seqnames(gr1), ':', start(gr1), '[', sep = '')))) ## last one is B- --> A-
 
 
-                        gr1$FILTER = gr2$FILTER = ifelse(gr2$acn != 0, "PASS", "NINC")
-                        gr2$FORMAT = gr1$FORMAT = "GT:CN:RCN:SCN"
-                        gr1$GENO = paste(ifelse(gr1$rcn>0, '0/1', '1'), gr1$acn, gr1$rcn, gr1$cn, sep = ":")
-                        gr2$GENO = paste(ifelse(gr2$rcn>0, '0/1', '1'), gr2$acn, gr2$rcn, gr2$cn, sep = ":")
+            gr1$FILTER = gr2$FILTER = ifelse(gr2$acn != 0, "PASS", "NINC")
+            gr2$FORMAT = gr1$FORMAT = "GT:CN:RCN:SCN"
+            gr1$GENO = paste(ifelse(gr1$rcn>0, '0/1', '1'), gr1$acn, gr1$rcn, gr1$cn, sep = ":")
+            gr2$GENO = paste(ifelse(gr2$rcn>0, '0/1', '1'), gr2$acn, gr2$rcn, gr2$cn, sep = ":")
 
-                        gr2$CHROM = as.character(seqnames(gr2))
-                        gr1$CHROM = as.character(seqnames(gr1))
+            gr2$CHROM = as.character(seqnames(gr2))
+            gr1$CHROM = as.character(seqnames(gr1))
 
-                        gr2$POS = as.character(start(gr2))
-                        gr1$POS = as.character(start(gr1))
+            gr2$POS = as.character(start(gr2))
+            gr1$POS = as.character(start(gr1))
 
-                        gr1$QUAL = gr2$QUAL = '.'
-                        gr1$INFO = paste("SVTYPE=BND", ";MATEID=", gr1$mid, ";CNADJ=", gr1$acn, ";CNRADJ=", gr1$rcn, ";CN=", gr1$cn,
-                            ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", 1:length(gr1), sep = '')
-                        gr2$INFO = paste("SVTYPE=BND", ";MATEID=", gr2$mid, ";CNADJ=", gr2$acn, ";CNRADJ=", gr2$rcn, ";CN=", gr2$cn,
-                            ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", 1:length(gr2), sep = '')
+            gr1$QUAL = gr2$QUAL = '.'
+            gr1$INFO = paste("SVTYPE=BND", ";MATEID=", gr1$mid, ";CNADJ=", gr1$acn, ";CNRADJ=", gr1$rcn, ";CN=", gr1$cn,
+                ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", 1:length(gr1), sep = '')
+            gr2$INFO = paste("SVTYPE=BND", ";MATEID=", gr2$mid, ";CNADJ=", gr2$acn, ";CNRADJ=", gr2$rcn, ";CN=", gr2$cn,
+                ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", 1:length(gr2), sep = '')
 
-                        gr1 = gr1[, vcffields]
-                        gr2 = gr2[, vcffields]
-                    }
-                else
-                    {
-                        gr1 = GRanges()
-                        gr2 = GRanges()
-                    }
+            gr1 = gr1[, vcffields]
+            gr2 = gr2[, vcffields]
+        } else{
+            gr1 = GRanges()
+            gr2 = GRanges()
+        }
 
-                ## now loose ends
-                lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
-                if (length(lix)>0)
-                    {
-                        gr.loose = gr.start(jab$segstats[lix, 'cn']) ## loose ends should be width 1, but just in case
-                        gr.loose$jid = NA
-                        gr.loose$nid = lix
-                        gr.loose$acn = gr.loose$cn
+        ## now loose ends
+        lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
+        if (length(lix)>0){
+            gr.loose = gr.start(jab$segstats[lix, 'cn']) ## loose ends should be width 1, but just in case
+            gr.loose$jid = NA
+            gr.loose$nid = lix
+            gr.loose$acn = gr.loose$cn
 
-                        ## query parents / children of loose ends
-                        tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (i.e. is a parent)
-                        tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (i.e. is child)
+            ## query parents / children of loose ends
+            tmp1 = apply(jab$adj[gr.loose$nid, , drop = FALSE],1, function(x) which(x!=0)[1]) ## only non NA if loose end has children (i.e. is a parent)
+            tmp2 = apply(jab$adj[, gr.loose$nid, drop = FALSE],2, function(x) which(x!=0)[1]) ## only non NA if loose end has parents (i.e. is child)
 
-                        isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
-                        pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
+            isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
+            pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
 
-##                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
-                        gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            gr.loose$cn = jab$segstats$cn[pcid]
+            ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
+            gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
+            gr.loose$mid = NA
+            gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
 
+            ## again, same rationale as above, parent = left loose end, child = right loose end
+            gr.loose$ALT = ifelse(isp, paste('.', gr.loose$REF, sep = ''), paste(gr.loose$REF, '.', sep = ''))
+            gr.loose$FORMAT = "GT:CN:RCN:SCN"
+            gr.loose$GENO = paste(ifelse(gr.loose$rcn>0, '0/1', '1'), gr.loose$acn, gr.loose$rcn, gr.loose$cn, sep = ":")
+            gr.loose$CHROM = as.character(seqnames(gr.loose))
+            gr.loose$POS = start(gr.loose)
+            gr.loose$FILTER = "LOOSEEND"
+            gr.loose$QUAL = '.'
+            gr.loose$INFO = paste("SVTYPE=BND", ";CNADJ=", gr.loose$acn, ";CNRADJ=", gr.loose$rcn, ";CN=", gr.loose$cn, ";JABID=", lix, ";RJABID=", rcix[lix], sep = '')
+            gr.loose = gr.loose[, vcffields]
+        } else{
+            gr.loose = GRanges()
+        }
 
-                        gr.loose$cn = jab$segstats$cn[pcid]
-                        ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
-                        gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
-                        gr.loose$mid = NA
-                        gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
+        ### make header
+        sl = seqlengths(jab$segstats)
+        header = '##fileformat=VCFv4.2'
+        header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
+        header = c(header, '##source=JaBbAV0.1')
+        if (inherits(hg, "BSgenome")){
+            header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+        } else {
+            header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+        }
 
-                        ## again, same rationale as above, parent = left loose end, child = right loose end
-                        gr.loose$ALT = ifelse(isp, paste('.', gr.loose$REF, sep = ''), paste(gr.loose$REF, '.', sep = ''))
-                        gr.loose$FORMAT = "GT:CN:RCN:SCN"
-                        gr.loose$GENO = paste(ifelse(gr.loose$rcn>0, '0/1', '1'), gr.loose$acn, gr.loose$rcn, gr.loose$cn, sep = ":")
-                        gr.loose$CHROM = as.character(seqnames(gr.loose))
-                        gr.loose$POS = start(gr.loose)
-                        gr.loose$FILTER = "LOOSEEND"
-                        gr.loose$QUAL = '.'
-                        gr.loose$INFO = paste("SVTYPE=BND", ";CNADJ=", gr.loose$acn, ";CNRADJ=", gr.loose$rcn, ";CN=", gr.loose$cn, ";JABID=", lix, ";RJABID=", rcix[lix], sep = '')
-                        gr.loose = gr.loose[, vcffields]
-                    }
-                else
-                    gr.loose = GRanges()
+        header = c(header,
+            '##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">',
+            '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">',
+            '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
+            '##INFO=<ID=CNADJ,Number=.,Type=Integer,Description="Copy number of variant adjacency at breakend">',
+            '##INFO=<ID=CNRADJ,Number=1,Type=Integer,Description="Copy number of reference adjacency at breakend">',
+            '##INFO=<ID=CN,Number=1,Type=Integer,Description="Copy number of segment containing breakend">',
+            '##INFO=<ID=JUNCID,Number=.,Type=Integer,Description="Index of allele(s) in JaBbA junction input pile">',
+            '##INFO=<ID=JABID,Number=.,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
+            '##INFO=<ID=RJABID,Number=.,Type=Integer,Description="Index of the reverse complement containing interval allele(s) in JaBbA reconstruction">',
+            '##FILTER=<ID=PASS,Description="Junction incorporated into JaBbA MIP reconstruction at nonzero copy number">',
+            '##FILTER=<ID=LOOSEEND,Description="Loose end incorporated into JaBbA MIP reconstruction at unexplained copy break">',
+            '##FILTER=<ID=NINC,Description="Not Incorporated into JaBbA MIP reconstruction: either subclonal or false positive">',
+            '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+            '##FORMAT=<ID=CN,Number=.,Type=String,Description="Copy number of variant adjacencies">',
+            '##FORMAT=<ID=RCN,Number=1,Type=String,Description="Copy number of reference adjacency at breakend">',
+            '##FORMAT=<ID=SCN,Number=1,Type=String,Description="Copy number of segment containing breakend">'
+        )
 
-                                        # make header
-                sl = seqlengths(jab$segstats)
-                header = '##fileformat=VCFv4.2'
-                header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
-                header = c(header, '##source=JaBbAV0.1')
-                if (inherits(hg, "BSgenome"))
-                    {
-                        header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
-                    }
-                else
-                    {
-                        header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
-                    }
+        if ((length(gr1) + length(gr.loose))>0){
+            body = as.data.frame(values(c(gr1, gr2, gr.loose)))
+            body$ord = NA
+            body$ord[order(gr.stripstrand(c(gr1, gr2, gr.loose)))] = 1:nrow(body)
+            body = as.data.table(body)
+            setkeyv(body, c('CHROM', 'POS'))
 
-                header = c(header,
-                    '##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">',
-                    '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">',
-                    '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
-                    '##INFO=<ID=CNADJ,Number=.,Type=Integer,Description="Copy number of variant adjacency at breakend">',
-                    '##INFO=<ID=CNRADJ,Number=1,Type=Integer,Description="Copy number of reference adjacency at breakend">',
-                    '##INFO=<ID=CN,Number=1,Type=Integer,Description="Copy number of segment containing breakend">',
-                    '##INFO=<ID=JUNCID,Number=.,Type=Integer,Description="Index of allele(s) in JaBbA junction input pile">',
-                    '##INFO=<ID=JABID,Number=.,Type=Integer,Description="Index of the interval containing allele(s) in JaBbA reconstruction">',
-                    '##INFO=<ID=RJABID,Number=.,Type=Integer,Description="Index of the reverse complement containing interval allele(s) in JaBbA reconstruction">',
-                    '##FILTER=<ID=PASS,Description="Junction incorporated into JaBbA MIP reconstruction at nonzero copy number">',
-                    '##FILTER=<ID=LOOSEEND,Description="Loose end incorporated into JaBbA MIP reconstruction at unexplained copy break">',
-                    '##FILTER=<ID=NINC,Description="Not Incorporated into JaBbA MIP reconstruction: either subclonal or false positive">',
-                    '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-                    '##FORMAT=<ID=CN,Number=.,Type=String,Description="Copy number of variant adjacencies">',
-                    '##FORMAT=<ID=RCN,Number=1,Type=String,Description="Copy number of reference adjacency at breakend">',
-                    '##FORMAT=<ID=SCN,Number=1,Type=String,Description="Copy number of segment containing breakend">'
-                           )
-
-                if ((length(gr1) + length(gr.loose))>0)
-                    {
-                        body = as.data.frame(values(c(gr1, gr2, gr.loose)))
-                        body$ord = NA
-                        body$ord[order(gr.stripstrand(c(gr1, gr2, gr.loose)))] = 1:nrow(body)
-                        body = as.data.table(body)
-                        setkeyv(body, c('CHROM', 'POS'))
-
-                        ## useful for merging info records in painful coordinate deduping process below
-                        .infomelt = function(str)
-                            {
-                                z = lapply(strsplit(str, ";"), function(x) {y = matrix(unlist(strsplit(x, "=")), ncol = 2, byrow = T); return(structure(y[,2], names = y[,1]))})
-                                unames = unique(unlist(sapply(z, names)))
-                                mfields = c("MATEID", "CNADJ", "JUNCID", "JABID", "RJABID")
-                                mergeix = unames %in% mfields
-                                out = sapply(1:length(unames), function(i) {
-                                    x = unames[i]
-                                    tmp = sapply(z, function(y) y[x])
-                                    if (mergeix[i])
-                                        {
-                                            if (any(is.na(tmp))) tmp[is.na(tmp)] = '.';
-                                            return(paste(tmp, collapse = ','))
-                                        }
-                                    else
-                                        return(tmp[!is.na(tmp)][1])})
-                                names(out) = unames
-                                return(paste(names(out), "=", out, collapse = ";", sep = ''))
+            ## useful for merging info records in painful coordinate deduping process below
+            .infomelt = function(str){
+                z = lapply(strsplit(str, ";"), function(x) {y = matrix(unlist(strsplit(x, "=")), ncol = 2, byrow = T); return(structure(y[,2], names = y[,1]))})
+                unames = unique(unlist(sapply(z, names)))
+                mfields = c("MATEID", "CNADJ", "JUNCID", "JABID", "RJABID")
+                mergeix = unames %in% mfields
+                out = sapply(1:length(unames), function(i){
+                    x = unames[i]
+                    tmp = sapply(z, function(y) y[x])
+                        if (mergeix[i]){
+                            if (any(is.na(tmp))){
+                                tmp[is.na(tmp)] = '.';
                             }
+                            return(paste(tmp, collapse = ','))
+                        } else{
+                            return(tmp[!is.na(tmp)][1])})
+                        }
+                names(out) = unames
+                return(paste(names(out), "=", out, collapse = ";", sep = ''))
+            }
 
-                        .genomelt = function(geno, format)
-                            {
-                                if (length(geno)==1)
-                                    return(genos)
-                                genos = strsplit(geno, ":")
-                                formats = strsplit(format[1], ":")[[1]]
+            .genomelt = function(geno, format){
+                if (length(geno)==1){
+                    return(genos)
+                }
+                genos = strsplit(geno, ":")
+                formats = strsplit(format[1], ":")[[1]]
 
-                                mergeix = formats == "CN"
-                                gtix = formats == "GT" ## should be only one such entry
-                                out = genos[[1]] ## pick the first one as the default - this should be a vector length(formats)
-                                if (any(gtix))
-                                    out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
+                mergeix = formats == "CN"
+                gtix = formats == "GT" ## should be only one such entry
+                out = genos[[1]] ## pick the first one as the default - this should be a vector length(formats)
+                if (any(gtix)){
+                    out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
+                }
 
-
-                                if (any(mergeix))
+                                if (any(mergeix)){
                                     out[mergeix] = sapply(which(mergeix), function(x)
                                         paste(sapply(genos, function(y) y[[x]]), collapse = ','))
+                                }
                                 return(paste(out, collapse = ":"))
-                            }
+            }
 
                         ## dedup and collapse breakends that share coordinates into single variant sites with several alleles
                         body = body[, list(
@@ -5442,7 +5430,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                 close(t)
                 return(out)
             }
-    }
+}
 
 
 
