@@ -170,34 +170,31 @@ JaBbA = function(
     verbose = TRUE ## whether to provide verbose output
     )
 {
-  system(paste('mkdir -p', outdir))
-  jmessage('Starting analysis in ', normalizePath(outdir))
-  if (overwrite)
-    jmessage('Overwriting previous analysis contents')
-  ra = junctions
-  reiterate = 1 + as.integer(reiterate)
+    system(paste('mkdir -p', outdir))
+    jmessage('Starting analysis in ', normalizePath(outdir))
+    if (overwrite){
+        jmessage('Overwriting previous analysis contents')
+    }
+    ra = junctions
+    reiterate = 1 + as.integer(reiterate)
+ 
+    if (is.character(ra)){
+        if (!file.exists(ra)){
+            stop(paste('Junction path', ra, 'does not exist'))
+        }
 
-  if (is.character(ra))
-  {
-    if (!file.exists(ra))
-    {
-      stop(paste('Junction path', ra, 'does not exist'))
+        if (grepl("rds$", ra)){
+            ra.all = readRDS(ra)
+        } else {
+            ra.all = read.junctions(ra)
+        }
+    } else {
+        ra.all = ra
     }
 
-      if (grepl("rds$", ra)){
-        ra.all = readRDS(ra)
-      } else {
-        ra.all = read.junctions(ra)
-      }
-  } else
-  {
-    ra.all = ra
-  }
-
-  if (verbose)
-  {
-    jmessage("Read in ", length(ra.all), " total junctions")
-  }
+    if (verbose){
+        jmessage("Read in ", length(ra.all), " total junctions")
+    }
 
   ## if we are iterating more than once
   if (reiterate>1)  {
@@ -353,14 +350,17 @@ JaBbA = function(
     )
   }
 
-  return(jab)
+    return(jab)
 }
+
+
 
 
 #' @name jabba_stub
 #' @rdname internal
 #' @title jabba_stub
 #' @description
+#'
 #' Internal function to run single iteration of JaBbA
 #'
 #' Generates the following files in the output directory:
@@ -438,61 +438,53 @@ jabba_stub = function(
     verbose = TRUE
 )
 {
-  kag.file = paste(outdir, 'karyograph.rds', sep = '/')
-  hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
-  junctions.txt.file = paste(outdir, 'junctions.txt', sep = '/')
-  junctions.rds.file = paste(outdir, 'junctions.rds', sep = '/')
-  jabba.raw.rds.file = paste(outdir, 'jabba.raw.rds', sep = '/')
-  jabba.rds.file = paste(outdir, 'jabba.rds', sep = '/')
-  jabba.json.file = paste(outdir, 'jabba.json', sep = '/')
-  jabba.gg.rds.file = paste(outdir, 'jabba.gg.rds', sep = '/')
-  jabba.vcf.file = paste(outdir, 'jabba.vcf', sep = '/')
-  jabba.cnv.vcf.file = paste(outdir, 'jabba.cnv.vcf', sep = '/')
-  jabba.simple.rds.file = paste(outdir, 'jabba.simple.rds', sep = '/')
-  jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
-  jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
-  jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
-  jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
-  jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
-  seg.tab.file = paste(outdir, 'jabba.seg.txt', sep = '/')
-  seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
-  seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
-  nozzle.file = paste(outdir, 'nozzle', sep = '/')
+    kag.file = paste(outdir, 'karyograph.rds', sep = '/')
+    hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
+    junctions.txt.file = paste(outdir, 'junctions.txt', sep = '/')
+    junctions.rds.file = paste(outdir, 'junctions.rds', sep = '/')
+    jabba.raw.rds.file = paste(outdir, 'jabba.raw.rds', sep = '/')
+    jabba.rds.file = paste(outdir, 'jabba.rds', sep = '/')
+    jabba.json.file = paste(outdir, 'jabba.json', sep = '/')
+    jabba.gg.rds.file = paste(outdir, 'jabba.gg.rds', sep = '/')
+    jabba.vcf.file = paste(outdir, 'jabba.vcf', sep = '/')
+    jabba.cnv.vcf.file = paste(outdir, 'jabba.cnv.vcf', sep = '/')
+    jabba.simple.rds.file = paste(outdir, 'jabba.simple.rds', sep = '/')
+    jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
+    jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
+    jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
+    jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
+    jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
+    seg.tab.file = paste(outdir, 'jabba.seg.txt', sep = '/')
+    seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
+    seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
+    nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
-    if (is.character(coverage))
-    {
-      if (!file.exists(coverage))
-      {
-        stop(paste('Coveraeg path ', coverage, 'does not exist'))
-      }
-      
-        if (grepl('\\.rds$', coverage))
-        {
-            coverage = readRDS(coverage)
+    if (is.character(coverage)){
+        if (!file.exists(coverage)){
+            stop(paste('Coveraeg path ', coverage, 'does not exist'))
         }
-        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
-      {
-        tmp = fread(coverage)
-        coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
-      }
-        else
-      {
-        jmessage('Importing seg from UCSC format')
-        coverage = import.ucsc(coverage)
-        field = 'score';
-        coverage = gr.fix(coverage)
-      }
-    }
-    else
+      
+        if (grepl('\\.rds$', coverage)){
+            coverage = readRDS(coverage)
+        } else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage)){
+            tmp = fread(coverage)
+            coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
+        } else{
+            jmessage('Importing seg from UCSC format')
+            coverage = import.ucsc(coverage)
+            field = 'score';
+            coverage = gr.fix(coverage)
+        }
+    } else{
         coverage = coverage
+    }
 
-    if (!inherits(coverage, 'GRanges'))
-      coverage = dt2gr(coverage)
+    if (!inherits(coverage, 'GRanges')){
+        coverage = dt2gr(coverage)
+    }
 
-
-    if (verbose)
-    {
-      jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
+    if (verbose){
+        jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
     }
 
     if (!(field %in% names(values(coverage))))
@@ -503,13 +495,11 @@ jabba_stub = function(
     }
 
     seg.fn = paste0(outdir, '/seg.rds')
-    if (!overwrite & file.exists(seg.fn))
-    {
-      if (verbose)
-      {
-        jmessage('Using previous segmentation found in jabba directory')
-      }
-      seg = readRDS(seg.fn)
+    if (!overwrite & file.exists(seg.fn)){
+        if (verbose){
+            jmessage('Using previous segmentation found in jabba directory')
+        }
+        seg = readRDS(seg.fn)
     } else {
       if (is.null(seg))
       {
@@ -867,24 +857,28 @@ jabba_stub = function(
 #' @name karyograph
 #' @rdname internal
 karyograph_stub = function(seg.file, ## path to rds file of initial genome partition (values on segments are ignored)
-     cov.file, ## path to rds file GRanges of coverage with meta data field "field"
-     nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
-                           het.file = NULL,
-                           ra = NULL,
-                           junction.file = NULL,
-                           out.file,
-                           use.ppurple = TRUE,
-                           ra.file = NULL,
-                           verbose = FALSE,
-                           force.seqlengths = NULL,
-                           purity =  NA,
-                           ploidy = NA,
-                           field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
+    cov.file, ## path to rds file GRanges of coverage with meta data field "field"
+    nseg.file = NULL, ## rds file of GRanges providing integer copy numbers for normal segments in the genome
+    het.file = NULL,
+    ra = NULL,
+    junction.file = NULL,
+    out.file,
+    use.ppurple = TRUE,
+    ra.file = NULL,
+    verbose = FALSE,
+    force.seqlengths = NULL,
+    purity =  NA,
+    ploidy = NA,
+    field = 'ratio', 
+    mc.cores = 1, 
+    max.chunk = 1e8, 
+    subsample = NULL)
 {
-  loose.ends = GRanges()
+    loose.ends = GRanges()
 
-  if (!is.null(ra))
-    this.ra = ra
+    if (!is.null(ra)){
+        this.ra = ra
+    }
   else
   {
     if (!is.null(junction.file))
@@ -894,11 +888,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       if (ncol(these.junctions)<=1) ## wrong separator
               these.junctions = read.delim(junction.file, sep = ',', strings = F)
 
-            if (!is.null(these.junctions$strand1) & !is.null(these.junctions$strand2))
-            {
-              ## looks like snowman input flip breaks so that they are pointing away from junction
-              these.junctions$str1 = ifelse(these.junctions$strand1 == '+', '-', '+')
-              these.junctions$str2 = ifelse(these.junctions$strand2 == '+', '-', '+')
+            if (!is.null(these.junctions$strand1) & !is.null(these.junctions$strand2)){
+                ## looks like snowman input flip breaks so that they are pointing away from junction
+                these.junctions$str1 = ifelse(these.junctions$strand1 == '+', '-', '+')
+                these.junctions$str2 = ifelse(these.junctions$strand2 == '+', '-', '+')
             }
 
             these.junctions$chr1 = gsub('23', 'X', gsub('24', 'Y', these.junctions$chr1))
@@ -916,230 +909,197 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
               loose.ends = tmp.ra$loose.ends
             }
           }
-          else
+          else{
             this.ra = readRDS(ra.file)
+          }
         }
-  ## if we don't have normal segments then coverage file will be our bible for seqlengths
-
-  if (is.character(cov.file))
-  {
-    if (grepl('\\.rds$', cov.file))
-      this.cov = readRDS(cov.file)
-    else
-    {
-      this.cov = import.ucsc(cov.file)
-      field = 'score';
-    }
-  }
-  else
-    this.cov = cov.file
-
-  ## now make sure we have the "best" seqlengths
-  .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
-
-  if (is.null(force.seqlengths))
-    sl = .fixsl(seqlengths(this.ra), this.cov)
-  else
-    sl = .fixsl(force.seqlengths, this.cov)
-                                        #      sl = .fixsl(seqlengths(this.ra), this.cov)
-
-  if (!is.null(nseg.file))
-  {
-    if (is.character(nseg.file))
-    {
-      if (file.exists(nseg.file))
-      {
-        if (grepl('\\.rds$', nseg.file, ignore.case = TRUE))
-        {
-          nseg = readRDS(nseg.file)
+    ## if we don't have normal segments then coverage file will be our bible for seqlengths
+    if (is.character(cov.file)){
+        if (grepl('\\.rds$', cov.file)){
+            this.cov = readRDS(cov.file)
+        } else{
+            this.cov = import.ucsc(cov.file)
+            field = 'score';
         }
-        else
-        {
-          nseg = dt2gr(fread(nseg.file))
+    } else{
+        this.cov = cov.file
+    }
+
+    ## now make sure we have the "best" seqlengths
+    .fixsl = function(sl, gr) {
+        sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)
+    }
+
+    if (is.null(force.seqlengths)){
+        sl = .fixsl(seqlengths(this.ra), this.cov)
+    } else{
+        sl = .fixsl(force.seqlengths, this.cov)
+    }
+
+    if (!is.null(nseg.file)){
+        if (is.character(nseg.file)){
+            if (file.exists(nseg.file)){
+                if (grepl('\\.rds$', nseg.file, ignore.case = TRUE)){
+                    nseg = readRDS(nseg.file)
+                } else{
+                    nseg = dt2gr(fread(nseg.file))
+                }
+            } else {
+                stop('Did not find nseg file!')
+            }
+        } else{
+            nseg = nseg.file
         }
-      } else {
-        stop('Did not find nseg file!')
-      }
-
+        sl = .fixsl(sl, nseg)
     }
-    else
-      nseg = nseg.file
-    sl = .fixsl(sl, nseg)
-  }
 
-  ## make sure all sl's are equiv
-  if (is.character(seg.file))
-    this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
-  else
-    this.seg = seg.file
-
-  if (length(loose.ends>0))
-  {
-    if (verbose)
-    {
-      jmessage('Adding loose ends from vcf file to seg file')
+    ## make sure all sl's are equiv
+    if (is.character(seg.file)){
+        this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+    } else{
+        this.seg = seg.file
     }
-    this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))
-  }
 
-  this.ra = gr.fix(this.ra, sl, drop = T)
+    if (length(loose.ends>0)){
+        if (verbose){
+            jmessage('Adding loose ends from vcf file to seg file')
+        }
+        this.seg = grbind(this.seg, gr.fix(loose.ends, sl, drop = T))
+    }
 
-  this.kag = karyograph(this.ra, this.seg)
+    this.ra = gr.fix(this.ra, sl, drop = T)
 
-  if (is.null(nseg.file))
+    this.kag = karyograph(this.ra, this.seg)
+
+    if (is.null(nseg.file)){
+        this.kag$segstats$ncn = 2
+    }
+
+    hets.gr = NULL
+
+
+    if (!is.null(het.file)){
+        hets = fread(het.file)
+        if (verbose){
+            jmessage('loaded hets')
+        }
+
+        if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n)){
+            ## old format, apply het filter ourselves
+            hets$ref.frac.n = hets$alt.count.n / (hets$alt.count.n + hets$ref.count.n)
+            ##      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
+            hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
+            hets.gr$alt = hets.gr$alt.count.t
+            hets.gr$ref = hets.gr$ref.count.t
+        } else {
+            ## new, standard format, with $alt and $ref field
+            hets.gr = dt2gr(hets)
+            hets.gr$alt.count.t = hets.gr$alt
+            hets.gr$ref.count.t = hets.gr$ref
+        }
+        ## save hets object for later
+        saveRDS(hets.gr, paste(dirname(out.file), 'hets.gr.rds', sep = '/'))
+    }
+
+    if (length(hets.gr)>0){
+        ## pretend we don't have hets at all
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores)
+    } else{
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
+    }
     this.kag$segstats$ncn = 2
 
-  hets.gr = NULL
+    if (!is.null(nseg.file)){
+        if (is.null(nseg$cn)){
+            stop('Error: Normal seg file does not have "cn" met data field')
+        } else{
+            this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
+            this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
+        }
+    }  
 
+    ## 6/15 temp fix for sd on short segments, which we overestimate for now
+    cov.thresh = pmin(1e5, median(width(this.cov)))
 
-  if (!is.null(het.file))
-  {
-    hets = fread(het.file)
-    if (verbose)
-    {
-      jmessage('loaded hets')
+    fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
+
+    this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
+
+    ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
+    pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
+
+    purity = as.numeric(purity)
+    ploidy = as.numeric(ploidy)
+    if (!is.na(purity) & !is.na(ploidy)) {
+        ## purity and ploidy are completely set
+        pp = data.table(purity = purity, ploidy = ploidy)
+    } else if (use.ppurple) {
+
+        if (is.na(purity)){
+            purity = seq(0, 1, 0.1)
+        }
+
+        if (is.na(ploidy)){
+            ploidy = seq(1, 6, 0.2)
+        }
+
+        this.cov$y = values(this.cov)[, field]
+
+        if (verbose){
+            jmessage('Computing purity and ploidy with Ppurple')
+        }
+
+        pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose, mc.cores = mc.cores)
     }
 
-    if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n)) ## old format, apply het filter ourselves
-    {
-      hets$ref.frac.n = hets$alt.count.n / (hets$alt.count.n + hets$ref.count.n)
-      ##      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
-      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
-      hets.gr$alt = hets.gr$alt.count.t
-      hets.gr$ref = hets.gr$ref.count.t
+    mu = this.kag$segstats$mean
+    mu[is.infinite(mu)] = NA
+    w = as.numeric(width(this.kag$segstats))
+    w[is.na(mu)] = NA
+    sw = sum(w, na.rm = T)
+    ncn = this.kag$segstats$ncn
+    ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+    mutl = sum(mu * w, na.rm = T)
+    pp$beta = ((1-pp$purity)*ploidy_normal + pp$purity*pp$ploidy) * sw / (pp$purity * mutl)
+    pp$gamma = 2*(1-pp$purity)/pp$purity
+
+    saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
+
+    this.kag$purity = pp[1,]$purity
+    this.kag$ploidy = pp[1,]$ploidy
+    this.kag$beta = pp[1,]$beta
+    this.kag$gamma = pp[1,]$gamma
+    this.kag$segstats$cn = rel2abs(this.kag$segstats, purity = this.kag$purity, ploidy = this.kag$ploidy, field = 'mean')
+    if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla'))){
+        pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
     }
-    else ## new, standard format, with $alt and $ref field
-    {
-      hets.gr = dt2gr(hets)
-      hets.gr$alt.count.t = hets.gr$alt
-      hets.gr$ref.count.t = hets.gr$ref
+    tmp.kag = this.kag
+
+    tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] )
+
+    if (length(tmp.kag$segstats)<10){
+        warning('number of segments used for purity ploidy extremely low .. check coverage data')
     }
+    .plot_ppfit(tmp.kag)
+    dev.off()
 
-    ## save hets object for later
-    saveRDS(hets.gr, paste(dirname(out.file), 'hets.gr.rds', sep = '/'))
-  }
-
-  if (length(hets.gr)>0){
-    ## pretend we don't have hets at all
-
-    this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores)
-  }
-  else
-    this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
-
-  this.kag$segstats$ncn = 2
-
-  if (!is.null(nseg.file))
-    if (is.null(nseg$cn))
-      stop('Normal seg file does not have "cn" met data field')
-    else
-    {
-      this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
-      this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
+    if (verbose){
+        jmessage('Built gGraph with ', length(this.kag$tile), ' nodes, ', sum(this.kag$adj!=0), ' edges, purity ', round(this.kag$purity,2), ', and ploidy ', round(this.kag$ploidy,2))
     }
 
+    y1 = 10
 
-  ## 6/15 temp fix for sd on short segments, which we overestimate for now
-  cov.thresh = pmin(1e5, median(width(this.cov)))
-                                        #    jmessage('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
-  fix.sd  = width(this.kag$segstats)<(3*cov.thresh)
-                                        #    this.kag$segstats$mean[make.na] = NA
-  this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
-
-                                        #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
-  ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
-  pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
-
-  purity = as.numeric(purity)
-  ploidy = as.numeric(ploidy)
-  if (!is.na(purity) & !is.na(ploidy)) ## purity and ploidy are completely set
-  {
-    pp = data.table(purity = purity, ploidy = ploidy)
-  }
-  else if (use.ppurple)
-  {
-
-    if (is.na(purity))
-      {
-        purity = seq(0, 1, 0.1)
-      }
-
-    if (is.na(ploidy))
-      {
-        ploidy = seq(1, 6, 0.2)
-      }
-
-    this.cov$y = values(this.cov)[, field]
-
-    if (verbose)
-    {
-      jmessage('Computing purity and ploidy with Ppurple')
-    }
-
-    pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose, mc.cores = mc.cores)
-  }
-  ## else
-  ##   {
-  ##     if (!is.null(het.file))
-  ##       {
-  ##         pp = ppgrid(ss.tmp, verbose = verbose, plot = F, mc.cores = mc.cores,
-  ##                     purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-  ##                     ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = TRUE)
-  ##       }
-  ##     else
-  ##       {
-  ##         pp = ppgrid(ss.tmp, verbose = verbose, plot = F, mc.cores = mc.cores,
-  ##                     purity.min = ifelse(is.na(purity), 0, purity), purity.max = ifelse(is.na(purity),1, purity),
-  ##                     ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy), ploidy.max = ifelse(is.na(ploidy), 6, ploidy), allelic = FALSE)
-  ##       }
-  ##   }
-
-  mu = this.kag$segstats$mean
-  mu[is.infinite(mu)] = NA
-  w = as.numeric(width(this.kag$segstats))
-  w[is.na(mu)] = NA
-  sw = sum(w, na.rm = T)
-  ncn = this.kag$segstats$ncn
-  ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
-  mutl = sum(mu * w, na.rm = T)
-  pp$beta = ((1-pp$purity)*ploidy_normal + pp$purity*pp$ploidy) * sw / (pp$purity * mutl)
-  pp$gamma = 2*(1-pp$purity)/pp$purity
-
-  saveRDS(pp, paste(out.file, '.ppgrid.solutions.rds', sep = '')) ## save alternate solutions
-
-  this.kag$purity = pp[1,]$purity
-  this.kag$ploidy = pp[1,]$ploidy
-  this.kag$beta = pp[1,]$beta
-  this.kag$gamma = pp[1,]$gamma
-  this.kag$segstats$cn = rel2abs(this.kag$segstats, purity = this.kag$purity, ploidy = this.kag$ploidy, field = 'mean')
-  if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
-    pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
-  tmp.kag = this.kag
-
-  tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] )
-  if ( class( tryres ) == "try-error" ) browser()
-
-  if (length(tmp.kag$segstats)<10)
-    warning('number of segments used for purity ploidy extremely low .. check coverage data')
-  .plot_ppfit(tmp.kag)
-  dev.off()
-
-  if (verbose)
-  {
-    jmessage('Built gGraph with ', length(this.kag$tile), ' nodes, ', sum(this.kag$adj!=0), ' edges, purity ', round(this.kag$purity,2), ', and ploidy ', round(this.kag$ploidy,2))
-  }
-
-  y1 = 10
-
-  if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+    if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla'))){
         pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
 
+    }
     gTrack::plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
-           gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
+        gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
     dev.off()
 
     saveRDS(this.kag, out.file)
 }
+
 
 ## diagnostic function used by karyograph_stub
 #' @name .plot_ppfit
@@ -4388,9 +4348,8 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 #' @rdname internal
 #' @title read.jucntions
 #' @description
-#' read.junctions
 #'
-#' takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
+#' Takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
 #' and returns junctions in VCF format.
 #'
 #' The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
@@ -4398,10 +4357,19 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 #' @import VariantAnnotation
 #' @export
 ############################################
-read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
+read.junctions = function(rafile, 
+    keep.features = TRUE, 
+    seqlengths = hg_seqlengths(),
+    chr.convert = TRUE, 
+    snowman = FALSE, 
+    swap.header = NULL, 
+    breakpointer = FALSE, 
+    seqlevels = NULL, 
+    force.bnd = FALSE, 
+    skip = NA,
     get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
-  )
-  {
+)
+{
       if (is.character(rafile))
           {
               if (grepl('(.bedpe$)', rafile))
@@ -4413,45 +4381,41 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                       if (is.na(skip))
                       {
                               nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-                              if (is.infinite(nh))
+                              if (is.infinite(nh)){
                                   nh = 1
-                          }
-                      else
+                              }
+                      } else{
                           nh = skip
+                      }
 
 
-                      if ((length(ln)-nh)==0)
-                          if (get.loose)
+                      if ((length(ln)-nh)==0){
+                          if (get.loose){
                               return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-                          else
+                          } else{
                               return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-#                          return(GRangesList())
-
-
-                      if (nh ==0)
-                          rafile = fread(rafile, header = FALSE)
-                      else
-                          {
-
-                              rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
-                              if (is.null(rafile))
-                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
-
-                              if (is.null(rafile))
-                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
-
-                              if (is.null(rafile))
-                                  stop('Error reading bedpe')
                           }
+                      }
+
+                      if (nh ==0){
+                          rafile = fread(rafile, header = FALSE)
+                      } else{
+                              rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
+                              if (is.null(rafile)){
+                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                              }
+                              if (is.null(rafile)){
+                                  rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                              }
+                              if (is.null(rafile)){
+                                  stop('Error reading bedpe')
+                              }
+                      }
                       setnames(rafile, 1:length(cols), cols)
                       rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
                       rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-#                      rafile[, str1 := ifelse(str1=='+', '-', '+')]
-                                        #                      rafile[, str2 := ifelse(str2=='+', '-', '+')]
 
-                  }
-              else if (grepl('(vcf$)|(vcf.gz$)', rafile))
-                  {
+              } else if (grepl('(vcf$)|(vcf.gz$)', rafile)) {
                       vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
                       if (!('SVTYPE' %in% names(info(vcf)))) {
                         warning('Vcf not in proper format.  Is this a rearrangement vcf?')
@@ -4756,7 +4720,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
 #' karyograph
 #'
 #' @details
-#' builds graph from rearrangement breakpoints +/- copy number endpoints
+#'
+#' Builds graph from rearrangement breakpoints +/- copy number endpoints
 #' used for downstream jbaMIP and karyoMIP functions
 #'
 #' Input bpp is a GRangesList of signed locus pairs describing aberrant adjacencies.
@@ -4794,11 +4759,9 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
 ############################################
 karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of read.junctions(dranger.df) where dranger is df of dranger output)
     tile = NULL, # pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
-    label.edges = FALSE
-  )
-  {
-    if (length(junctions)>0)
-      {
+    label.edges = FALSE)
+{
+    if (length(junctions)>0){
         bp.p = grl.pivot(junctions)
         bp1 = suppressWarnings(gr.end(gr.fix(bp.p[[1]]), 1, ignore.strand = F))
         bp2 = suppressWarnings(gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F))
@@ -4814,14 +4777,13 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         end(bp1) = pmax(1, end(bp1))
         start(bp1) = pmax(1, start(bp1))
 
-        if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
-          stop('bp1 and bp2 must be signed intervals (i.e. either + or -)')
+        if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*'))){
+            stop('bp1 and bp2 must be signed intervals (i.e. either + or -)')
+        }
 
-        if (length(bp1) != length(bp2))
-          stop('bp1 and bp2 inputs must have identical lengths')
-
-                                        #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
-                                        #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
+        if (length(bp1) != length(bp2)){
+            stop('bp1 and bp2 inputs must have identical lengths')
+        }
 
         values(bp1)$bp.id = 1:length(bp1);
         values(bp2)$bp.id = 1:length(bp1)+length(bp1);
@@ -4836,30 +4798,21 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end+1, na.rm = TRUE), keyby = seqnames][names(tmp.sl.og), structure(pmax(V1, tmp.sl.og, na.rm = TRUE), names = names(tmp.sl.og))]
         bp1 = gr.fix(bp1, tmp.sl)
         bp2 = gr.fix(bp2, tmp.sl)
-    # first we tile the genome around the combined breakpoints
-      }
-    else
-      {
-        if (is.null(tile))
-            {
-                tile = si2gr(junctions)
-                if (length(tile)==0)
-                    {
-                        warning('Empty input given, producing empty output')
-                        return(NULL)
-                    }
-                A = sparseMatrix(1,1, x = 0, dims = rep(length(tile), 2))
-                return(
-                    list(tile = tile, adj = A,
-                         G = graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
+    } else {
+        if (is.null(tile)){
+            tile = si2gr(junctions)
+            if (length(tile)==0){
+                warning('Empty input given, producing empty output')
+                return(NULL)
             }
-
+            A = sparseMatrix(1,1, x = 0, dims = rep(length(tile), 2))
+            return( list(tile = tile, adj = A, G = graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
+        }
         junctions = GRangesList()
         bp1 = bp2 = GRanges()
-      }
+    }
 
-    if (!is.null(tile))
-      {
+    if (!is.null(tile)){
         ## find disjoint union of tile and join with gaps
         tile = gr.fix(tile)
         tile = gr.fix(tile, bp1)
@@ -4869,37 +4822,38 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         tile = sort(c(tile, gaps(tile)))
 
         ## make sure seqlevels / seqinfo are identical
-        if (!identical(sort(seqlevels(tile)), seqlevels(junctions)))
-          {
+        if (!identical(sort(seqlevels(tile)), seqlevels(junctions))){
             tile = gr.fix(tile, junctions)
             junctions = gr.fix(junctions, tile)
-          }
+        }
 
-        if(length(junctions)>0)
-            {
-                tbp = setdiff(gr.stripstrand(gr.trim(tile, 1)), gr.stripstrand(grbind(bp1, bp2)))
-                bp1 = gr.fix(bp1, tbp)
-                bp2 = gr.fix(bp2, tbp) ## seqlengths pain
-                tbp = gr.fix(tbp, bp1)
-            }
-        else
-          tbp = gr.stripstrand(gr.trim(tile, 1))
+        if(length(junctions)>0){
+            tbp = setdiff(gr.stripstrand(gr.trim(tile, 1)), gr.stripstrand(grbind(bp1, bp2)))
+            bp1 = gr.fix(bp1, tbp)
+            bp2 = gr.fix(bp2, tbp) ## seqlengths pain
+            tbp = gr.fix(tbp, bp1)
+        } else{
+            tbp = gr.stripstrand(gr.trim(tile, 1))
+        }
 
         tbp = tbp[start(tbp)!=1]
 
-        if (length(tbp)>0)
+        if (length(tbp)>0){
             tbp$seg.bp = TRUE
-      }
-    else
+        }
+    } else{
         tbp = NULL;
+    }
 
-      if (length(junctions)>0)
-          if (length(tbp)>0)
-              g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
-          else
-              g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()]))))
-    else
-      g = gaps(gr.stripstrand(sort(tbp)));
+    if (length(junctions)>0){
+        if (length(tbp)>0){
+            g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
+        } else{
+            g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()]))))
+        }
+    } else{
+        g = gaps(gr.stripstrand(sort(tbp)));
+    }
 
     g = g[as.logical( strand(g)=='*' )];
     strand(g) = '+';
@@ -4907,47 +4861,47 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     values(g)$bp.id = NA
     values(g)$seg.bp = NA
 
-      ## combine tiles and find disjoint set
-      tile.og = tile
+    ## combine tiles and find disjoint set
+    tile.og = tile
     tile = grbind(bp1, bp2, g, tbp);
     tile = disjoin(gr.stripstrand(tile[order(gr.stripstrand(tile))]))
     strand(tile) = '+'
     tile = gr.fix(tile);
     tile$is.tel = start(tile)==1 | end(tile) == seqlengths(tile)[as.character(seqnames(tile))]
-      values(tile)$tile.id = 1:length(tile);
+    values(tile)$tile.id = 1:length(tile);
 
-    # find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
+    ## find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
     junc.bp = grbind(bp1, bp2)
     junc.bpix = numeric()
-    if (length(junc.bp)>0)
-      junc.bpix = which(paste(seqnames(tile), end(tile)) %in% paste(seqnames(junc.bp), start(junc.bp)))
+    if (length(junc.bp)>0){
+        junc.bpix = which(paste(seqnames(tile), end(tile)) %in% paste(seqnames(junc.bp), start(junc.bp)))
+    }
 
-      ## make sure all seqlenths are compatible (so effing annoying)
-      tile = gr.fix(tile, bp1)
-      tile = gr.fix(tile, bp2)
-      bp1 = gr.fix(bp1, tile)
-      bp2 = gr.fix(bp2, tile)
+    ## make sure all seqlenths are compatible (so effing annoying)
+    tile = gr.fix(tile, bp1)
+    tile = gr.fix(tile, bp2)
+    bp1 = gr.fix(bp1, tile)
+    bp2 = gr.fix(bp2, tile)
 
 
     ## also keep track of tbp associatd bp.ix
     all.bp = grbind(bp1, bp2, tbp)
     all.bpix = numeric()
 
-    if (length(all.bp)>0)
-      all.bpix = which(paste(seqnames(tile), end(tile)) %in% paste(seqnames(all.bp), start(all.bp)))
+    if (length(all.bp)>0){
+        all.bpix = which(paste(seqnames(tile), end(tile)) %in% paste(seqnames(all.bp), start(all.bp)))
+    } 
 
     ## now to build the graph, we would like to fuse all the bp associated intervals with their previous interval
     ## UNLESS they are preceded by another bp associated interval
     ##
-    if (length(all.bpix>0))
-      {
+    if (length(all.bpix>0)){
         to.fuse = all.bpix[which(all.bpix>1 & !((all.bpix-1) %in% all.bpix))]
         end(tile)[to.fuse-1] = end(tile)[to.fuse-1]+1
         tile = tile[-to.fuse]
-      }
+    }
 
-    if (length(junc.bpix)>0)
-      {
+    if (length(junc.bpix)>0){
         ## we have a partition of genomic segments flanked by tile endpoints and/or ra junctions
         ##
         ## Input junction syntax is interpreted as follows:
@@ -4961,12 +4915,11 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         #            c|bp2|d
         # "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
 
-          ab.pairs = cbind(
-              ifelse(as.logical(strand(bp1)=='+'), gr.match(GenomicRanges::shift(gr.start(bp1), 1), gr.start(tile)),
-                     gr.match(gr.start(bp1), gr.end(tile))),
-              ifelse(as.logical(strand(bp2)=='+'), gr.match(GenomicRanges::shift(gr.start(bp2), 1), gr.start(tile)),
-                     gr.match(gr.start(bp2), gr.end(tile)))
-              )
+        ab.pairs = cbind(
+            ifelse(as.logical(strand(bp1)=='+'), gr.match(GenomicRanges::shift(gr.start(bp1), 1), gr.start(tile)),
+                gr.match(gr.start(bp1), gr.end(tile))),
+            ifelse(as.logical(strand(bp2)=='+'), gr.match(GenomicRanges::shift(gr.start(bp2), 1), gr.start(tile)),
+                gr.match(gr.start(bp2), gr.end(tile))))
 
 
         ## ab.pairs = cbind(
@@ -4983,54 +4936,49 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ab.pairs[mm,2] = -ab.pairs[mm,2] # -- breakpoints --> a(-c) adjacency
         ab.pairs[mp, ] = -ab.pairs[mp, ] # +- breakpoints --> (-b)(-c) adjacency
 
-        # clean up adj pairs
-        # remove any that have crossed a chromosome boundary from their breakpoint
-        # this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
-        # from their telomeres)
+        ## clean up adj pairs
+        ## remove any that have crossed a chromosome boundary from their breakpoint
+        ## this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
+        ## from their telomeres)
         edge.id = rep(1:nrow(ab.pairs), 2)
         ab.pairs = rbind(ab.pairs, cbind(-ab.pairs[,2], -ab.pairs[,1]));
         ab.pairs.bpid = c(ab.pairs.bpid, ab.pairs.bpid)
 
-        # build "aberrant" adjacency matrix representing directed graph of edges connecting
-        # <signed> nodes.
-        # note: indices of matrix represent edge labels
-          adj.ab = Matrix( 0,
-                          nrow = 2*length(tile),
-                          ncol = 2*length(tile),
-                          dimnames = rep( list( as.character(c(1:length(tile), -(1:length(tile))))), 2))
-          tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
-          match(as.character(ab.pairs[,2]), colnames(adj.ab)))
+        ## build "aberrant" adjacency matrix representing directed graph of edges connecting
+        ## <signed> nodes.
+        ## note: indices of matrix represent edge labels
+        adj.ab = Matrix(0,
+            nrow = 2*length(tile),
+            ncol = 2*length(tile),
+            dimnames = rep( list( as.character(c(1:length(tile), -(1:length(tile))))), 2))
+        tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
+        match(as.character(ab.pairs[,2]), colnames(adj.ab)))
         adj.ab[tmp.ix[!duplicated(tmp.ix), , drop = F]] = ab.pairs.bpid[!duplicated(tmp.ix)]
-      }
-    else
-      {
+    } else{
         ab.pairs.bpid = edge.id = c()
         ab.pairs = matrix(nrow = 0, ncol = 2);
         adj.ab = Matrix(FALSE, nrow = 2*length(tile), ncol = 2*length(tile),
-          dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
-      }
+            dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
+    }
 
-    # build reference adjacency matrix (representing consecutive segments on the reference genome)
-    # note: indices of matrix represent edge labels
+    ## build reference adjacency matrix (representing consecutive segments on the reference genome)
+    ## note: indices of matrix represent edge labels
     seg.ix = 1:length(tile)
     ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)], seg.ix[2:(length(seg.ix))])
-    # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
+    ## ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
     ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) == as.character(seqnames(tile[ref.pairs[,2]]))), ]
 
-    if (nrow(ref.pairs)>0)
-      {
+    if (nrow(ref.pairs)>0){
         edge.id = c(edge.id, max(edge.id) + rep(1:nrow(ref.pairs), 2))
         ref.pairs = rbind(ref.pairs, cbind(-ref.pairs[,2], -ref.pairs[,1])) # reverse ref pairs
         adj.ref = Matrix(0, nrow = 2*length(tile), ncol = 2*length(tile),
           dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
         adj.ref[cbind(match(as.character(ref.pairs[,1]), rownames(adj.ref)),
                       match(as.character(ref.pairs[,2]), colnames(adj.ref)))] = nrow(ab.pairs)+1:nrow(ref.pairs)
-      }
-    else
-      {
+    } else {
         adj.ref = Matrix(FALSE, nrow = 2*length(tile), ncol = 2*length(tile),
           dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
-      }
+    }
 
     ## current tile is partition of genome only in positive orientation + dummy intervals for breakpoints
     ## output tile is forward partition and followed by reverse partition
@@ -5077,8 +5025,9 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     E(G)$width = 1
     ab.ix = E(G)$type=='aberrant'  ## keep track of bp.id leading to edge
     E(G)$bp.id = NA;
-    if (length(ab.pairs.bpid)>0)
-      E(G)$bp.id[ab.ix] = ab.pairs.bpid[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
+    if (length(ab.pairs.bpid)>0){
+        E(G)$bp.id[ab.ix] = ab.pairs.bpid[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
+    }
     E(G)$eid = NA; ## what is edge ID??? how is different from edge.ix?
     E(G)$eid[ab.ix] = edge.id[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
     E(G)$eid[!ab.ix] = edge.id[adj.ref[cbind(E(G)$from[!ab.ix], E(G)$to[!ab.ix])]]
@@ -5095,18 +5044,16 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ab.edges[,3, 1] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to)) ## must be easier way to perform this taks
     ab.edges[,3, 2] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to))
 
-    if (label.edges & nrow(ab.edges)>0)
-        {
-            ix = c(ab.edges[,1,1], ab.edges[,2,1], ab.edges[,1,2], ab.edges[,2,2])
-            tile$edges.out = tile$edges.in = ''
-            tile$edges.in[ix]= sapply(ix,
-                function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
-            tile$edges.out[ix] = sapply(ix,
-                function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
-        }
-
+    if (label.edges & nrow(ab.edges)>0){
+        ix = c(ab.edges[,1,1], ab.edges[,2,1], ab.edges[,1,2], ab.edges[,2,2])
+        tile$edges.out = tile$edges.in = ''
+        tile$edges.in[ix]= sapply(ix,
+            function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
+        tile$edges.out[ix] = sapply(ix,
+            function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
+    }
     return(list(tile = tile, adj = adj, G = G, ab.adj = adj.ab != 0, ab.edges = ab.edges, junctions = junctions))
-  }
+}
 
 
 
@@ -5127,6 +5074,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @return returns character string or writes to file if specified
 #########################################
 jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE){
+    
     if (is.null(hg)){
         hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
     }
@@ -5296,8 +5244,9 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                             }
                             return(paste(tmp, collapse = ','))
                         } else{
-                            return(tmp[!is.na(tmp)][1])})
+                            return(tmp[!is.na(tmp)][1])
                         }
+                })
                 names(out) = unames
                 return(paste(names(out), "=", out, collapse = ";", sep = ''))
             }
@@ -5316,15 +5265,15 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                     out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
                 }
 
-                                if (any(mergeix)){
-                                    out[mergeix] = sapply(which(mergeix), function(x)
-                                        paste(sapply(genos, function(y) y[[x]]), collapse = ','))
-                                }
-                                return(paste(out, collapse = ":"))
+                if (any(mergeix)){
+                    out[mergeix] = sapply(which(mergeix), function(x)
+                        paste(sapply(genos, function(y) y[[x]]), collapse = ','))
+                }
+                return(paste(out, collapse = ":"))
             }
 
-                        ## dedup and collapse breakends that share coordinates into single variant sites with several alleles
-                        body = body[, list(
+            ## dedup and collapse breakends that share coordinates into single variant sites with several alleles
+            body = body[, list(
                             ID = ID[1],
                             REF = REF[1],
                             ALT = if (length(ALT)>1) paste(ALT, collapse = ',') else ALT,
@@ -5336,43 +5285,35 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                             ord = ord[1]
                         ), by = c("CHROM", "POS")]
 
-                        setkey(body, "ord")
+            setkey(body, "ord")
 
-                        body = as.data.frame(body)[, vcffields]
-                        names(body)[ncol(body)] = sampleid
-                        names(body)[1] = '#CHROM'
-                    }
-                else
-                    {
-                        body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
-                        names(body)[1] = '#CHROM'
-                        names(body)[ncol(body)] = sampleid
-                    }
-            }
-        else ## CNV mode
-            {
-                sl = seqlengths(jab$segstats)
-                header = '##fileformat=VCFv4.2'
-                header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
-                header = c(header, '##source=JaBbAV0.1 CNV')
+            body = as.data.frame(body)[, vcffields]
+            names(body)[ncol(body)] = sampleid
+            names(body)[1] = '#CHROM'
+        } else{
+            body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
+            names(body)[1] = '#CHROM'
+            names(body)[ncol(body)] = sampleid
+        }
+    } else {
+        ## CNV mode
+        sl = seqlengths(jab$segstats)
+        header = '##fileformat=VCFv4.2'
+        header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
+        header = c(header, '##source=JaBbAV0.1 CNV')
 
-                if (inherits(hg, "BSgenome"))
-                    {
-                        header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-                        header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
-                    }
-                else if (inherits(hg, "ffTrack"))
-                {
-                    header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
-                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
-                }
-                else
-                {
-                    header = c(header, sprintf("##reference=NA"))
-                    header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
-                }
+        if (inherits(hg, "BSgenome")){
+            header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+        } else if (inherits(hg, "ffTrack")) {
+            header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+        } else{
+            header = c(header, sprintf("##reference=NA"))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
+        }
 
-                header = c(header,
+        header = c(header,
                     '##ALT=<ID=DEL,Description="Decreased copy number relative to reference">',
                     '##ALT=<ID=DUP,Description="Increased copy number relative to reference">',
                     '##ALT=<ID=DIP,Description="Normal diploid copy number">',
@@ -5383,38 +5324,35 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                     '##INFO=<ID=RJABID,Number=1,Type=Integer,Description="Index of the reverse complement  interval allele(s) in JaBbA reconstruction">',
                     '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
                     '##FORMAT=<ID=CN,Number=1,Type=String,Description="Copy number">'
-                           )
+        )
 
                 rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
                 six = which(!is.na(jab$segstats$cn) & !jab$segstats$loose & as.character(strand(jab$segstats))=='+')
                 ss = jab$segstats[six]
 
-                if (length(ss)>0)
-                {
-                  REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))), error = function(e) NULL)
-                  if (is.null(REF))
-                  {
-                    REF = 'N'
-                  }
-                  body = data.frame("CHROM" = as.character(seqnames(ss)), POS = start(ss),
-                                    ID = paste(sampleid, '_seg', six, sep = ''),
-                                    REF = REF,
-                                    ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
-                                    QUAL = ".",
-                                    FILTER = "PASS",
-                                    INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
-                                                 ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
-                                    FORMAT = "GT:CN",
-                                    GENO = paste("./.", ss$cn, sep = ':'))
-                  names(body)[1] = '#CHROM'
-                  names(body)[ncol(body)] = sampleid
+                if (length(ss)>0){
+                    REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.start(ss,1)))), error = function(e) NULL)
+                    if (is.null(REF)){
+                        REF = 'N'
+                    }
+                    body = data.frame("CHROM" = as.character(seqnames(ss)), 
+                        POS = start(ss),
+                        ID = paste(sampleid, '_seg', six, sep = ''),
+                        REF = REF,
+                        ALT = ifelse(ss$cn==2, "<DIP>", ifelse(ss$cn>2, "<DUP>", "<DEL>")),
+                        QUAL = ".",
+                        FILTER = "PASS",
+                        INFO = paste("SVTYPE=", ifelse(ss$cn>2, "DUP", "DEL"),
+                            ";START=", start(ss), ";END=", end(ss), ";JABID=", six, ";RJABID=", rcix[six], sep = ''),
+                        FORMAT = "GT:CN",
+                        GENO = paste("./.", ss$cn, sep = ':'))
+                    names(body)[1] = '#CHROM'
+                    names(body)[ncol(body)] = sampleid
+                } else {
+                    body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
+                    names(body)[1] = '#CHROM'
+                    names(body)[ncol(body)] = sampleid
                 }
-                else
-              {
-                body = as.data.frame(matrix(NA, ncol = length(vcffields), dimnames = list(c(), vcffields), ))[c(), ]
-                names(body)[1] = '#CHROM'
-                names(body)[ncol(body)] = sampleid
-              }
             }
 
         if (!is.null(fn))

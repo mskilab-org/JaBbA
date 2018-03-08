@@ -52,8 +52,8 @@ write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
 ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
   min.treads2 = 3, max.nreads = Inf)
 
-read.junctions(rafile, keep.features = T, seqlengths = hg_seqlengths(),
-  chr.convert = T, snowman = FALSE, swap.header = NULL,
+read.junctions(rafile, keep.features = TRUE, seqlengths = hg_seqlengths(),
+  chr.convert = TRUE, snowman = FALSE, swap.header = NULL,
   breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
   get.loose = FALSE)
 
@@ -159,9 +159,7 @@ Classify full set of dRanger rearrangements into "tiers" of confidence
 (2) Tier 2 BPresult=0 and somatic_score>min.score1
 (3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
 
-read.junctions
-
-takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
+Takes in either file or data frame from various formats including BND VCF, bedpe, and others, and returns GRangesList of junctions
 and returns junctions in VCF format.
 
 The default output is GRangesList each with a length two GRanges whose strands point AWAY from the break.  If get.loose = TRUE (only relevant for VCF)
