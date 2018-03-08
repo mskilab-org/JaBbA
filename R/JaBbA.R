@@ -500,6 +500,7 @@ jabba_stub = function(
       {
         jmessage('No segmentation provided, so performing segmentation using CBS')
       }
+      set.seed(42)
       vals = values(coverage)[, field]
       new.sl = seqlengths(coverage)
       ix = which(!is.na(vals))
@@ -1463,17 +1464,18 @@ segstats = function(target,
     target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
     loe = loess(var ~ mu, weights = target$nbins)
     target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
-    target$sem = sqrt((2*target$var)/target$nbins)
-    target$sd = target$sem
 
     ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
     ## basically assign all means below the left domain bound of the function the variance of the left domain bound
     ## and analogously for all means above the right domain bound
-    na.sd = is.na(target$sd)
-    rrm = range(target$mean[!na.sd])
+    na.var = is.na(target$var)
+    rrm = range(target$mean[!na.var])
     rrv = predict(loe, rrm)
-    target$sd[target$mean<=rrm[1]] = rrv[1]
-    target$sd[target$mean>=rrm[2]] = rrv[2]    
+    target$var[target$mean<=rrm[1]] = rrv[1]
+    target$var[target$mean>=rrm[2]] = rrv[2]    
+
+    ## computing sd / sem for each target 
+    target$sd = sqrt((2*target$var)/target$nbins)
   }
 
   return(target)
