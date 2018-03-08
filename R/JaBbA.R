@@ -1443,26 +1443,37 @@ segstats = function(target,
 
     mu = sapply(vall, .postmean)
     sd = sapply(vall, .postsd, subsample)
-    pc.na = sapply(vall, function(x) sum(is.na(x))/length(x))
+#    pc.na = sapply(vall, function(x) sum(is.na(x))/length(x))
 
-    mu[which(pc.na>na.thresh)] = NA
-    sd[which(pc.na>na.thresh)] = NA
+ #   mu[which(pc.na>na.thresh)] = NA
+ #   sd[which(pc.na>na.thresh)] = NA
 
-    target$mean = prior_mean;
+    target$mean = NA;
     target$sd = sqrt(prior_beta / (prior_alpha + 1));
 
+    mu = sapply(vall, mean, na.rm = TRUE)
     ix = !is.na(mu)
     target$mean[ix] = mu[ix]
-    target$sd[ix] = sd[ix]
 
     ## loess var estimation
+    ## i.e. we fit loess function to map segment mean to variance across the sample
+    ## the assumption is that such a function exists 
     var = sapply(vall, var)       
-                                        #        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+    ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
     target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
     loe = loess(var ~ mu, weights = target$nbins)
     target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
     target$sem = sqrt((2*target$var)/target$nbins)
     target$sd = target$sem
+
+    ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
+    ## basically assign all means below the left domain bound of the function the variance of the left domain bound
+    ## and analogously for all means above the right domain bound
+    na.sd = is.na(target$sd)
+    rrm = range(target$mean[!na.sd])
+    rrv = predict(loe, rrm)
+    target$sd[target$mean<=rrm[1]] = rrv[1]
+    target$sd[target$mean>=rrm[2]] = rrv[2]    
   }
 
   return(target)
@@ -2229,14 +2240,14 @@ jbaMIP = function(
   if (length(v.ix.c>0))
     Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
 
-  EPS = 0.000000000001
-  if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
-    if (length(v.ix.na)>0)
-    {
-      if (verbose)
-        jmessage('NA nudging node!!')
-      Qobj[cbind(v.ix.na, v.ix.na)] = EPS
-    }
+  ##  EPS = 0.000000000001
+  ## if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
+  ##   if (length(v.ix.na)>0)
+  ##   {
+  ##     if (verbose)
+  ##       jmessage('NA nudging node!!')
+  ##     Qobj[cbind(v.ix.na, v.ix.na)] = EPS
+  ##   }
 
                                         #  if (!ignore.cons)
                                         #    Qobj[s.ix[length(s.ix)], s.ix[length(s.ix)]] = 1
@@ -2442,6 +2453,7 @@ jbaMIP = function(
     control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis))
     if (!is.null(mipstart)) ## apply mipstart if provided
       control$mipstart = varmeta$mipstart
+
     sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = control)
   }
   if (is.null(sol$xopt))
@@ -3718,8 +3730,8 @@ mmatch = function(A, B, dir = 1)
       A = t(A)
       B = t(B)
     }
-    ixA = which(A!=0, arr.ind = T)
-    ixB = which(B!=0, arr.ind = T)
+    ixA = Matrix::which(A!=0, arr.ind = T)
+    ixB = Matrix::which(B!=0, arr.ind = T)
 
     if (nrow(ixA)>0)
       ixAl = split(1:nrow(ixA), ixA[,1])
