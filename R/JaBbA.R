@@ -2943,7 +2943,7 @@ jabba.alleles = function(
 
     aadj = sparseMatrix(1, 1, x = 0, dims = c(length(asegstats), length(asegstats)))
 
-    .flip = function(x){ x %% 2+1}
+    .flip = function(x){ x %% 2+1 }
 
     asegstats = c(high, low)
     acn = cbind(high$cn, low$cn)
