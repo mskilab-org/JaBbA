@@ -1425,7 +1425,6 @@ segstats = function(target,
 
     .postsd = function(x, subsample = NULL)
     {
-      ## TODO: fix prior weight here ..
       var_bar = var(x, na.rm = T)
       n = sum(!is.na(x))
       if (!is.null(subsample)) ## apply penalty to simulate subsampling
@@ -1922,7 +1921,6 @@ jbaMIP = function(
   if (any(!is.na(cn.ub)))
     ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
 
-  ## add these vars to varmeta TODO: convert everything to data frame
   varmeta$vtype = vtype
   varmeta$lb = vtype
   varmeta$ub = ub
@@ -2717,7 +2715,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   out$ab.edges = array(NA, dim = c(nrow(kag$ab.edges), 3, 2), dimnames = list(NULL, c('from', 'to', 'edge.ix'), c('+', '-')))
 
   ## match ab edges to new graph, excluding any edges that aren't included in graph (i.e. not given >0 copy number)
-  ## (tmp.ix may map some ab.edges to "internal" vertices, so need to weed these out via keep TODO:cleanup)
+   ## (tmp.ix may map some ab.edges to "internal" vertices, so need to weed these out via keep)
   if (any(nnab))
   {
     ## og junctions
@@ -2985,7 +2983,6 @@ jabba.alleles = function(
     if (!(baf.field %in% names(values(het.sites))))
       stop('BAF field not found in meta data of het.sites input either!')
     else{
-      ## TODO: change the stats model to beta
       ## outputs are re.seg$low and re.seg$high
       ## test deviations of observed BAF from expected by beta distribution
       if (verbose)
@@ -4187,7 +4184,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                                         # iterate through rows of A, "canceling" them out
   while (length(remaining)>0)
   {
-    if (nrow(K_i)==0 | ncol(K_i)==0) ## TODO figure out why we have to check this so many times
+    if (nrow(K_i)==0 | ncol(K_i)==0)
       return(matrix())
 
     iter = iter+1;
@@ -5583,7 +5580,6 @@ chromoplexy = function(kag = NULL, # output of karyograph
                                         #        exclude.ij = cbind(ab.edges[,3], unlist(tmp))
                                         #        exclude = sparseMatrix(exclude.ij[,1], exclude.ij[,2], x = 1)
       exclude = NULL
-      ## dedup junctions with equiv connections (TODO: why are there dups?) to prevent blowup .. in this case only choosing one "path" for each dup edge
       dt = data.table(i = 1:nrow(adj.bp), j = mmatch(adj.bp, adj.bp[!duplicated(as.matrix(adj.bp)), , drop = F]), key = 'j')
       dtu = dt[!duplicated(j), ]
       pc = all.paths(adj.bp[dtu$i, dtu$i, drop = FALSE], all = paths, verbose = verbose, interval = interval, chunksize = chunksize, exclude = exclude)
@@ -5618,10 +5614,8 @@ chromoplexy = function(kag = NULL, # output of karyograph
 
 
     ## xtYao modified: mclapply to replace lapply and sapply
-    ## CHANGE
     if (length(pc$cycles)>0)
     {
-      ## pc$cycles = pc$cycles[!sapply(pc$cycles, .check.pc, is.cycle = T)]
       pc$cycles = pc$cycles[!unlist(mclapply(pc$cycles, .check.pc, is.cycle = T, mc.cores=mc.cores))]
       pc$cycles = mclapply(pc$cycles, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores=mc.cores)
       pc$cycles = pc$cycles[!duplicated(unlist(mclapply(pc$cycles, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores=mc.cores)))]
