@@ -34,7 +34,7 @@
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table
 #' @importFrom methods as is
-#' @useDynLib JaBbA
+#' @useDynLib jabbadevtest
 #' 
 
 ###############################
@@ -58,6 +58,7 @@
 #' @name JaBbA
 #' @title JaBbA
 #' @description
+#'
 #' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.
 #'
 #' Generates the following files in the output directory:
@@ -82,7 +83,6 @@
 #' jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
 #'
 #' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
-#'
 #'
 #' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
 #' @param coverage  GRanges of coverage OR path to tsv of cov file w GRanges style columns, rds of GRanges or .wig / .bed file of (+/- normalized, GC corrected) fragment density
@@ -1328,7 +1328,7 @@ segstats = function(target,
 
         utarget = unique(gr.stripstrand(target))
 
-        map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
+        map = gr.tile.map(utarget, signal, verbose = TRUE, mc.cores = mc.cores)
         val = values(signal)[, field]
         val[is.infinite(val)] = NA
         vall = lapply(map, function(x) val[x])
@@ -3115,7 +3115,6 @@ jabba.alleles = function(
 ##############################
 #' @name pp.nll
 #' @rdname internal
-#' pp.nll
 #'
 #' computes neg log likelihood ($nll) for purity, ploidy combo and mle abs copy numbers ($v), returns as list
 #'
@@ -3179,7 +3178,7 @@ pp.nll = function(segstats, purity = NA, ploidy = NA, gamma = NA, beta = NA, fie
 #' force.cbind = T will force concatenation via 'cbind'
 #' force.rbind = T will force concatenation via 'rbind'
 #############################################################
-munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
+munlist = function(x, force.rbind = FALSE, force.cbind = FALSE, force.list = FALSE)
 {
     x = x[!sapply(x, is.null)]
 
@@ -3376,7 +3375,7 @@ vaggregate = function(...)
 
 #' @name write.tab
 #' @rdname internal
-write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
+write.tab = function(x, ..., sep = "\t", quote = FALSE, row.names = FALSE)
 {
     if (!is.data.frame(x)){
         x = as.data.frame(x)
@@ -3397,39 +3396,9 @@ alpha = function(col, alpha)
 
 
 
-#' @name ra_tier
-#' @rdname internal
-#' @title ra_tier (
-#' @description
-#'
-#' Classify full set of dRanger rearrangements into "tiers" of confidence
-#'
-#' (1) Tier 1 BPresult>0 and somatic_score>min.score1
-#' (2) Tier 2 BPresult=0 and somatic_score>min.score1
-#' (3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
-#'
-#'
-##################
-ra_tier = function(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10, min.treads2 = 3, max.nreads = Inf)
-{
-    if (is(dra, 'GRangesList')){
-        dra = values(dra)
-    }
-    dra$BPresult[is.na(dra$BPresult)] = -1
-    dra$T_SWreads[is.na(dra$T_SWreads)] = 0
-    dra$N_SWreads[is.na(dra$N_SWreads)] = 0
-    tier = rep(3, nrow(dra))
-    tier[dra$BPresult==1 & dra$somatic_score>=min.score1 & (dra$tumreads >= min.treads1 | dra$T_SWreads > min.treads1 | dra$T_BWAreads > min.treads1) & dra$normreads==0 & dra$N_SWreads < 0] = 1
-    tier[dra$BPresult>=0 & tier!=1 & dra$normreads == 0 & ((dra$tumreads + dra$T_SWreads) >= min.treads2 | (dra$somatic_score >= min.score2 | (dra$tumreads >= min.treads2)) )] = 2
-
-    return(tier)
-}
-
-
 ############################
 #' @name rel2abs
 #' @rdname internal
-#' rel2abs
 #'
 #' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
 #'
@@ -3478,12 +3447,12 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
 #' @name abs2rel
 #' @rdname internal
-#' abs2rel
 #'
 #' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
 #' By default, output is normalized to 1 (i.e. assumes that the total relative copy number signal mass over the genome is 1)
 #'
 #' takes in gr with signal field "field"
+#'
 #' @param gr GRanges input with meta data field corresponding to mean relative copy "mean" in that interval
 #' @param purity purity of sample
 #' @param ploidy ploidy of sample
@@ -3534,7 +3503,7 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 #################################################
 adj2inc = function(A)
 {
-    ij = which(A!=0, arr.ind = T)
+    ij = which(A!=0, arr.ind = TRUE)
     return(sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij))))
 }
 
@@ -3728,7 +3697,6 @@ all.paths = function(A,
 ###############################################
 #' @name collapse.paths
 #' @rdname internal
-#' collapse.paths
 #'
 #' collapse simple paths in a graph G (adjacency matrix or igraph object)
 #' returns m x m new adjacency matrix and map of old vertex id's to new ones
@@ -3851,7 +3819,6 @@ collapse.paths = function(G, verbose = TRUE)
 ###############################################
 #' @name sparse_subset
 #' @rdname internal
-#' sparse_subset
 #'
 #' given k1 x n matrix A and k2 x n matrix B
 #' returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
@@ -3888,56 +3855,6 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 }
 
 
-
-#' .e2class
-#'
-#' edge to contig class conversion
-#'
-#' given matrix K of k contigs over e edges, each belonging to cardinality 1 or cardinality 2 equivalence classes,
-#' assigns id's to equivalent contigs
-#'
-####################################
-.e2class = function(K, eclass)
-{
-    eclass = factor(as.character(eclass))
-
-    if (length(eclass)!=nrow(K)){
-        stop('Error: eclass must be of the same length as number of rows in K')
-    }
-
-    eclass = factor(as.character(eclass))
-    class.count = table(eclass);
-
-    if (any(class.count)>2){
-        stop('Edge equivalence classes can have at most 2 members')
-    }
-
-    biclasses = names(class.count)[class.count==2];  # classes with two edges
-
-    if (length(biclasses)>0){
-        # edge class rotation matrix
-        R = diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
-
-        ix = matrix(unlist(split(1:length(eclass), eclass)[biclasses]), ncol = 2, byrow = T); # index pairs corresponding to edges in biclasses
-        R[ix[, 1:2]] = 1
-        R[ix[, 2:1]] = 1
-
-        Kr = R %*% K
-        eix = mmatch(t(Kr), t(K))
-        eix[is.na(eix)] = 0
-        pairs = t(apply(cbind(1:length(eix), eix), 1, sort))
-        pairs = pairs[!duplicated(pairs) & rowSums(pairs==0)==0, , drop = FALSE]
-
-        kclass = rep(NA, ncol(K))
-        kclass[pairs[,1]] = 1:nrow(pairs);
-        kclass[pairs[,2]] = 1:nrow(pairs);
-        kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
-    } else{
-        kclass = 1:ncol(K)
-    }
-
-    return(kclass)
-}
 
 
 
@@ -4134,9 +4051,9 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 
 
 read.junctions = function(rafile, 
-    keep.features = T, 
+    keep.features = TRUE, 
     seqlengths = hg_seqlengths(), 
-    chr.convert = T, 
+    chr.convert = TRUE, 
     snowman = FALSE, 
     swap.header = NULL,  
     breakpointer = FALSE, 
@@ -4195,8 +4112,8 @@ read.junctions = function(rafile,
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
 
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-            if (!('SVTYPE' %in% names(info(vcf)))) {
+            vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+            if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
             }
@@ -4237,8 +4154,8 @@ read.junctions = function(rafile,
                 vgr$svtype = vgr$SVTYPE
             }
 
-            if (!is.null(info(vcf)$SCTG)){
-                vgr$SCTG = info(vcf)$SCTG
+            if (!is.null(VariantAnnotation::info(vcf)$SCTG)){
+                vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
             }
 
             if (force.bnd){
@@ -4377,7 +4294,7 @@ read.junctions = function(rafile,
                 if (!is.null(tmp)){
                     values(vgr.loose) = tmp
                 } else{
-                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], VariantAnnotation::info(vcf)[bix[npix], ])
                 }
 
                 return(list(junctions = ra, loose.ends = vgr.loose))
@@ -4841,7 +4758,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 ########################################
 #' @name jabba2vcf
 #' @rdname internal
-#' jabba2vcf
 #'
 #' Converts jabba output to vcf file according to 4.2 "BND" syntax
 #'
@@ -5451,18 +5367,18 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
         }
 
         system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
-        vcf = readVcf(tmp.name, hg, ...)
+        vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
         system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
     } else{
-        vcf = readVcf(fn, hg, ...)
+        vcf = VariantAnnotation::readVcf(fn, hg, ...)
     }
 
     out = granges(vcf)
 
     if (!is.null(values(out))){
-        values(out) = cbind(values(out), info(vcf))
+        values(out) = cbind(values(out), VariantAnnotation::info(vcf))
     } else{
-        values(out) = info(vcf)
+        values(out) = VariantAnnotation::info(vcf)
     }
 
     if (!is.null(geno)){
