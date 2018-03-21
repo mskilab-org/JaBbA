@@ -1,3 +1,0 @@
-PKG_CFLAGS=-m64 -fPIC -fno-strict-aliasing
-PKG_CPPFLAGS=-I${CPLEX_DIR}/cplex/include
-PKG_LIBS=-lm -lpthread
