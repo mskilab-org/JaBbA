@@ -22,7 +22,17 @@ install:
 - ./travis-tool.sh install_github mskilab/Ppurple
 - ./travis-tool.sh install_github mskilab/gTrack
 
-
+script: ./travis-tool.sh run_tests
+after_failure:
+- ./travis-tool.sh dump_logs
+notifications:
+  email:
+    on_success: change
+    on_failure: change
+r_packages:
+- covr
+after_success:
+- Rscript -e 'library(covr); codecov()'
 env:
   global:
   - secure: Q5KLtcjpPN9mUuNbKLqPUoa6giSo0lt47+SbbG1YbEa78JLcarJDovTBtLK9arDe3UgAcQGAKb55D/rVNNt0N8RMlKwZGsPTNqRB5/3Q9HdKn3ArTJSQt3SprjTyrAMy/1lK9MLVa0ZkorsMQlLpGwZok07shKQoTyCbO0i7ZV5jQNMeYVU1J+LnTPIkCWXi5nUUd01OyWuyBrtQbe6EFR7gC/K2NFCsrNz7e2SQQEHeBBntaoBNGEjmoK2RORaMvPkWursRJYE+Y0Tbxr2mSQlT8I6P7Tbym+F0+N8JFHz37+3/RcTF8bU68eDNWsAVMQwLKndPgk3+EqxB4yotK1onDrtUNov21fJ4jPqBpCqV/4vCHRvlFfQNya19+cA6DsgRuZSHH3sSYg+o+5THpW7sgKEX5RAhF0f0Y6//FbXAdGm46rW7iRKBHzDBFnX+51qahZRz1Z1QOUXlcdUxPxZi5sObhqMOe5KIItG74JQbKRuW3V0Uv2KjOeEn1yhWlgh9dfzr95SeSWEFKKG26E77SaihSlmvpg5MG2hAfxwEcpiHhD6bkAIeWmBJWTiZd9cABVYMWH/BuLdLR8LSg5RLK3HuLJNuL3kjIKr4xcTUfxvcJQKZxTiNHBcBpHyXH4mrzPasxzrpPOdlFLwiwR0VrcKvWZJ08alhdrnKnCk=
