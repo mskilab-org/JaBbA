@@ -112,7 +112,7 @@
 #' @export
 #' @examples
 #'
-#' library(JaBbA)
+#' library(jabbadevtest)
 #' junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 #' coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 #' hets = system.file("extdata", "hets.txt", package = 'JaBbA')
