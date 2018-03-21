@@ -403,7 +403,7 @@ JaBbA = function(
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @import DNAcopy
 jabba_stub = function(
-    junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+    junctions, ## path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
     coverage, # path to cov file, rds of GRanges
     seg = NULL, # path to seg file, rds of GRanges
     cfield = NULL, # character, junction confidence meta data field in ra
@@ -429,7 +429,7 @@ jabba_stub = function(
     edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
     slack.penalty = 1e2, ## nll penalty for each loose end cop
     use.gurobi = FALSE,
-    overwrite = F, ## whether to overwrite existing output in outdir
+    overwrite = FALSE, ## whether to overwrite existing output in outdir
     verbose = TRUE
 )
 {
@@ -1242,7 +1242,7 @@ ramip_stub = function(kag.file,
 
 
 ##############################
-#' @name .ramip_stub
+#' @name segstats
 #' @rdname internal
 #' segstats is a step in the JaBbA pipeline
 #'
@@ -3605,7 +3605,7 @@ all.paths = function(A,
     source.vertices = sources, 
     sink.vertices = sinks,
     exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
-    verbose = FALSE,...)
+    verbose = FALSE, ...)
 {
     blank.vertices = which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
 
@@ -4419,7 +4419,6 @@ read.junctions = function(rafile,
 
 #' @name karyograph
 #' @rdname internal
-#' karyograph
 #'
 #' @details
 #'
@@ -5068,7 +5067,6 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #################################################
 #' @name chromoplexy
 #' @rdname internal
-#' chromoplexy
 #'
 #' Determines chromoplexy paths from standard JaBbA output
 #'
@@ -5327,7 +5325,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
 #'
 #' @description
 #'
-#' wrapper around variantAnnotation reads VCF into granges or data.table format
+#' Wrapper around variantAnnotation reads VCF into granges or data.table format
 #'
 #' @author Marcin Imielinski
 read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...){
