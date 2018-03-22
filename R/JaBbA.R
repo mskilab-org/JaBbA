@@ -113,9 +113,9 @@
 #' @examples
 #'
 #' library(jabbadevtest)
-#' junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
-#' coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
-#' hets = system.file("extdata", "hets.txt", package = 'JaBbA')
+#' junctions = system.file("extdata", "junctions.vcf", package = 'jabbadevtest')
+#' coverage = system.file("extdata", "coverage.txt", package = 'jabbadevtest')
+#' hets = system.file("extdata", "hets.txt", package = 'jabbadevtest')
 #'
 #' ## run analysis without hets 
 #' jab = JaBbA(junctions = junctions, coverage = coverage)

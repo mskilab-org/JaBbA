@@ -11,7 +11,7 @@
 \alias{.correct.slack}
 \alias{vaggregate}
 \alias{write.tab}
-\alias{ra_tier}
+\alias{karyograph}
 \alias{read_vcf}
 \alias{levapply}
 \alias{Rcplex2}
@@ -23,7 +23,7 @@ jabba_stub(junctions, coverage, seg = NULL, cfield = NULL, tfield = NULL,
   max.threads = Inf, max.mem = 16, purity = NA, ploidy = NA,
   strict = FALSE, mipstart = NULL, field = "ratio", subsample = NULL,
   tilim = 1200, mem = 16, init = NULL, edgenudge = 0.1,
-  slack.penalty = 100, use.gurobi = FALSE, overwrite = F,
+  slack.penalty = 100, use.gurobi = FALSE, overwrite = FALSE,
   verbose = TRUE)
 
 karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
@@ -47,10 +47,9 @@ jmessage(..., pre = "JaBbA")
 
 vaggregate(...)
 
-write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
+write.tab(x, ..., sep = "\\t", quote = FALSE, row.names = FALSE)
 
-ra_tier(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10,
-  min.treads2 = 3, max.nreads = Inf)
+karyograph(junctions, tile = NULL, label.edges = FALSE)
 
 read_vcf(fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
   verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf", ...)
@@ -102,14 +101,35 @@ Rcplex2(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
 
 \item{x}{input vector of data}
 
+\item{tile}{GRanges optional existing tiling of the genome (eg a copy number segmentation) from which additional segments will be created}
+
 \item{by}{length(x) vector of categorical labels}
 
 \item{FUN}{function that takes a length k vector and outputs a length k vector, used for processing each "level" of by}
 
 \item{nseg}{path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
+
+\item{junctions}{GRangesList of junctions, where each item is a length GRanges of signed locations}
 }
 \value{
 named vector indexed by levels of "by"
+
+a list with the following fields
+$tile = GRanges of length 2*n tiling of the genome corresponding to union of rearrangement breakpoints and copy number endpoints
+$G = igraph object representing karyograph, here are the edge and vertex features
+     vertex features: $chrom, $start, $end, $width, $strand, $size, $shape, $border.width, $label, $chrom.ord, $y, $col, $weight
+     edge features:$ $bp.id, $weight, $from, $to, $col, $type, $line.style, $arrow.shape, $width,
+     important:  $type specifies which edges are "aberrant" and "reference", $bp.id specifies which input rearrangement (item in junctions)
+     a given aberrant edge came from (and is NA for reference edges)
+$adj = 2n x 2n adjacency matrix whose nonzero entries ij show the edge.id in $G
+$ab.adj = 2n x 2n binary matrix specifying aberrant edges
+$ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
+            in both orientations
+mimielinski Sunday, Aug 06, 2017 06:46:15 PM
+fix added to handle strange [0 0] junctions outputted
+by Snowman ... which failed to match to any tile
+todo: may want to also handle junctions that
+fall off the other side of the chromosome
 
 length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
 }
@@ -148,18 +168,34 @@ with names as first column of output and values as second
 
 Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
 
-Classify full set of dRanger rearrangements into "tiers" of confidence
-
-(1) Tier 1 BPresult>0 and somatic_score>min.score1
-(2) Tier 2 BPresult=0 and somatic_score>min.score1
-(3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
-
-wrapper around variantAnnotation reads VCF into granges or data.table format
+Wrapper around variantAnnotation reads VCF into granges or data.table format
 
 Applies FUN locally to levels of x and returns vector of length()
 (eg can do a "local" order within levels)
 
 Modification of Rcplex which takes in mipcontrol parameters.
+}
+\details{
+Builds graph from rearrangement breakpoints +/- copy number endpoints
+used for downstream jbaMIP and karyoMIP functions
+
+Input bpp is a GRangesList of signed locus pairs describing aberrant adjacencies.
+The convention is as follows: Each locus in the input breakpoint pair points to the direction that
+is being joined by the adjacencies i.e.
+(-) bp points to "left" or preceding segment
+(+) bp points to the  "right" or the following segment
+
+eg imagine a|bp1|b
+           c|bp2|d
+ "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
+
+Input "tile" is a set of intervals whose endpoints are also used to partition the genome prior to the building of the
+karyograph.
+
+Output karyograph connects signed genomic intervals (in a signed tiling of the reference genome) with "aberrant" and "reference" edges.
+Reference edges connect intervals that are adjacent in the reference genome, and aberrant edges are inferred (upstream
+of this) through cancer genome paired end analysis.
+Note that every node, edge, and path in this karyograph has a "reciprocal path"
 }
 \author{
 Marcin Imielinski
