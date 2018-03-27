@@ -39,6 +39,8 @@ install.packages('devtools')
 
 ```{r}
 devtools::install_github('mskilab/gUtils')
+devtools::install_github('mskilab/bamUtils')
+devtools::install_github('mskilab/gTrack')
 devtools::install_github('mskilab/gGnome')
 devtools::install_github('mskilab/Ppurple')
 ```
