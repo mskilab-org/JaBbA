@@ -48,7 +48,7 @@ devtools::install_github('mskilab/Ppurple')
 6. Install JaBbA
 
 ```{r}
-devtools::install_github('mskilab/JaBbA)
+devtools::install_github('mskilab/JaBbA')
 ```
 
 
