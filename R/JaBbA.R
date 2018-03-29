@@ -2608,7 +2608,7 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   #' resulting from unnecessarily having to use coordinates
   #' to match up loose ends with their nodes
 
-  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
+  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0, na.rm=T))
   {
     sink.ix = which(jab$segstats$eslack.out>0)
     sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
