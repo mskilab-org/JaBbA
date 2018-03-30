@@ -1060,7 +1060,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
       jmessage('Computing purity and ploidy with Ppurple')
     }
 
-    pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose, mc.cores = mc.cores, ignore.sex = TRUE)
+    max.chunk = 1e3
+    numchunks = ceiling(length(ss.tmp)/max.chunk)
+    pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose, mc.cores = mc.cores, numchunks = numchunks, ignore.sex = TRUE)
   }
   ## else
   ##   {
