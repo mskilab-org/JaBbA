@@ -2610,41 +2610,42 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   #' resulting from unnecessarily having to use coordinates
   #' to match up loose ends with their nodes
 
-  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
+  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0, na.rm=T))
   {
-    sink.ix = which(jab$segstats$eslack.out>0)
-    sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
-    sinks$cn = jab$segstats$eslack.out[sink.ix]
-    sinks$partner.id = sink.ix
-    sinks$id = nrow(adj) + 1:length(sinks)
-    sinks$loose = TRUE
-    sinks$right = as.logical(strand(sinks)=='+')
+      sink.ix = which(jab$segstats$eslack.out>0)
+      sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
+      sinks$cn = jab$segstats$eslack.out[sink.ix]
+      sinks$partner.id = sink.ix
+      sinks$id = nrow(adj) + 1:length(sinks)
+      sinks$loose = TRUE
+      sinks$right = as.logical(strand(sinks)=='+')
 
-    source.ix = which(jab$segstats$eslack.in>0)
-    sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
-    sources$cn = jab$segstats$eslack.in[source.ix]
-    sources$partner.id = source.ix
-    sources$id = nrow(adj) + length(sinks) + 1:length(sources)
-    sources$loose = TRUE
-    sources$right = as.logical(strand(sources)=='+')
+      source.ix = which(jab$segstats$eslack.in>0)
+      sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
+      sources$cn = jab$segstats$eslack.in[source.ix]
+      sources$partner.id = source.ix
+      sources$id = nrow(adj) + length(sinks) + 1:length(sources)
+      sources$loose = TRUE
+      sources$right = as.logical(strand(sources)=='+')
 
-    nlends = length(sources) + length(sinks)
+      nlends = length(sources) + length(sinks)
 
-    ## pad original matrix with new nodes
-    adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
-                     cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
+      ## pad original matrix with new nodes
+      adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
+                       cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
 
-    ## add new edges
-    adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
-    adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
-    adj = adj.plus
-    segstats = grbind(jab$segstats, sinks, sources)
-    segstats$loose = F
-    values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
+      ## add new edges
+      adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
+      adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
+      adj = adj.plus
+      segstats = grbind(jab$segstats, sinks, sources)
+      segstats$loose = F
+      values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
   }
-  else
-    segstats$loose = FALSE
-
+  else {
+      segstats = jab$segstats
+      segstats$loose = FALSE
+  }
 
   ##  lends = loose.ends(jab, kag)
   ##  if (!is.null(lends))
