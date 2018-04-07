@@ -278,7 +278,7 @@ JaBbA = function(
       } else {
           values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
       }
-      saveRDS(all.input, "junctions.all.rds")      
+      saveRDS(all.input, "junctions.all.rds")
 
       ## junction rescue
       ## rescues junctions that are within rescue.window bp of a loose end
@@ -1023,7 +1023,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
   if (length(hets.gr)>0){
     ## pretend we don't have hets at all
-
     this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores)
   }
   else
@@ -1509,9 +1508,22 @@ segstats = function(target,
     target$var[target$mean>=rrm[2]] = rrv[2]    
 
     ## computing sd / sem for each target 
-    target$sd = sqrt((2*target$var)/target$nbins)
-  }
+      target$sd = sqrt((2*target$var)/target$nbins)
 
+      ## final clean up
+      good.bin = signal[which(!is.na(val) & !is.infinite(val))]
+      target$good.prop = (target+5e5) %O% good.bin
+      ## table(target$good.prop < 0.85)
+      ## t.td = gTrack(target %Q% (good.prop<0.75))
+      ## c.td = gTrack(signal, y.field = field, circles=T, lwd.border=0.2)
+      ## ppdf(plot(c(c.td, t.td), streduce((target %Q% (good.prop < 0.75))+1e6)[1:20]), width=25)
+      bad.nodes = which(target$good.prop < 0.75)
+      target$raw.mean = target$mean
+      target$raw.sd = target$sd
+      target$mean[bad.nodes] = NA
+      target$sd[bad.nodes] = NA
+  }
+  
   return(target)
 }
 
