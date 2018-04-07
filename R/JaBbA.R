@@ -263,11 +263,26 @@ JaBbA = function(
       gc()
 
       jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
+      jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
       le = jab$segstats[jab$segstats$loose]
+
+      ## Annotate ra.all
+      all.input = readRDS("junctions.all.rds")
+      all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
+      if (ncol(all.ov)==2){
+          all.ov = data.table(data.frame(all.ov))
+          all.ov[, this.cn := values(jab$junctions)$cn[ra2.ix]]
+          values(all.input)[, paste0("iteration", this.iter, ".cn")] =
+              all.ov[, setNames(this.cn, ra1.ix)][as.character(seq_along(all.input))]
+      } else {
+          values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
+      }
+      saveRDS(all.input, "junctions.all.rds")      
 
       ## junction rescue
       ## rescues junctions that are within rescue.window bp of a loose end
-      new.ra  = ra.all[union(values(last.ra)$id, values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
+      new.ra  = ra.all[union(values(last.ra)$id,
+                             values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
       num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
       jcn = rep(0, nrow(jab$ab.edges))
       abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
@@ -283,11 +298,13 @@ JaBbA = function(
         this.iter = this.iter + 1
       }
 
+
       pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
       purity = pp1$purity[1]
       ploidy = pp1$ploidy[1]
 
-      seg = readRDS(paste0(outdir,'/iteration1/seg.rds'))
+      seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## why read from the first iteration??
+      ## seg = jabr$segstats %Q% (strand=="+")
 
       if (verbose)
       {
@@ -865,7 +882,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            ploidy = NA,
                            field = 'ratio', mc.cores = 1, max.chunk = 1e8, subsample = NULL)
 {
-  loose.ends = GRanges()
+    loose.ends = GRanges()
 
   if (!is.null(ra))
     this.ra = ra
@@ -1279,7 +1296,7 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
 
     mipstart = sparseMatrix(ijs$i, ijs$j, x = ijs$mipstart, dims = dim(this.kag$adj))
   }
-  
+
   ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, mipstart = mipstart, adj.lb = adj.lb , use.gurobi = use.gurobi, mc.cores = mc.cores, adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = verbose)
   saveRDS(ra.sol, out.file)
   
@@ -1451,20 +1468,35 @@ segstats = function(target,
  #   sd[which(pc.na>na.thresh)] = NA
 
     target$mean = NA;
-    target$sd = sqrt(prior_beta / (prior_alpha + 1));
+    target$sd = sqrt(prior_beta / (prior_alpha + 1)); ## These are prior parameters
 
     mu = sapply(vall, mean, na.rm = TRUE)
     ix = !is.na(mu)
     target$mean[ix] = mu[ix]
 
+    ## ## loess var estimation
+    ## ## i.e. we fit loess function to map segment mean to variance across the sample
+    ## ## the assumption is that such a function exists 
+    ## var = sapply(vall, var, na.rm = TRUE)       
+    ## ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+    ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
+    ## loe = loess(var ~ mu, weights = target$nbins)
+      ## target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
+      
     ## loess var estimation
     ## i.e. we fit loess function to map segment mean to variance across the sample
     ## the assumption is that such a function exists 
-    var = sapply(vall, var)       
+    sample.var = sapply(vall, var, na.rm = TRUE)        ## computing sample variance for each segment
     ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
     target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
-    loe = loess(var ~ mu, weights = target$nbins)
-    target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
+    target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+    target$nbins.nafrac = 1-target$nbins/target$nbins.tot
+
+    tmp = data.table(var = sample.var, mean = target$mean, nbins = target$nbins, na.frac = target$nbins.nafrac)
+    loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
+
+    ## inferring segment specific variance using loess fit of mean to sample variance across dataset
+    target$var = pmax(predict(loe, target$mean), min(sample.var, na.rm = TRUE))
 
     ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
     ## basically assign all means below the left domain bound of the function the variance of the left domain bound
@@ -1614,6 +1646,7 @@ jbaMIP = function(
     ## that we would never imagine a "reasonable" slack to have to over-rule
     fix = as.integer(which(residual.diff>(8/slack.prior))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
 
+      ## If we have too few fixed nodes, we will have too many subgraphs to optimize, each smaller in size and isolated from others. This allows more loose ends to be used.
     if (verbose)
     {
       jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
@@ -1967,6 +2000,10 @@ jbaMIP = function(
   Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
 
                                         # vertices that will actually have constraints (i.e. those that have non NA segstats )
+  ## XT: if some node's sd is 0, evaluate it to NA
+  if (length(zero.sd.ix <- which(segstats$sd==0))>0){
+      segstats$sd[zero.sd.ix] <- NA
+  }
   v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
 
   v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
@@ -2288,7 +2325,9 @@ jbaMIP = function(
     {
       jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
     }
-
+    if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
+        jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")
+    }
 
   }
 
@@ -2302,6 +2341,7 @@ jbaMIP = function(
       warning("Can't do JaBbA mipstart without setting purity and ploidy ... ignoring mipstart")
     } else
     {
+
       mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
       setnames(mips.dt, c("row", "col"))
       mips.dt[, cn := mipstart[cbind(row, col)]]
@@ -4786,7 +4826,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
       A = sparseMatrix(1,1, x = 0, dims = rep(length(tile), 2))
       return(
         list(tile = tile, adj = A,
-             G = graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
+             G = igraph::graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
     }
 
     junctions = GRangesList()
