@@ -226,6 +226,7 @@ JaBbA = function(
 
     while (continue) {
       gc()
+
       this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
       system(paste('mkdir -p', this.iter.dir))
 
@@ -1157,7 +1158,7 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
                       verbose = FALSE,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
                       ab.force = NULL, ## indices of aberrant junctions to force include into the solution
-                      ab.exclude = NULL ## indices of aberrant junctions to force include into the solution
+                      ab.exclude = NULL ## indices of aberrant junctions to force exclude from the solution
                       )
 {
 
@@ -1460,11 +1461,17 @@ segstats = function(target,
     ## loess var estimation
     ## i.e. we fit loess function to map segment mean to variance across the sample
     ## the assumption is that such a function exists 
-    var = sapply(vall, var)       
+    sample.var = sapply(vall, var, na.rm = TRUE)        ## computing sample variance for each segment
     ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
     target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
-    loe = loess(var ~ mu, weights = target$nbins)
-    target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
+    target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+    target$nbins.nafrac = 1-target$nbins/target$nbins.tot
+
+    tmp = data.table(var = sample.var, mean = target$mean, nbins = target$nbins, na.frac = target$nbins.nafrac)
+    loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
+
+    ## inferring segment specific variance using loess fit of mean to sample variance across dataset
+    target$var = pmax(predict(loe, target$mean), min(sample.var, na.rm = TRUE))
 
     ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
     ## basically assign all means below the left domain bound of the function the variance of the left domain bound
@@ -1555,6 +1562,7 @@ jbaMIP = function(
                   tilim = 20, mipemphasis = 0, epgap = 0.01, # MIP params
                   ploidy.min = 0.1, # ploidy bounds (can be generous)
                   ploidy.max = 20,
+                  ploidy.normal = NULL, ## usually inferred from ncn field but can be entered for subgraph analysis
                                         #  purity.guess = NA,
                                         #  ploidy.guess = NA,
                   beta.guess = beta,
@@ -1602,9 +1610,14 @@ jbaMIP = function(
   {
 
                                         #      m = segstats$mean*beta.guess - gamma.guess
-    m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
-    cnmle = round(m) ## MLE estimate for CN
 
+    ## transform means from data space into copy number space
+    m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
+
+    ## transform sds from data space into copy number space (only need to multiply by beta)
+    segstats$sd = segstats$sd * beta.guess
+
+    cnmle = round(m) ## MLE estimate for CN
     residual.min = ((m-cnmle)/(segstats$sd))^2
     residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
     residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
@@ -1709,6 +1722,15 @@ jbaMIP = function(
     ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
     args = as.list(match.call())[-1]
     args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
+
+    if (is.null(ploidy.normal))
+    {
+      if (field.ncn %in% names(values(segstats)))
+        {
+          args$ploidy.normal = as.data.table(segstats)[, sum(ncn*as.numeric(width), na.rm = TRUE)/sum(ncn*0+1*as.numeric(width), na.rm = TRUE)]
+          
+        }
+    }
 
     sols = mclapply(1:length(cll), function(k, args)
     {
@@ -1990,7 +2012,8 @@ jbaMIP = function(
       if (field.ncn %in% names(values(segstats)))
         ncn = values(segstats)[, field.ncn]
 
-    normal_ploidy = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
+    if (is.null(ploidy.normal))
+      ploidy.normal = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
 
     ## copy number constraints
     Acn = Zero[rep(1, length(v.ix.c)+1), ]
@@ -2004,7 +2027,7 @@ jbaMIP = function(
     Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
                                         #  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
     ##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
-    Acn[length(v.ix.c)+1, gamma.ix] = normal_ploidy/2; ## taking into account (normal) variable cn
+    Acn[length(v.ix.c)+1, gamma.ix] = ploidy.normal/2; ## taking into account (normal) variable cn
     Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
     bcn = rep(0, nrow(Acn))
     sensecn = rep("E", length(bcn))
@@ -2610,42 +2633,41 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   #' resulting from unnecessarily having to use coordinates
   #' to match up loose ends with their nodes
 
-  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0, na.rm=T))
+  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
   {
-      sink.ix = which(jab$segstats$eslack.out>0)
-      sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
-      sinks$cn = jab$segstats$eslack.out[sink.ix]
-      sinks$partner.id = sink.ix
-      sinks$id = nrow(adj) + 1:length(sinks)
-      sinks$loose = TRUE
-      sinks$right = as.logical(strand(sinks)=='+')
+    sink.ix = which(jab$segstats$eslack.out>0)
+    sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
+    sinks$cn = jab$segstats$eslack.out[sink.ix]
+    sinks$partner.id = sink.ix
+    sinks$id = nrow(adj) + 1:length(sinks)
+    sinks$loose = TRUE
+    sinks$right = as.logical(strand(sinks)=='+')
 
-      source.ix = which(jab$segstats$eslack.in>0)
-      sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
-      sources$cn = jab$segstats$eslack.in[source.ix]
-      sources$partner.id = source.ix
-      sources$id = nrow(adj) + length(sinks) + 1:length(sources)
-      sources$loose = TRUE
-      sources$right = as.logical(strand(sources)=='+')
+    source.ix = which(jab$segstats$eslack.in>0)
+    sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
+    sources$cn = jab$segstats$eslack.in[source.ix]
+    sources$partner.id = source.ix
+    sources$id = nrow(adj) + length(sinks) + 1:length(sources)
+    sources$loose = TRUE
+    sources$right = as.logical(strand(sources)=='+')
 
-      nlends = length(sources) + length(sinks)
+    nlends = length(sources) + length(sinks)
 
-      ## pad original matrix with new nodes
-      adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
-                       cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
+    ## pad original matrix with new nodes
+    adj.plus = rBind(cBind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), nlends))),
+                     cBind(sparseMatrix(1,1,x = 0, dims = c(nlends, ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(nlends, nlends))))
 
-      ## add new edges
-      adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
-      adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
-      adj = adj.plus
-      segstats = grbind(jab$segstats, sinks, sources)
-      segstats$loose = F
-      values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
+    ## add new edges
+    adj.plus[cbind(sinks$partner.id, sinks$id)] = sinks$cn+0.01
+    adj.plus[cbind(sources$id, sources$partner.id)] = sources$cn+0.01
+    adj = adj.plus
+    segstats = grbind(jab$segstats, sinks, sources)
+    segstats$loose = F
+    values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
   }
-  else {
-      segstats = jab$segstats
-      segstats$loose = FALSE
-  }
+  else
+    segstats$loose = FALSE
+
 
   ##  lends = loose.ends(jab, kag)
   ##  if (!is.null(lends))
@@ -3489,8 +3511,6 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
       last.x = last.y = NA
       for (i in 1:length(all.pos))
       {
-                                        #                            if (verbose)
-                                        #                               if (i %% 200000 == 0) cat('Iteration', i, 'of', length(all.pos), '\n')
         if (is.q[i])
         {
           out[i, ] = c(all.ix[i], last.y)
