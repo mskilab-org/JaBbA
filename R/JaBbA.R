@@ -290,7 +290,14 @@ JaBbA = function(
       if (any(abix))
         jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
       num.used.junc = length(which(jcn>0))
-      cat('Adding ', num.new.junc, 'new junctions, yielding', num.used.junc, 'used junctions and ', length(new.ra), 'total junctions\n')
+
+
+      t3 = values(new.ra)[, tfield]==3
+      jmessage('Adding ', num.new.junc, 'new junctions, including ', sum(t3), ' tier 3 junctions, yielding', num.used.junc, 'used junctions and ', length(new.ra), 'total junctions\n')
+
+      if (any(t3))
+        values(new.ra)[t3, tfield] = 2
+
 
       if (num.new.junc==0 | this.iter >= reiterate)
         continue = FALSE
@@ -2180,11 +2187,23 @@ jbaMIP = function(
     consmeta = rbind(consmeta, data.frame(type = 'PurityPrior', label = paste('PurityPrior', 1:nrow(Ppd)), sense = 'E', b = bpd, stringsAsFactors = F))
   }
 
-  ## ploidy constraints
-  Aineq = Zero[rep(1, 2), , drop = F];
-  Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
-  bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
-  senseineq = c("G", "L")
+  if (is.na(beta.guess) | is.na(gamma.guess))
+  {
+    ## ploidy constraints
+    Aineq = Zero[rep(1, 2), , drop = F];
+    Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
+    bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
+    senseineq = c("G", "L")
+    
+    ## only constrain ploidy if beta / gamma not specified (ie via non NA guess)
+    consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F))
+  }
+  else
+  {
+    Aineq = NULL
+    bineq = NULL
+    senseineq = NULL
+  }
 
 
                                         # override gamma
@@ -2259,9 +2278,7 @@ jbaMIP = function(
     b = c(bcn, bineq);
     sense = c(sensecn, senseineq);
   }
-
-  consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F))
-
+ 
   ## ecn.out.ub constraints (if any)
   if (any(!is.na(ecn.out.ub)))
   {
@@ -2307,6 +2324,7 @@ jbaMIP = function(
 
   if (length(v.ix.c>0))
     Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
+
 
   ##  EPS = 0.000000000001
   ## if (na.node.nudge) ## added Monday, Oct 23, 2017 05:17:25 PM to prevent unconstrained nodes from blowing up
@@ -2487,7 +2505,13 @@ jbaMIP = function(
     }
   }
 
-                                        # setup MIP
+  ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
+  ## astronomical = value that is 1e8 higher than lowest value
+  qr = range(setdiff(diag(Qobj), 0))
+  CPLEX.INFIN = 1e9
+  Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))] = pmin(CPLEX.INFIN*qr[1], Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))])
+
+  ## setup MIP
   if (use.gurobi) # translate into gurobi
   {
     if (verbose)
@@ -2679,7 +2703,8 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
   #' resulting from unnecessarily having to use coordinates
   #' to match up loose ends with their nodes
 
-  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0))
+  
+  if (any(jab$segstats$eslack.out>0 | jab$segstats$eslack.in>0, na.rm = TRUE))
   {
     sink.ix = which(jab$segstats$eslack.out>0)
     sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
@@ -2712,7 +2737,10 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     values(segstats) = rrbind(values(jab$segstats), values(sinks), values(sources))
   }
   else
+  {
+    segstats = jab$segstats
     segstats$loose = FALSE
+  }
 
 
   ##  lends = loose.ends(jab, kag)
