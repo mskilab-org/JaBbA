@@ -1518,17 +1518,22 @@ segstats = function(target,
       target$sd = sqrt((2*target$var)/target$nbins)
 
       ## final clean up
-      good.bin = signal[which(!is.na(val) & !is.infinite(val))]
-      target$good.prop = (target+5e5) %O% good.bin
+      good.bin = signal[which(!is.na(values(signal)[, field]) & !is.infinite(values(signal)[, field]))]
+      ## target$good.prop = (target+5e5) %O% good.bin
+      target$good.prop = (target+1e5) %O% good.bin
       ## table(target$good.prop < 0.85)
       ## t.td = gTrack(target %Q% (good.prop<0.75))
       ## c.td = gTrack(signal, y.field = field, circles=T, lwd.border=0.2)
       ## ppdf(plot(c(c.td, t.td), streduce((target %Q% (good.prop < 0.75))+1e6)[1:20]), width=25)
-      bad.nodes = which(target$good.prop < 0.75)
+      ## bad.nodes = which(target$good.prop < 0.75)
+      bad.nodes = which(target$good.prop < 0.9)
       target$raw.mean = target$mean
       target$raw.sd = target$sd
       target$mean[bad.nodes] = NA
       target$sd[bad.nodes] = NA
+      target$bad.nodes = seq_along(target) %in% bad.nodes
+      jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
+      jmessage("Hard setting", sum(width(target[bad.nodes]))/1e6, "Mb of the genome to NA that didn't pass our quality threshold")      
   }
   
   return(target)
