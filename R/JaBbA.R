@@ -3453,7 +3453,7 @@ abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
         gamma = 2*(1-purity)/purity
     }
 
-    ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+    ploidy_normal = sum(w * ncn, na.rm = TRUE) / sw  ## this will be = 2 if ncn is trivially 2
 
     if (is.na(beta)){
         beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * total)
