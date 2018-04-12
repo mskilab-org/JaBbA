@@ -3662,35 +3662,6 @@ alpha = function(col, alpha)
 }
 
 
-#' @name ra_tier
-#' @rdname internal
-#' @title ra_tier (
-#' @description
-#'
-#' Classify full set of dRanger rearrangements into "tiers" of confidence
-#'
-#' (1) Tier 1 BPresult>0 and somatic_score>min.score1
-#' (2) Tier 2 BPresult=0 and somatic_score>min.score1
-#' (3) Tier 3 min.score2<=somatic_score<=min.score2 & tumreads>min.reads
-#'
-#'
-##################
-ra_tier = function(dra, min.score1 = 10, min.score2 = 4, min.treads1 = 10, min.treads2 = 3, max.nreads = Inf)
-{
-  if (is(dra, 'GRangesList'))
-    dra = values(dra)
-  dra$BPresult[is.na(dra$BPresult)] = -1
-  dra$T_SWreads[is.na(dra$T_SWreads)] = 0
-  dra$N_SWreads[is.na(dra$N_SWreads)] = 0
-  tier = rep(3, nrow(dra))
-  tier[dra$BPresult==1 & dra$somatic_score>=min.score1 & (dra$tumreads >= min.treads1 | dra$T_SWreads > min.treads1 | dra$T_BWAreads > min.treads1) & dra$normreads==0 & dra$N_SWreads < 0] = 1
-  tier[dra$BPresult>=0 & tier!=1 & dra$normreads == 0 &
-       ((dra$tumreads + dra$T_SWreads) >= min.treads2 |
-        (dra$somatic_score >= min.score2 | (dra$tumreads >= min.treads2))
-       )] = 2
-
-  return(tier)
-}
 
 
 ############################
@@ -4174,54 +4145,6 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 
 
 
-#' .e2class
-#'
-#' edge to contig class conversion
-#'
-#' given matrix K of k contigs over e edges, each belonging to cardinality 1 or cardinality 2 equivalence classes,
-#' assigns id's to equivalent contigs
-#'
-####################################
-.e2class = function(K, eclass)
-{
-  eclass = factor(as.character(eclass))
-
-  if (length(eclass)!=nrow(K))
-    stop('eclass must be of the same length as number of rows in K')
-
-  eclass = factor(as.character(eclass))
-  class.count = table(eclass);
-
-  if (any(class.count)>2)
-    stop('Edge equivalence classes can have at most 2 members')
-
-  biclasses = names(class.count)[class.count==2];  # classes with two edges
-
-  if (length(biclasses)>0)
-  {
-                                        # edge class rotation matrix
-    R = diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
-
-    ix = matrix(unlist(split(1:length(eclass), eclass)[biclasses]), ncol = 2, byrow = T); # index pairs corresponding to edges in biclasses
-    R[ix[, 1:2]] = 1
-    R[ix[, 2:1]] = 1
-
-    Kr = R %*% K
-    eix = mmatch(t(Kr), t(K))
-    eix[is.na(eix)] = 0
-    pairs = t(apply(cbind(1:length(eix), eix), 1, sort))
-    pairs = pairs[!duplicated(pairs) & rowSums(pairs==0)==0, , drop = FALSE]
-
-    kclass = rep(NA, ncol(K))
-    kclass[pairs[,1]] = 1:nrow(pairs);
-    kclass[pairs[,2]] = 1:nrow(pairs);
-    kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
-  }
-  else
-    kclass = 1:ncol(K)
-
-  return(kclass)
-}
 
 
 ##################################
