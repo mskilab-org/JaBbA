@@ -8,7 +8,11 @@ junctions = system.file("extdata", "junctions.vcf", package = 'jabbadevtest')
 coverage = system.file("extdata", "coverage.txt", package = 'jabbadevtest')
 hets = system.file("extdata", "hets.txt", package = 'jabbadevtest')
 
+set.seed(42);
 
+jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+
+print(jab)
 
 
 ## JaBbA
