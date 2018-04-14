@@ -9,6 +9,8 @@ before_install:
 - echo $PWD
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
 - tar -xzf /home/travis/build/mskilab/JaBbA/cool.tar.gz
+- cd /home/travis/build/mskilab/JaBbA/
+- echo $PWD
 install:
 - ./travis-tool.sh install_bioc_deps
 - ./travis-tool.sh install_deps
