@@ -213,7 +213,7 @@ check.Rcplex.control <- function(control, isQP)
     return(con)
 }
 
-
+###
 
 split.control.list <- function(control){
     R.names <- c("round", "maxcalls")
