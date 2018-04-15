@@ -5,14 +5,14 @@ before_install:
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
 - "./travis-tool.sh bootstrap"
-- curl -OL $CS
+- curl -OL $CSS
 - echo $PWD
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- tar -xzf /home/travis/build/mskilab/JaBbA/socool.tar.gz
+- tar -xzf /home/travis/build/mskilab/JaBbA/vcool.tar.gz
 install:
 - "./travis-tool.sh install_bioc_deps"
 - "./travis-tool.sh install_deps"
-- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/cplex"
+- R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/CPLEX_Studio"
   Rcplex_0.3-3.tar.gz
 - "./travis-tool.sh install_github r-lib/testthat"
 - "./travis-tool.sh install_github mskilab/gUtils"
