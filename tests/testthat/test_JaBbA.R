@@ -10,21 +10,31 @@ hets = system.file("extdata", "hets.txt", package = 'jabbadevtest')
 
 
 
-##library(Rcplex)
+library(Rcplex)
 
-##cvec <- c(1,2,3)
-##Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-##bvec <- c(20,-30)
-##ub <- c(40,Inf,Inf)
-##res <- Rcplex(cvec,Amat,bvec,ub=ub,objsense="max",sense=c('L','G'))
-##print(res)
+cvec <- c(1,2,3)
+Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+bvec <- c(20,-30)
+ub <- c(40,Inf,Inf)
+res <- Rcplex(cvec,Amat,bvec,ub=ub,objsense="max",sense=c('L','G'))
+print(res)
 
 
-set.seed(42);
+test_that('testing Rcplex works', {
+    
+    expect_equal(res$xopt[1], 40)
+    expect_equal(res$xopt[3], 42.5)
+    expect_equal(res$obj, 202.5)
+    expect_equal(res$extra$slack[1], 0)
 
-jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+})
 
-print(jab)
+
+##set.seed(42);
+
+##jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+
+##print(jab)
 
 ## JaBbA
 

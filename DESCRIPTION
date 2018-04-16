@@ -26,6 +26,7 @@ Imports:
   utils
 Suggests:  
   testthat (>= 2.0), 
+  covr,
   slam, 
   Rcplex
 License: GPL-2

@@ -22,6 +22,7 @@ install:
 - "./travis-tool.sh install_github mskilab/gGnome"
 - "./travis-tool.sh install_github mskilab/Ppurple"
 - "./travis-tool.sh install_github mskilab/gTrack"
+- ./travis-tool.sh install_github r-lib/covr
 script: "./travis-tool.sh run_tests"
 after_failure:
 - "./travis-tool.sh dump_logs"
