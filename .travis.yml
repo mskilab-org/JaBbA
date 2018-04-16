@@ -15,6 +15,7 @@ install:
 - R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/CPLEX_Studio/cplex"
   Rcplex_0.3-3.tar.gz
 - "./travis-tool.sh install_github r-lib/testthat"
+- "./travis-tool.sh install_github cran/Rcplex"
 - "./travis-tool.sh install_github mskilab/gUtils"
 - "./travis-tool.sh install_github mskilab/bamUtils"
 - "./travis-tool.sh install_github mskilab/gTrack"
