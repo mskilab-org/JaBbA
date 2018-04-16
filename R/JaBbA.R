@@ -4310,7 +4310,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
     else if (grepl('(vcf$)|(vcf.gz$)', rafile))
     {
       vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-      if (!('SVTYPE' %in% names(info(vcf)))) {
+      if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
         warning('Vcf not in proper format.  Is this a rearrangement vcf?')
         return(GRangesList());
       }
@@ -4348,8 +4348,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
       else
         vgr$svtype = vgr$SVTYPE
 
-      if (!is.null(info(vcf)$SCTG))
-        vgr$SCTG = info(vcf)$SCTG
+      if (!is.null(VariantAnnotation::info(vcf)$SCTG))
+        vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
 
       if (force.bnd)
         vgr$svtype = "BND"
@@ -4496,7 +4496,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
         if (!is.null(tmp))
           values(vgr.loose) = tmp
         else
-          values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+          values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], VariantAnnotation::info(vcf)[bix[npix], ])
 
         return(list(junctions = ra, loose.ends = vgr.loose))
       }
@@ -5617,9 +5617,9 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
   out = granges(vcf)
 
   if (!is.null(values(out)))
-    values(out) = cbind(values(out), info(vcf))
+    values(out) = cbind(values(out), VariantAnnotation::info(vcf))
   else
-    values(out) = info(vcf)
+    values(out) = VariantAnnotation::info(vcf)
 
 
   if (!is.null(geno))
