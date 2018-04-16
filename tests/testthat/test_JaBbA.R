@@ -37,9 +37,9 @@ test_that("read.junctions", {
 
 
 
-##set.seed(42);
+set.seed(42);
 
-##jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
 
 ##print(jab)
 
