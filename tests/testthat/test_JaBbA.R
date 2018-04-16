@@ -8,22 +8,23 @@ junctions = system.file("extdata", "junctions.vcf", package = 'jabbadevtest')
 coverage = system.file("extdata", "coverage.txt", package = 'jabbadevtest')
 hets = system.file("extdata", "hets.txt", package = 'jabbadevtest')
 
+
+
+##library(Rcplex)
+
+##cvec <- c(1,2,3)
+##Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+##bvec <- c(20,-30)
+##ub <- c(40,Inf,Inf)
+##res <- Rcplex(cvec,Amat,bvec,ub=ub,objsense="max",sense=c('L','G'))
+##print(res)
+
+
 set.seed(42);
 
-##jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
 
-##print(jab)
-
-library(Rcplex)
-
-cvec <- c(1,2,3)
-Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-bvec <- c(20,-30)
-ub <- c(40,Inf,Inf)
-res <- Rcplex(cvec,Amat,bvec,ub=ub,objsense="max",sense=c('L','G'))
-print(res)
-
-
+print(jab)
 
 ## JaBbA
 
