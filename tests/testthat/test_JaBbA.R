@@ -14,6 +14,12 @@ set.seed(42);
 
 ##print(jab)
 
+cvec <- c(1,2,3)
+Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+bvec <- c(20,-30)
+ub <- c(40,Inf,Inf)
+res <- Rcplex(cvec,Amat,bvec,ub=ub,objsense="max",sense=c('L','G'))
+print(res)
 
 
 
