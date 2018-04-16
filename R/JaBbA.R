@@ -4309,7 +4309,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
     }
     else if (grepl('(vcf$)|(vcf.gz$)', rafile))
     {
-      vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+      vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
       if (!('SVTYPE' %in% names(info(vcf)))) {
         warning('Vcf not in proper format.  Is this a rearrangement vcf?')
         return(GRangesList());
@@ -5608,11 +5608,11 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
       system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
 
     system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
-    vcf = readVcf(tmp.name, hg, ...)
+    vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
     system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
   }
   else
-    vcf = readVcf(fn, hg, ...)
+    vcf = VariantAnnotation::readVcf(fn, hg, ...)
 
   out = granges(vcf)
 
