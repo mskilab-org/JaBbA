@@ -1,12 +1,12 @@
 
-library(jabbadevtest)   
+library(JaBbA)   
 library(gUtils)
 library(testthat)
 
 
-junctions = system.file("extdata", "junctions.vcf", package = 'jabbadevtest')
-coverage = system.file("extdata", "coverage.txt", package = 'jabbadevtest')
-hets = system.file("extdata", "hets.txt", package = 'jabbadevtest')
+junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
+coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
+hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
 
 

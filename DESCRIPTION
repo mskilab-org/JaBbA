@@ -1,4 +1,4 @@
-Package: jabbadevtest
+Package: JaBbA
 Title: Infer cancer graph genomes from read depth and junctions
 Version: 0.0.0.9000
 Authors@R: person(given = "Marcin", family = "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
