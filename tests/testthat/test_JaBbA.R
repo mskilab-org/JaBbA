@@ -1,5 +1,5 @@
 
-library(jabbadevtest)   ### package
+library(jabbadevtest)   
 library(gUtils)
 library(testthat)
 
@@ -58,7 +58,6 @@ test_that("JaBbA", {
 
 
 
-##print(jab)
 
 ## JaBbA
 
