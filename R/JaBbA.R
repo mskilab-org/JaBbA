@@ -4413,6 +4413,30 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
         strand(vgr.pair1)[tmpix] = '-'
         strand(vgr.pair2)[tmpix] = '+'
       }
+      ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
+
+      this.inf = values(vgr)[bix[pix[vix]], ]
+
+      if (is.null(this.inf$POS))
+        this.inf = cbind(data.frame(POS = ''), this.inf)
+      if (is.null(this.inf$CHROM))
+        this.inf = cbind(data.frame(CHROM = ''), this.inf)
+
+      if (is.null(this.inf$MATL))
+        this.inf = cbind(data.frame(MALT = ''), this.inf)
+
+      this.inf$CHROM = seqnames(vgr.pair1)
+      this.inf$POS = start(vgr.pair1)
+      this.inf$MATECHROM = seqnames(vgr.pair2)
+      this.inf$MATEPOS = start(vgr.pair2)
+      this.inf$MALT = vgr.pair2$AL
+
+      ## NOT SURE WHY BROKEN
+      ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
+      ## if (!is.null(tmp))
+      ##     values(ra) = tmp
+      ## else
+      ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
 
       ## if "first" and "left" then "-", "-"
       tmpix = vgr.pair1$first & !vgr.pair1$right
@@ -4421,6 +4445,29 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
         strand(vgr.pair1)[tmpix] = '-'
         strand(vgr.pair2)[tmpix] = '-'
       }
+    }
+    else
+      rafile = read.delim(rafile)
+  }
+
+  if (is.data.table(rafile))
+  {
+    rafile = as.data.frame(rafile)
+  }
+
+  out = GRangesList()
+
+  if (nrow(rafile)==0)
+  {
+    values(out) = rafile
+    return(out)
+  }
+
+  if (snowman) ## flip breaks so that they are pointing away from junction
+  {
+    rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
+    rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
+  }
 
       ## if "second" and "left" then "+", "-"
       tmpix = !vgr.pair1$first & !vgr.pair1$right
@@ -5240,6 +5287,22 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
       header = c(header, sprintf("##reference=NA"))
       header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
     }
+  }
+
+  if (!is.null(fn))
+  {
+    writeLines(header, fn)
+    suppressWarnings(write.table(body, fn, sep = '\t', quote = F, row.names = F, append = T))
+  }
+  else
+  {
+    t = textConnection("out", 'w')
+    writeLines(header, t)
+    suppressWarnings(write.table(body, t, sep = '\t', quote = F, row.names = F, append = T))
+    close(t)
+    return(out)
+  }
+}
 
     header = c(header,
                '##ALT=<ID=DEL,Description="Decreased copy number relative to reference">',
