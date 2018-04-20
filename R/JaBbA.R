@@ -149,234 +149,239 @@ JaBbA = function(
                  mc.cores = 1,
                  strict = FALSE,
                  max.threads = Inf,
-                 max.mem = 16, 
+                 max.mem = 16,
+                 indel = TRUE, ## whether to force the small isolated tier 2 events into the model
+                 all.in = TRUE, ## whether to use all available junctions in the first interation
                  verbose = TRUE ## whether to provide verbose output
                  )
 {
-  system(paste('mkdir -p', outdir))
-  jmessage('Starting analysis in ', normalizePath(outdir))
-  if (overwrite)
-    jmessage('Overwriting previous analysis contents')
-  ra = junctions
-  reiterate = 1 + as.integer(reiterate)
+    system(paste('mkdir -p', outdir))
+    jmessage('Starting analysis in ', normalizePath(outdir))
+    if (overwrite)
+        jmessage('Overwriting previous analysis contents')
+    ra = junctions
+    reiterate = 1 + as.integer(reiterate)
 
-  if (is.character(ra))
-  {
-    if (!file.exists(ra))
+    if (is.character(ra))
     {
-      stop(paste('Junction path', ra, 'does not exist'))
-    }
+        if (!file.exists(ra))
+        {
+            stop(paste('Junction path', ra, 'does not exist'))
+        }
 
-    if (grepl("rds$", ra)){
-      ra.all = readRDS(ra)
-    } else {
-      ra.all = read.junctions(ra)
-    }
-  } else
-  {
-    ra.all = ra
-  }
-
-  if (verbose)
-  {
-    jmessage("Read in ", length(ra.all), " total junctions")
-  }
-
-  ## if we are iterating more than once
-  if (reiterate>1)  {
-    if (is.null(tfield))
-      tfield = 'tier'
-
-    if (!(tfield %in% names(values(ra.all))))
+        if (grepl("rds$", ra)){
+            ra.all = readRDS(ra)
+        } else {
+            ra.all = read.junctions(ra)
+        }
+    } else
     {
-      if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
-        jmessage("Detected SvABA input. Expand to unfiltered set.")
-        svaba.uf = gsub("svaba.somatic.sv.vcf",
-                        "svaba.unfiltered.somatic.sv.vcf", ra)
-        ra.uf = read.junctions(svaba.uf)
-        ## Careful!!! swapping the un
-        ra.old = ra.all
-        ra.all = ra.uf
-      }
-      else ## just give every rearrangement the same tier (2, i.e. optional)
-      {
-        warning("Tier field", field, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
-        values(ra.all)$tier = 2
-      }
+        ra.all = ra
     }
 
-    if (!all(unique(values(ra.all)[, tfield]) %in% 1:3))
-      stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
-
-    continue = TRUE
-    this.iter = 1;
-
-    values(ra.all)$id = 1:length(ra.all)
-    saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
-
-    #' xtYao #' Wednesday, Apr 18, 2018 08:28:15 AM
-    ## MOMENT
-    ## big change tonight, I'm gonna start with all of the tiers in the first round
-    ## and then in each of following iterations keep the ones incorporated
-    ## plus the ones that didn't but fall inside the range of a lo
-    ## last.ra = ra.all[values(ra.all)[, tfield]<3]
-    last.ra = ra.all
-    
-
-                                        #    if (verbose)
-                                        #    {
-    jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
-    jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
-    jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
-    jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
-    ##   }
-
-    while (continue) {
-      gc()
-
-      this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
-      system(paste('mkdir -p', this.iter.dir))
-
-      jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
-
-      this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
-      saveRDS(last.ra, this.ra.file)
-      jab = jabba_stub(
-        junctions = this.ra.file,
-        seg = seg,
-        coverage = coverage,
-        hets = hets,
-        nseg = nseg,
-        cfield = cfield,
-        tfield = tfield,
-        nudge.balanced = as.logical(nudge.balanced),
-        outdir = this.iter.dir,
-        mc.cores = as.numeric(mc.cores),
-        max.threads = as.numeric(max.threads),
-        max.mem = as.numeric(max.mem),
-        edgenudge = as.numeric(edgenudge),
-        tilim = as.numeric(tilim),
-        strict = strict,
-        name = name,
-        use.gurobi = as.logical(use.gurobi),
-        field = field,
-        subsample = subsample,
-        slack.penalty = as.numeric(slack.penalty),
-        mipstart = init, 
-        ploidy = as.numeric(ploidy),
-        purity = as.numeric(purity),
-        overwrite = as.logical(overwrite),
-        verbose = as.numeric(verbose)        
-      )
-      gc()
-
-      jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
-      jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
-      le = jab$segstats[jab$segstats$loose]
-
-      ## Annotate ra.all
-      all.input = readRDS("junctions.all.rds")
-      all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
-      if (ncol(all.ov)==2){
-          all.ov = data.table(data.frame(all.ov))
-          all.ov[, this.cn := values(jab$junctions)$cn[ra2.ix]]
-          values(all.input)[, paste0("iteration", this.iter, ".cn")] =
-              all.ov[, setNames(this.cn, ra1.ix)][as.character(seq_along(all.input))]
-      } else {
-          values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
-      }
-      saveRDS(all.input, "junctions.all.rds")
-
-      ## junction rescue
-      ## rescues junctions that are within rescue.window bp of a loose end
-      new.ra.id = union(values(jab$junctions)$id[which(values(jab$junctions)$cn>0)],## got used, stay there
-                        values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T))])
-      new.ra = ra.all[which(values(ra.all)$id %in% new.ra.id)]
-      ## new.ra  = ra.all[union(values(last.ra)$id,
-      ##                        values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
-      new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
-      ## num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
-      num.new.junc = length(new.junc.id)
-      jcn = rep(0, nrow(jab$ab.edges))
-      abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
-      if (any(abix))
-        jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
-      num.used.junc = length(which(jcn>0))
-
-
-      t3 = values(new.ra)[, tfield]==3
-      jmessage('Adding ', num.new.junc,
-               ' new junctions, including ', sum(t3),
-               ' tier 3 junctions, yielding ', num.used.junc,
-               ' used junctions and ', length(new.ra), ' total junctions\n')
-
-      if (any(t3))
-        values(new.ra)[t3, tfield] = 2
-
-
-      if (num.new.junc==0 | this.iter >= reiterate)
-        continue = FALSE
-      else {
-        last.ra = new.ra
-        this.iter = this.iter + 1
-      }
-
-
-      pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
-      purity = pp1$purity[1]
-      ploidy = pp1$ploidy[1]
-
-      seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## why read from the first iteration??
-      ## seg = jabr$segstats %Q% (strand=="+")
-
-      if (verbose)
-      {
-        jmessage("Setting mipstart to previous iteration's jabba graph")
-      }
-
-      init = jab
-
-      if (verbose)
-      {
-        jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
-      }
+    if (verbose)
+    {
+        jmessage("Read in ", length(ra.all), " total junctions")
     }
 
-    this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
+    ## if we are iterating more than once
+    if (reiterate>1)  {
+        if (is.null(tfield))
+            tfield = 'tier'
 
-    system(sprintf('cp %s/* %s', this.iter.dir, outdir))
-    jmessage('Done Iterating')
-  } else  {
-    jab = jabba_stub(
-      junctions = ra,
-      seg = seg,
-      coverage = coverage,
-      hets = hets,
-      nseg = nseg,
-      cfield = cfield,
-      tfield = tfield,
-      nudge.balanced = as.logical(nudge.balanced),
-      outdir = outdir,
-      mc.cores = as.numeric(mc.cores),
-      max.threads = as.numeric(max.threads),
-      max.mem = as.numeric(max.mem),
-      edgenudge = as.numeric(edgenudge),
-      tilim = as.numeric(tilim),
-      strict = strict,
-      name = name,
-      use.gurobi = as.logical(use.gurobi),
-      field = field,
-      subsample = subsample,
-      slack.penalty = as.numeric(slack.penalty),
-      mipstart = init, 
-      ploidy = as.numeric(ploidy),
-      purity = as.numeric(purity),
-      overwrite = as.logical(overwrite),
-      verbose = as.numeric(verbose)
-    )
-  }
+        if (!(tfield %in% names(values(ra.all))))
+        {
+            if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
+                jmessage("Detected SvABA input. Expand to unfiltered set.")
+                svaba.uf = gsub("svaba.somatic.sv.vcf",
+                                "svaba.unfiltered.somatic.sv.vcf", ra)
+                ra.uf = read.junctions(svaba.uf)
+                ## Careful!!! swapping the un
+                ra.old = ra.all
+                ra.all = ra.uf
+            }
+            else ## just give every rearrangement the same tier (2, i.e. optional)
+            {
+                warning("Tier field", field, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
+                values(ra.all)$tier = 2
+            }
+        }
 
-  return(jab)
+        if (!all(unique(values(ra.all)[, tfield]) %in% 1:3))
+            stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+
+        continue = TRUE
+        this.iter = 1;
+
+        values(ra.all)$id = 1:length(ra.all)
+        saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
+
+        #' xtYao #' Wednesday, Apr 18, 2018 08:28:15 AM
+        ## big change tonight, I'm gonna start with all of the tiers in the first round
+        ## and then in each of following iterations keep the ones incorporated
+        ## plus the ones that didn't but fall inside the range of a lo
+        if (all.in){
+            last.ra = ra.all
+        } else {
+            last.ra = ra.all[values(ra.all)[, tfield]<3]
+        }
+        
+        ## #    if (verbose)
+        ## #    {
+        jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
+        jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
+        jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
+        jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
+        ##   }
+
+        while (continue) {
+            gc()
+
+            this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
+            system(paste('mkdir -p', this.iter.dir))
+
+            jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
+
+            this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
+            saveRDS(last.ra, this.ra.file)
+            jab = jabba_stub(
+                junctions = this.ra.file,
+                seg = seg,
+                coverage = coverage,
+                hets = hets,
+                nseg = nseg,
+                cfield = cfield,
+                tfield = tfield,
+                nudge.balanced = as.logical(nudge.balanced),
+                outdir = this.iter.dir,
+                mc.cores = as.numeric(mc.cores),
+                max.threads = as.numeric(max.threads),
+                max.mem = as.numeric(max.mem),
+                edgenudge = as.numeric(edgenudge),
+                tilim = as.numeric(tilim),
+                strict = strict,
+                name = name,
+                use.gurobi = as.logical(use.gurobi),
+                field = field,
+                subsample = subsample,
+                slack.penalty = as.numeric(slack.penalty),
+                mipstart = init, 
+                ploidy = as.numeric(ploidy),
+                purity = as.numeric(purity),
+                indel = as.logical(indel),
+                overwrite = as.logical(overwrite),
+                verbose = as.numeric(verbose)        
+            )
+            gc()
+
+            jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
+            jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
+            le = jab$segstats[jab$segstats$loose]
+
+            ## Annotate ra.all
+            all.input = readRDS("junctions.all.rds")
+            all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
+            if (ncol(all.ov)==2){
+                all.ov = data.table(data.frame(all.ov))
+                all.ov[, this.cn := values(jab$junctions)$cn[ra2.ix]]
+                values(all.input)[, paste0("iteration", this.iter, ".cn")] =
+                    all.ov[, setNames(this.cn, ra1.ix)][as.character(seq_along(all.input))]
+            } else {
+                values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
+            }
+            saveRDS(all.input, "junctions.all.rds")
+
+            ## junction rescue
+            ## rescues junctions that are within rescue.window bp of a loose end
+            new.ra.id = union(values(jab$junctions)$id[which(values(jab$junctions)$cn>0)],## got used, stay there
+                              values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T))])
+            new.ra = ra.all[which(values(ra.all)$id %in% new.ra.id)]
+            ## new.ra  = ra.all[union(values(last.ra)$id,
+            ##                        values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
+            new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
+            ## num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
+            num.new.junc = length(new.junc.id)
+            jcn = rep(0, nrow(jab$ab.edges))
+            abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
+            if (any(abix))
+                jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
+            num.used.junc = length(which(jcn>0))
+
+
+            t3 = values(new.ra)[, tfield]==3
+            jmessage('Adding ', num.new.junc,
+                     ' new junctions, including ', sum(t3),
+                     ' tier 3 junctions, yielding ', num.used.junc,
+                     ' used junctions and ', length(new.ra), ' total junctions\n')
+
+            if (any(t3))
+                values(new.ra)[t3, tfield] = 2
+
+
+            if (num.new.junc==0 | this.iter >= reiterate)
+                continue = FALSE
+            else {
+                last.ra = new.ra
+                this.iter = this.iter + 1
+            }
+
+
+            pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
+            purity = pp1$purity[1]
+            ploidy = pp1$ploidy[1]
+
+            seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## why read from the first iteration??
+            ## seg = jabr$segstats %Q% (strand=="+")
+
+            if (verbose)
+            {
+                jmessage("Setting mipstart to previous iteration's jabba graph")
+            }
+
+            init = jab
+
+            if (verbose)
+            {
+                jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
+            }
+        }
+
+        this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
+
+        system(sprintf('cp %s/* %s', this.iter.dir, outdir))
+        jmessage('Done Iterating')
+    } else  {
+        jab = jabba_stub(
+            junctions = ra,
+            seg = seg,
+            coverage = coverage,
+            hets = hets,
+            nseg = nseg,
+            cfield = cfield,
+            tfield = tfield,
+            nudge.balanced = as.logical(nudge.balanced),
+            outdir = outdir,
+            mc.cores = as.numeric(mc.cores),
+            max.threads = as.numeric(max.threads),
+            max.mem = as.numeric(max.mem),
+            edgenudge = as.numeric(edgenudge),
+            tilim = as.numeric(tilim),
+            strict = strict,
+            name = name,
+            use.gurobi = as.logical(use.gurobi),
+            field = field,
+            subsample = subsample,
+            slack.penalty = as.numeric(slack.penalty),
+            mipstart = init, 
+            ploidy = as.numeric(ploidy),
+            purity = as.numeric(purity),
+            indel = as.logical(indel),
+            overwrite = as.logical(overwrite),
+            verbose = as.numeric(verbose)
+        )
+    }
+
+    return(jab)
 }
 
 
@@ -457,207 +462,221 @@ jabba_stub = function(
                       edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
+                      indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE
                       )
 {
-  kag.file = paste(outdir, 'karyograph.rds', sep = '/')
-  hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
-  junctions.txt.file = paste(outdir, 'junctions.txt', sep = '/')
-  junctions.rds.file = paste(outdir, 'junctions.rds', sep = '/')
-  jabba.raw.rds.file = paste(outdir, 'jabba.raw.rds', sep = '/')
-  jabba.rds.file = paste(outdir, 'jabba.rds', sep = '/')
-  jabba.json.file = paste(outdir, 'jabba.json', sep = '/')
-  jabba.gg.rds.file = paste(outdir, 'jabba.gg.rds', sep = '/')
-  jabba.vcf.file = paste(outdir, 'jabba.vcf', sep = '/')
-  jabba.cnv.vcf.file = paste(outdir, 'jabba.cnv.vcf', sep = '/')
-  jabba.simple.rds.file = paste(outdir, 'jabba.simple.rds', sep = '/')
-  jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
-  jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
-  jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
-  jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
-  jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
-  seg.tab.file = paste(outdir, 'jabba.seg.txt', sep = '/')
-  seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
-  seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
-  nozzle.file = paste(outdir, 'nozzle', sep = '/')
+    kag.file = paste(outdir, 'karyograph.rds', sep = '/')
+    hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
+    junctions.txt.file = paste(outdir, 'junctions.txt', sep = '/')
+    junctions.rds.file = paste(outdir, 'junctions.rds', sep = '/')
+    jabba.raw.rds.file = paste(outdir, 'jabba.raw.rds', sep = '/')
+    jabba.rds.file = paste(outdir, 'jabba.rds', sep = '/')
+    jabba.json.file = paste(outdir, 'jabba.json', sep = '/')
+    jabba.gg.rds.file = paste(outdir, 'jabba.gg.rds', sep = '/')
+    jabba.vcf.file = paste(outdir, 'jabba.vcf', sep = '/')
+    jabba.cnv.vcf.file = paste(outdir, 'jabba.cnv.vcf', sep = '/')
+    jabba.simple.rds.file = paste(outdir, 'jabba.simple.rds', sep = '/')
+    jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
+    jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
+    jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
+    jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
+    jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
+    seg.tab.file = paste(outdir, 'jabba.seg.txt', sep = '/')
+    seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
+    seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
+    nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
-  if (is.character(coverage))
-  {
-    if (!file.exists(coverage))
+    if (is.character(coverage))
     {
-      stop(paste('Coveraeg path ', coverage, 'does not exist'))
-    }
-    
-    if (grepl('\\.rds$', coverage))
-    {
-      coverage = readRDS(coverage)
-    }
-    else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
-    {
-      tmp = fread(coverage)
-      coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
-    }
-    else
-    {
-      jmessage('Importing seg from UCSC format')
-      coverage = import.ucsc(coverage)
-      field = 'score';
-      coverage = gr.fix(coverage)
-    }
-  }
-  else
-    coverage = coverage
-
-  if (!inherits(coverage, 'GRanges'))
-    coverage = dt2gr(coverage)
-
-
-  if (verbose)
-  {
-    jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
-  }
-
-  if (!(field %in% names(values(coverage))))
-  {
-    new.field = names(values(coverage))[1]
-    warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
-    field = new.field
-  }
-
-  seg.fn = paste0(outdir, '/seg.rds')
-  if (!overwrite & file.exists(seg.fn))
-  {
-    if (verbose)
-    {
-      jmessage('Using previous segmentation found in jabba directory')
-    }
-    seg = readRDS(seg.fn)
-  } else {
-    if (is.null(seg))
-    {
-      if (verbose)
-      {
-        jmessage('No segmentation provided, so performing segmentation using CBS')
-      }
-      set.seed(42)
-      vals = values(coverage)[, field]
-      new.sl = seqlengths(coverage)
-      ix = which(!is.na(vals))
-      cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
-      seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
-
-      if (verbose)
-      {
-        jmessage('Segmentation finished')
-      }
-      seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
-      seg = gr.fix(seg, seqlengths(coverage), drop = T)
-
-      if (verbose)
-      {
-        jmessage(length(seg), ' segments produced')
-      }
-      names(seg) = NULL
-    }
-    else
-    {
-      if (is.character(seg))
-      {
-        if (!file.exists(seg))
+        if (!file.exists(coverage))
         {
-          stop(paste('Seg path ', seg, 'does not exist'))
+            stop(paste('Coveraeg path ', coverage, 'does not exist'))
         }
         
-        if (grepl('\\.rds$', seg))
+        if (grepl('\\.rds$', coverage))
         {
-          seg = readRDS(seg)
+            coverage = readRDS(coverage)
+        }
+        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
+        {
+            tmp = fread(coverage)
+            coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
         }
         else
         {
-          jmessage('Importing seg from UCSC format')
-          seg = import.ucsc(seg)
-          field = 'score';
+            jmessage('Importing seg from UCSC format')
+            coverage = import.ucsc(coverage)
+            field = 'score';
+            coverage = gr.fix(coverage)
         }
-      }
     }
-  }
-
-  saveRDS(seg, seg.fn)
-
-  if (!inherits(seg, 'GRanges'))
-    seg = dt2gr(seg, seqlengths(coverage), drop = TRUE)
-
-
-  if (!is.null(hets))
-    if (!file.exists(hets))
-    {
-      warning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
-      hets = NULL
-    }
-
-  if (strict)
-  {
-    ends = c(gr.start(seg),
-             gr.end(gr.end(seg)))
-    nog = length(ra)
-    ra = ra[grl.in(ra, ends, logical, logical = FALSE) == 2]
-    jmessage('Applying strict junction filtering of junctions to only those that land at segment ends')
-    jmessage('Leaving ', length(ra), ' junctions from an initial set of ', nog)
-  }
-  
-
-  ra = junctions
-
-  if (!is.character(ra))
-  {
-    if (overwrite | !file.exists(kag.file))
-      karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
     else
-      warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
-  }
-  else
-  {
-    if (grepl('rds$', ra) | grepl('vcf$', ra) | grepl('vcf\\.gz$', ra))
+        coverage = coverage
+
+    if (!inherits(coverage, 'GRanges'))
+        coverage = dt2gr(coverage)
+
+
+    if (verbose)
     {
-      if (overwrite | !file.exists(kag.file))
-        karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
-      else
-        warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
-    } else  {
-      if (overwrite | !file.exists(kag.file))
-        karyograph_stub(seg, coverage, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
-      else
-        warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+        jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
     }
-  }
 
-  kag = readRDS(kag.file)
-
-  if (!is.null(cfield))
-  {
-    if (cfield %in% names(values(kag$junctions)))
+    if (!(field %in% names(values(coverage))))
     {
-      val = values(kag$junctions)[, cfield]
-      val[is.na(val)] = 0
-      edgenudge = val * edgenudge
+        new.field = names(values(coverage))[1]
+        warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
+        field = new.field
     }
-  }
 
-  ab.force = NULL
-  ab.exclude = NULL
-  
-  if (!is.null(tfield))
-  {
-    if (tfield %in% names(values(kag$junctions)))
+    seg.fn = paste0(outdir, '/seg.rds')
+    if (!overwrite & file.exists(seg.fn))
     {
-        ## If there are small DUP/DEL junctions in tier 2, bump them up to tier 1, otherwise no action
-        tier2.ix = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='2')
-        which.like.indel = tier2.ix[
-            which.indel(kag$junctions[tier2.ix], max.size = 1e4, mc.cores = mc.cores)
-        ]
-        ab.force = union(which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='1'),
-                         which.like.indel)
+        if (verbose)
+        {
+            jmessage('Using previous segmentation found in jabba directory')
+        }
+        seg = readRDS(seg.fn)
+    } else {
+        if (is.null(seg))
+        {
+            if (verbose)
+            {
+                jmessage('No segmentation provided, so performing segmentation using CBS')
+            }
+            set.seed(42)
+            vals = values(coverage)[, field]
+            new.sl = seqlengths(coverage)
+            ix = which(!is.na(vals))
+            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
+            seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
+
+            if (verbose)
+            {
+                jmessage('Segmentation finished')
+            }
+            seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
+            seg = gr.fix(seg, seqlengths(coverage), drop = T)
+
+            if (verbose)
+            {
+                jmessage(length(seg), ' segments produced')
+            }
+            names(seg) = NULL
+        }
+        else
+        {
+            if (is.character(seg))
+            {
+                if (!file.exists(seg))
+                {
+                    stop(paste('Seg path ', seg, 'does not exist'))
+                }
+                
+                if (grepl('\\.rds$', seg))
+                {
+                    seg = readRDS(seg)
+                }
+                else
+                {
+                    jmessage('Importing seg from UCSC format')
+                    seg = import.ucsc(seg)
+                    field = 'score';
+                }
+            }
+        }
+    }
+
+    saveRDS(seg, seg.fn)
+
+    if (!inherits(seg, 'GRanges'))
+        seg = dt2gr(seg, seqlengths(coverage), drop = TRUE)
+
+
+    if (!is.null(hets))
+        if (!file.exists(hets))
+        {
+            warning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
+            hets = NULL
+        }
+
+    if (strict)
+    {
+        ends = c(gr.start(seg),
+                 gr.end(gr.end(seg)))
+        nog = length(ra)
+        ra = ra[grl.in(ra, ends, logical, logical = FALSE) == 2]
+        jmessage('Applying strict junction filtering of junctions to only those that land at segment ends')
+        jmessage('Leaving ', length(ra), ' junctions from an initial set of ', nog)
+    }
+    
+
+    ra = junctions
+
+    if (!is.character(ra))
+    {
+        if (overwrite | !file.exists(kag.file))
+            karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
+        else
+            warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+    }
+    else
+    {
+        if (grepl('rds$', ra) | grepl('vcf$', ra) | grepl('vcf\\.gz$', ra))
+        {
+            if (overwrite | !file.exists(kag.file))
+                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
+            else
+                warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+        } else  {
+            if (overwrite | !file.exists(kag.file))
+                karyograph_stub(seg, coverage, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
+            else
+                warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+        }
+    }
+
+    kag = readRDS(kag.file)
+
+    if (!is.null(cfield))
+    {
+        if (cfield %in% names(values(kag$junctions)))
+        {
+            val = values(kag$junctions)[, cfield]
+            val[is.na(val)] = 0
+            edgenudge = val * edgenudge
+        }
+    }
+
+    ab.force = NULL
+    ab.exclude = NULL
+    
+    if (!is.null(tfield))
+    {
+        if (tfield %in% names(values(kag$junctions)))
+        {
+            ## default forcing tier 1
+            ab.force = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='1')
+
+            ## when the switch is on:
+            ## small DUP/DEL junctions in tier 2, bump them up to tier 1
+            if (indel){
+                tier2.ix = which(
+                    gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='2')
+                if (length(tier2.ix)>0){
+                    which.like.indel = tier2.ix[
+                        which.indel(kag$junctions[tier2.ix], max.size = 1e4, mc.cores = mc.cores)
+                    ]
+                } else {
+                    which.like.indel = numeric(0)
+                }
+                ab.force =
+                    union(ab.force,
+                          which.like.indel)
+            }
+            
         if (verbose)
         {
             jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')
