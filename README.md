@@ -103,7 +103,7 @@ Options:
 		Name of metadata field or column of coverage file to use for coverage signal from coverage file, may be required if coverage file has several fields
 
 	-t TFIELD, --tfield=TFIELD
-		Name of meta data field of ra GRanges or data frame that specifies tiers of junctions, where tier 1 is forced to be included, tier 2 is optional, and tier 3 junctions are only used in when --iterate is set
+		Name of metadata field of a rearrangements GRanges or data.frame that specifies tiers of junctions, where tier 1 is forced to be included, tier 2 is optional, and tier 3 junctions are only used in when --iterate is set
 
 	-i HETS, --hets=HETS
 		Path to tab or comma-delimited hets file output of het counts with columns /fields $seqnames, $start, $end, $alt, $ref
@@ -158,7 +158,6 @@ Options:
 
 	-h, --help
 		Show this help message and exit
-
 
 
 ```
