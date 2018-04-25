@@ -91,3 +91,31 @@ jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA outpu
 
 jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
 }
+\examples{
+
+library(JaBbA)
+junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
+coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
+hets = system.file("extdata", "hets.txt", package = 'JaBbA')
+
+## run analysis without hets 
+jab = JaBbA(junctions = junctions, coverage = coverage)
+
+## run analysis with hets in different subdir (default ./JaBbA)
+jab = JaBbA(junctions = junctions, coverage = coverage, hets = hets, outdir = './mydir')
+
+## run analysis with "tiered" junctions, these have metadata field $tier (in this case inside the vcf)
+jun = read.junctions(junctions)
+
+## these have metadata field tier, tier 1 junctions are forced to be included, tier 2 = are optional i.e. can be included,
+## tier 3 are only used in later iterations to rescue loose ends
+values(jun)$tier
+
+## here we will iterate JaBbA max 4 times, or until we run out of tier three junctions near loose ends
+jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, outdir = './iter')
+
+## can increase the window to rescue more junctions within 100kb of loose ends,
+## will overwrite original ./JaBbA outdir with overwrite = TRUE
+jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, rescue.window = 1e5, overwrite = TRUE)
+
+}
