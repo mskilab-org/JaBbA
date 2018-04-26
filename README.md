@@ -39,8 +39,6 @@ install.packages('devtools')
 
 ```{r}
 devtools::install_github('mskilab/gUtils')
-devtools::install_github('mskilab/bamUtils')
-devtools::install_github('mskilab/gTrack')
 devtools::install_github('mskilab/gGnome')
 devtools::install_github('mskilab/Ppurple')
 ```
@@ -48,7 +46,7 @@ devtools::install_github('mskilab/Ppurple')
 6. Install JaBbA
 
 ```{r}
-devtools::install_github('mskilab/JaBbA')
+devtools::install_github('mskilab/JaBbA)
 ```
 
 
@@ -92,8 +90,8 @@ Usage (jba executable)
 ```{bash}
 
 Usage: jba [options] JUNCTIONS COVERAGE
- 	JUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
- 	COVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges
+ 	JUNCTIONS can be BND-style VCF, bedpe, rds of GRangesList
+ 	COVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a GRanges, or .tsv  .csv /.txt  file that is coercible to a GRanges
        (use --field=FIELD argument so specify which column to use if specific meta field of a multi-column table')
 
 
@@ -102,13 +100,13 @@ Options:
 		Path to .rds file of GRanges object or .bed file or  .txt / .csv file of intervals corresponding to initial segmentation (optional, will use CBS of coverage to compute if not provided)
 
 	-f FIELD, --field=FIELD
-		Name of meta data field or column of coverage file to use for coverage signal from coverage file, may be required if coverage file has several fields
+		Name of metadata field or column of coverage file to use for coverage signal from coverage file, may be required if coverage file has several fields
 
 	-t TFIELD, --tfield=TFIELD
-		Name of meta data field of ra GRanges or data frame that specifies tiers of junctions, where tier 1 is forced to be included, tier 2 is optional, and tier 3 junctions are only used in when --iterate is set
+		Name of metadata field of a rearrangements GRanges or data.frame that specifies tiers of junctions, where tier 1 is forced to be included, tier 2 is optional, and tier 3 junctions are only used in when --iterate is set
 
 	-i HETS, --hets=HETS
-		Path to tab or commadelimited hets file output of het counts with columns /fields $seqnames, $start, $end, $alt, $ref
+		Path to tab or comma-delimited hets file output of het counts with columns /fields $seqnames, $start, $end, $alt, $ref
 
 	-o OUTDIR, --outdir=OUTDIR
 		Directory to dump output into (default JaBbA)
@@ -117,7 +115,7 @@ Options:
 		Slack penalty to apply per loose end copy
 
 	-z SUBSAMPLE, --subsample=SUBSAMPLE
-		Numeric value between 0 and 1 specifying whether to subsample coverage for intra segment variance estimation
+		Numeric value between 0 and 1 specifying whether to subsample coverage for intra-segment variance estimation
 
 	-l TILIM, --tilim=TILIM
 		Time limit for JaBbA MIP
@@ -160,7 +158,6 @@ Options:
 
 	-h, --help
 		Show this help message and exit
-
 
 
 ```

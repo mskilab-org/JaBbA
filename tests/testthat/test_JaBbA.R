@@ -1,25 +1,218 @@
-library(JaBbA)
+
+library(JaBbA)   
+library(gUtils)
+library(testthat)
+
 
 junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
-## test_that("JaBbA", {
-##    set.seed(42);
-##    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
-##   expect_equal(all(jab$segstats$cn == c(2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)))
-##    expect_equal(abs(jab$ploidy-2.578136)<1e-6, TRUE)
-##    expect_equal(abs(jab$purity-1)<1e-6, TRUE)
+
+
+library(Rcplex)
+
+cvec <- c(1,2,3)
+Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+bvec <- c(20,-30)
+ub <- c(40,Inf,Inf)
+res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
+print(res)
+
+
+test_that('testing Rcplex works', {
     
-##    jab = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE)
-##    expect_equal(all(jab$segstats$cn == c(3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)), TRUE)
-##    expect_equal(abs(jab$ploidy-3.754187)<1e-6, TRUE)
-##    expect_equal(abs(jab$purity-0.99)<1e-6, TRUE)
-## })
+    expect_equal(res$xopt[1], 40)
+    expect_equal(res$xopt[3], 42.5)
+    expect_equal(res$obj, 202.5)
+    expect_equal(res$extra$slack[1], 0)
+
+})
+
 
 test_that("read.junctions", {
-  expect_equal(all(values(read.junctions(junctions))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
+	expect_equal(all(values(read.junctions(junctions))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
 })
 
 
 
+test_that("JaBbA", {
+    
+    set.seed(42);
+    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
+    expect_equal(length(jab$segstats), 280)
+    expect_equal(round(jab$ploidy, 2), 2.58)
+    ##expect_equal(all(jab$segstats$cn == c(2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)))
+    ## this works ##expect_equal(abs(jab$ploidy-2.578136)<1e-6, TRUE)
+    ## this works ##expect_equal(abs(jab$purity-1)<1e-6, TRUE)
+    
+    jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE)
+    ##expect_equal(all(jab$segstats$cn == c(3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)), TRUE)
+    ##expect_equal(abs(jab$ploidy-3.754187)<1e-6, TRUE)
+    ##expect_equal(abs(jab$purity-0.99)<1e-6, TRUE)
+    ##expect_equal(length(jab$segstats), 290)
+    expect_equal(round(jab2$ploidy, 2), 3.76)
+
+})
+
+
+
+
+
+## JaBbA
+
+## jabba_stub
+
+## karyograph_stub
+
+## .plot_ppfit
+
+## ramip_stub
+
+## segstats 
+
+## jmessage
+
+## jbaMIP
+
+## JaBbA.digest
+
+## jbaMIP.process
+
+## jabba.alleles
+
+## pp.nll
+
+## munlist
+test_that('testing munlist() works', {
+    
+    expect_equal(dim(munlist(gr2dt(example_genes)$start))[1], 18812)
+    expect_equal(dim(munlist(gr2dt(example_genes)$start))[2], 3)
+
+})
+
+## .correct.slack
+
+## .cplex_customparams
+test_that('testing alpha() works', {
+    
+    ## not sure how to test this properly
+    expect_error(.cplex_customparams('out.txt'), NA) ## check no error
+
+})
+
+## gr.tile.map 
+## test_that('testing gr.tile.map() works', {
+## 
+##     > gr.tile.map(example_genes, example_dnase)
+##     Error in m[, 2] : subscript out of bounds
+## 
+## })
+
+
+## vaggregate  ### this should be replaced! data.table
+
+
+## write.tab
+test_that('testing write.tab() works', {
+
+    expect_error(write.tab(example_genes), NA) ## check works
+
+})
+
+
+
+## alpha()
+test_that('testing alpha() works', {
+
+    expect_match(alpha('blue', 1), '#0000FFFF')
+
+})
+
+
+
+
+## rel2abs()
+
+
+## abs2rel()
+
+## adj2inc()
+
+
+
+## mmatch()
+
+
+## all.paths()
+
+
+
+## collapse.paths()
+
+
+## sparse_subset()
+test_that('testing sparse_subset() works', {
+
+    ## function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
+    Amat = matrix(c(20, 40, 30, 10), nrow=2, ncol=2, byrow = TRUE) 
+    Bmat = matrix(c(250, 450, 350, 150), nrow=2, ncol=2, byrow = TRUE)
+    expect_equal(dim(sparse_subset(Amat, Bmat, quiet=TRUE))[1], 2)
+    expect_equal(dim(sparse_subset(Amat, Bmat, quiet=TRUE))[2], 2)
+    expect_equal(dim(sparse_subset(Amat, Bmat, chunksize=5, strict=TRUE, quiet=TRUE))[1], 2)
+    expect_equal(dim(sparse_subset(Amat, Bmat, chunksize=5, strict=TRUE, quiet=TRUE))[2], 2)
+
+
+})
+
+
+
+
+## convex.basis()
+test_that('testing convex.basis() works', {
+
+    example_matrix = matrix(c(2, 4, 3, 1, 5, 7), nrow=2, ncol=3, byrow = TRUE)  
+    expect_equal(as.logical(convex.basis(example_matrix)), NA)
+
+})
+
+
+
+## read.junctions()
+
+## karyograph()
+
+
+
+## jabba2vcf()
+
+## chromoplexy()
+
+## read_vcf()
+
+## levapply()
+
+test_that('testing levapply() works', {
+
+    gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
+    foo = levapply(width(gr), as.character(seqnames(gr)), function(x) if (length(x)>1) cumsum(c(0, x[1:(length(x)-1)])) else return(0))
+    expect_equal(foo, c(0, 3, 6))
+
+})
+
+
+## chr2num
+
+test_that('testing chr2num() works', {
+
+    expect_equal(chr2num('chr1'), 1)
+    expect_equal(chr2num('chrX'), 23)
+    expect_equal(chr2num('chrY'), 24)
+    expect_match(chr2num('chr1', xy=TRUE), '1')
+    expect_match(chr2num('chrX', xy=TRUE), 'X')
+    expect_match(chr2num('chrY', xy=TRUE), 'Y')
+    expect_equal(as.logical(chr2num('chrZ')), NA)
+    ### hmmmmm
+    expect_match(chr2num('chrZ', xy=TRUE), 'Z')
+
+})

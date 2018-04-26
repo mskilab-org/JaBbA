@@ -113,13 +113,6 @@
 #' ## tier 3 are only used in later iterations to rescue loose ends
 #' values(jun)$tier
 #'
-#' ## here we will iterate JaBbA max 4 times, or until we run out of tier three junctions near loose ends
-#' jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, outdir = './iter')
-#'
-#' ## can increase the window to rescue more junctions within 100kb of loose ends,
-#' ## will overwrite original ./JaBbA outdir with overwrite = TRUE
-#' jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, rescue.window = 1e5, overwrite = TRUE)
-#' 
 #' @import DNAcopy
 JaBbA = function(
                  junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
@@ -2982,127 +2975,6 @@ JaBbA.digest = function(jab, kag = NULL, verbose = T, keep.all = T)
     return(out)
 }
 
-####################################################################
-#' @name jbaMIP.process
-#' @rdname internal
-#' jbaMIP.process
-#'
-#' process jbaMIP solution "sol" given original graph "g" (karyograph() list output)
-#' into JaBbA object
-#'
-#' output is
-#'
-#' @param sol JaBbA object
-#' @param allelic logical flag specifying whether object is allelic
-#' @return
-#' list with items:
-#' $B incidence matrix of augmented graph (including slack vertices) (vertices x edges)
-#' rownames of $B are vertex names of $G and colnames of B are named with character version of their $G indices
-#' (i.e. column order of B  respects the original edge order in the solution)
-#'
-#' $e edge constraints for downstream karyoMIP, i.e the copy numbers at the edges
-#' $e.ij numedges x 2 vertex pair matrix denoting what are the vertex pairs corresponding to the cols of $B and entries of $e, $eclass, $etype etc
-#' $eclass id for each unique edge / anti-edge equivalence class
-#' $etype specifies whether edge is slack or nonslack
-###################################################################
-jbaMIP.process = function(
-                          ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object,
-                          ## corresponding to + and - strands of the same interval
-                          sol,
-                          allelic = F
-                          )
-{
-    if (allelic)
-        sol = list(segstats = sol$asegstats, adj = sol$aadj)
-
-    if (!all(c('segstats', 'adj') %in% names(sol)))
-        stop('sol must be output of jbaMIP()')
-
-    if (is.null(sol$segstats$tile.id))
-        stop('sol$segstats must be populated with tile.id')
-    else
-    {
-        if (!all(table(sol$segstats$tile.id)==2))
-            stop('sol$segstats$tile.id are malformed, there should be exactly two instances of each tile.id in sol$segstats, one for the positive and one for the negative strand of the same interval')
-
-        tmp = lapply(split(1:length(sol$segstats$tile.id), sol$segstats$tile.id), rev)
-
-        recip.ix = rep(NA, length(sol$segstats))
-        recip.ix[order(sol$segstats$tile.id)] = unlist(tmp)
-    }
-
-    if (is.null(sol$segstats$eslack.in))
-        sol$segstats$eslack.in = sol$segstats$slack.in
-
-    if (is.null(sol$segstats$eslack.out))
-        sol$segstats$eslack.out = sol$segstats$slack.out
-
-    ed.ij = Matrix::which(sol$adj!=0, arr.ind = T)
-
-    ## B is vertices x edges (i.e. signed incidence matrix)
-    B = sparseMatrix(c(ed.ij[,1], ed.ij[,2]), rep(1:nrow(ed.ij), 2), x = rep(c(-1.00001, 1), each = nrow(ed.ij)), dims = c(nrow(sol$adj), nrow(ed.ij)))
-
-    rownames(B) = 1:nrow(B)
-
-    tmp.ix = Matrix::which(abs(B)>=1)
-    B[tmp.ix] = round(B[tmp.ix]) ## "0.00001" hack to take care of eclass matching below, these are length 1 self loop edge cases
-
-    ix.tel.5 = Matrix::which(Matrix::colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres
-    sol$segstats$eslack.in[ix.tel.5] = sol$segstats$cn[ix.tel.5]
-
-    ix.tel.3 = Matrix::which(Matrix::rowSums(sol$adj!=0)==0)
-    sol$segstats$eslack.out[ix.tel.3] = sol$segstats$cn[ix.tel.3]  ## make fake slacks for telomeres
-
-    ix.eslack.out = Matrix::which(sol$segstats$eslack.out!=0);
-    names(ix.eslack.out) = paste('out slack', ix.eslack.out)
-    ix.eslack.in = which(sol$segstats$eslack.in!=0);
-    names(ix.eslack.in) = paste('in slack', ix.eslack.in)
-
-    names(ix.eslack.in)[ix.eslack.in %in% ix.tel.3] = paste(names(ix.eslack.in)[ix.eslack.in %in% ix.tel.3], 'tel')
-    names(ix.eslack.out)[ix.eslack.out %in% ix.tel.5] = paste(names(ix.eslack.out)[ix.eslack.out %in% ix.tel.5], 'tel')
-
-    ## we add "slack edges" and "slack nodes" to incidence matrix
-    Zero = sparseMatrix(1, 1, x = 0, dims = c(length(ix.eslack.in) + length(ix.eslack.out), ncol(B)))
-
-    if (nrow(Zero)>0)
-        rownames(Zero) = c(paste('slack in', 1:length(ix.eslack.in)), paste('slack out', 1:length(ix.eslack.out)))
-
-    Bs = rBind(B, Zero)
-    ed.ij = rbind(ed.ij, cbind(ix.eslack.out, NA), cbind(NA, ix.eslack.in))
-
-    Is = Diagonal(n = nrow(Bs), rep(1, nrow(Bs)))
-
-    Bs = cBind(Bs, -Is[, ix.eslack.out], Is[, ix.eslack.in])
-    colnames(Bs) = c(as.character(1:ncol(B)), names(ix.eslack.out), names(ix.eslack.in))
-
-    ## map new "slack nodes" to their reciprocals
-    recip.ix = c(recip.ix,
-                 nrow(B) + length(ix.eslack.out) +  match(recip.ix[ix.eslack.out], ix.eslack.in),
-                 nrow(B) + match(recip.ix[ix.eslack.in], ix.eslack.out)
-                 )
-
-    ## match matrix against its reverse complement (i.e. rotation) to find reciprocal edges
-    erecip.ix = mmatch(t(Bs), t(-Bs[recip.ix, ])) ## maps edges to their reciprocals
-
-    tmp.na = which(is.na(erecip.ix))
-    if (length(tmp.na)>0) ## fix the self loops so that they match
-        erecip.ix[tmp.na] = tmp.na[mmatch(t(Bs[1:nrow(Bs), tmp.na]), t(Bs[recip.ix,tmp.na, drop = F]))]
-
-    ## now use this mapping to define edge equivalence classes
-    rmat = t(apply(cbind(erecip.ix, erecip.ix[erecip.ix]), 1, sort)) ## length(erecip.ix) x 2 matrix of edge ids and their reciprocal, sorted
-
-    ## eclass will map length(erecip.ix) edges to length(erecip.ix)/2 edge equivalence class ids
-    eclass = mmatch(rmat, rmat[!duplicated(rmat), ])
-
-    Bs = round(Bs) ## remove the 0.0001 dummy coefficients (i.e. for self loops)
-
-    ## e will store observed copy states corresponding to edges (i.e. columns of Bs)
-    e = c(sol$adj[which(sol$adj!=0)], sol$segstats$eslack.out[ix.eslack.out],  sol$segstats$eslack.in[ix.eslack.in])
-
-    return(list(e = e, e.ij = ed.ij, B = Bs, eclass = eclass, etype = c(ifelse(grepl('slack', colnames(Bs)), 'slack', 'nonslack'))))
-}
-
-
 ####################
 #' @name jabba.alleles
 #' @rdname internal
@@ -3713,10 +3585,10 @@ write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
 
 alpha = function(col, alpha)
 {
-    col.rgb = col2rgb(col)
-    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-    names(out) = names(col)
-    return(out)
+  col.rgb = col2rgb(col)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
 }
 
 ############################
@@ -3763,137 +3635,6 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
                                         # return(beta * mu - gamma)
     return(beta * mu - ncn * gamma / 2)
-}
-
-
-
-#' @name abs2rel
-#' @rdname internal
-#' abs2rel
-#'
-#' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
-#' By default, output is normalized to 1 (i.e. assumes that the total relative copy number signal mass over the genome is 1)
-#'
-#' takes in gr with signal field "field"
-#' @param gr GRanges input with meta data field corresponding to mean relative copy "mean" in that interval
-#' @param purity purity of sample
-#' @param ploidy ploidy of sample
-#' @param gamma gamma fit of solution (over-rides purity and ploidy)
-#' @param beta beta fit of solution (over-rides purity and ploidy)
-#' @param field meta character specifying meta data field in "gr" variable from which to extract signal, default "mean"
-#' @param field.ncn character specifying meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
-#' @return
-#' numeric vector of integer copy numbers
-############################
-abs2rel = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'cn', field.ncn = 'ncn', total = 1)
-{
-    abs = values(gr)[, field]
-    w = width(gr)
-    sw = sum(as.numeric(w))
-
-    ncn = rep(2, length(mu))
-    if (!is.null(field.ncn))
-        if (field.ncn %in% names(values(gr)))
-            ncn = values(gr)[, field.ncn]
-
-    if (is.na(gamma))
-        gamma = 2*(1-purity)/purity
-
-    ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
-
-    if (is.na(beta))
-        beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * total)
-    ##  beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * total)
-
-                                        #    return((abs + gamma) / beta)
-    return((abs + ncn*gamma/2) / beta)
-}
-
-
-
-#################################################
-#' @name adj2inc
-#' @rdname internal
-#' adj2inc
-#'
-#' converts adjacency matrix (of directed graph) into incidence matrix - ie
-#' an nodes x edges matrix, for each edge i connecting node j to k, column i will have -1 at position
-#' j and +1 at position k
-#'
-#################################################
-adj2inc = function(A)
-{
-    ij = which(A!=0, arr.ind = T)
-    return(sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij))))
-}
-
-
-######################################################
-#' @name mmatch
-#' @rdname internal
-#' mmatch
-#'
-#' Low level utility function to match rows of matrix A to matrix B
-#'
-######################################################
-mmatch = function(A, B, dir = 1)
-{
-    SEP = '|';
-
-    if (is.null(dim(A)))
-        A = rbind(A)
-
-    if (is.null(dim(B)))
-        B = rbind(B)
-
-    if (dim(A)[(dir %% 2)+1] != dim(B)[(dir %% 2)+1])
-        stop('Dimensions of A and B matrices mismatch')
-
-
-    if (inherits(A, 'sparseMatrix') | inherits(B, 'sparseMatrix'))
-    {
-        if (dir == 2)
-        {
-            A = t(A)
-            B = t(B)
-        }
-        ixA = Matrix::which(A!=0, arr.ind = T)
-        ixB = Matrix::which(B!=0, arr.ind = T)
-
-        if (nrow(ixA)>0)
-            ixAl = split(1:nrow(ixA), ixA[,1])
-        else
-            ixAl = c()
-
-        if (nrow(ixB)>0)
-            ixBl = split(1:nrow(ixB), ixB[,1])
-        else
-            ixBl = c()
-
-        Atxt = rep('', nrow(A))
-        Btxt = rep('', nrow(B))
-
-        if (length(ixAl))
-        {
-            tmp.ix = as.numeric(names(ixAl))
-            Atxt[tmp.ix] = sapply(1:length(ixAl), function(x) paste(ixA[ixAl[[x]], 2], ':',
-                                                                    as.character(A[tmp.ix[x], ixA[ixAl[[x]], 2], drop = FALSE]), collapse = SEP))
-        }
-
-        if (length(ixBl)>0)
-        {
-            tmp.ix = as.numeric(names(ixBl))
-            Btxt[tmp.ix] = sapply(1:length(ixBl), function(x) paste(ixB[ixBl[[x]], 2], ':',
-                                                                    as.character(B[tmp.ix[x], ixB[ixBl[[x]], 2], drop = FALSE]), collapse = SEP))
-        }
-    }
-    else
-    {
-        Atxt = apply(A, dir, function(x) paste(x, collapse = SEP))
-        Btxt = apply(B, dir, function(x) paste(x, collapse = SEP))
-    }
-
-    return(match(Atxt, Btxt))
 }
 
 #####################################################
@@ -4198,8 +3939,6 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     return(C)
 }
 
-
-
 ##################################
 #' @name convex.basis
 #' @rdname internal
@@ -4459,6 +4198,74 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                                         #                      rafile[, str1 := ifelse(str1=='+', '-', '+')]
                                         #                      rafile[, str2 := ifelse(str2=='+', '-', '+')]
 
+    }
+    else if (grepl('(vcf$)|(vcf.gz$)', rafile))
+    {
+      vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+      if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
+        warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+        return(GRangesList());
+      }
+
+      ## vgr = rowData(vcf) ## parse BND format
+      vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
+
+      ## no events
+      if (length(vgr) == 0)
+        return (GRangesList())
+
+      ## fix mateids if not included
+      if (!"MATEID"%in%colnames(mcols(vgr))) {
+        nm <- vgr$MATEID <- names(vgr)
+        ix <- grepl("1$",nm)
+        vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
+        vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
+        vgr$SVTYPE="BND"
+      }
+
+      if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
+        stop("MATEID or SVTYPE not included. Required")
+
+      vgr$mateid = vgr$MATEID
+
+      if (!is.character(vgr$mateid))
+      {
+        vgr$mateid = unstrsplit(vgr$MATEID)
+        if (any(nix<-nchar(vgr$mateid)==0))
+          vgr$mateid[nix] = NA
+      }
+
+      if (is.null(vgr$SVTYPE))
+        vgr$svtype = vgr$SVTYPE
+      else
+        vgr$svtype = vgr$SVTYPE
+
+      if (!is.null(VariantAnnotation::info(vcf)$SCTG))
+        vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
+
+      if (force.bnd)
+        vgr$svtype = "BND"
+
+      if (sum(vgr$svtype == 'BND')==0)
+        warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+
+      if (!all(vgr$svtype == 'BND'))
+        warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
+
+      bix = which(vgr$svtype == "BND")
+      vgr = vgr[bix]
+      alt <- sapply(vgr$ALT, function(x) x[1])
+      vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
+      vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
+      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+      vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
+      vgr$mcoord = gsub('chr', '', vgr$mcoord)
+
+      if (all(is.na(vgr$mateid)))
+        if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+        {
+          warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+          vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
@@ -4654,8 +4461,13 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
         }
-        else
-            rafile = read.delim(rafile)
+        else{
+            values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], VariantAnnotation::info(vcf)[bix[npix], ])
+        }
+
+        return(list(junctions = ra, loose.ends = vgr.loose))
+      }
+
     }
 
     if (is.data.table(rafile))
@@ -5755,25 +5567,19 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
         else
             system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
 
-        if (grepl('gz$', swap.header))
-            system(sprintf("zcat %s | grep '^[#]' > %s.header", swap.header, tmp.name))
-        else
-            system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
-
-        system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
-        vcf = readVcf(tmp.name, hg, ...)
-        system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
-    }
-    else
-        vcf = readVcf(fn, hg, ...)
+    system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
+    vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
+    system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
+  }
+  else
+    vcf = VariantAnnotation::readVcf(fn, hg, ...)
 
     out = granges(vcf)
 
-    if (!is.null(values(out)))
-        values(out) = cbind(values(out), info(vcf))
-    else
-        values(out) = info(vcf)
-
+  if (!is.null(values(out)))
+    values(out) = cbind(values(out), VariantAnnotation::info(vcf))
+  else
+    values(out) = VariantAnnotation::info(vcf)
 
     if (!is.null(geno))
     {
@@ -5853,7 +5659,6 @@ chr2num = function(x, xy = FALSE)
 
     return(out)
 }
-
 
 #' @name which.indel
 #' @rdname internal
