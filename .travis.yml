@@ -9,7 +9,8 @@ before_install:
 - echo $PWD
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
 - tar -xzf /home/travis/build/mskilab/JaBbA/tcool.tar.gz
-install: travis_wait 30 mvn install
+install: 
+- travis_wait 30 mvn install
 - "./travis-tool.sh install_bioc_deps"
 - "./travis-tool.sh install_deps"
 - R CMD INSTALL --configure-args="--with-cplex-dir=/home/travis/build/mskilab/JaBbA/CPLEX_Studio/cplex"
