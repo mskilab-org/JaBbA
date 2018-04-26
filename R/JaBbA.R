@@ -220,16 +220,25 @@ JaBbA = function(
         ## big change tonight, I'm gonna start with all of the tiers in the first round
         ## and then in each of following iterations keep the ones incorporated
         ## plus the ones that didn't but fall inside the range of a lo
-        if (all.in){
-            last.ra = ra.all
-        } else {
-            last.ra = ra.all[values(ra.all)[, tfield]<3]
+        if (all.in & length(ra.all)>0){
+            t3 = values(ra.all)[, tfield]==3
+            jmessage('All-in mode: ', sum(t3),
+                     ' tier 3 junctions being included yielding ',
+                     length(ra.all), ' total junctions\n')
+
+            if (any(t3)){
+                values(ra.all)[t3, tfield] = 2
+            }
         }
+        
+        last.ra = ra.all[values(ra.all)[, tfield]<3]
         
         ## #    if (verbose)
         ## #    {
-        jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
-        jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
+        ## jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
+        jmessage('Starting JaBbA iterative with ', length(last.ra), ' junctions')
+        ## jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
+        jmessage('Will progressively add junctions within ', rescue.window, 'bp of a loose end in prev iter')
         jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
         jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
         ##   }
@@ -244,6 +253,7 @@ JaBbA = function(
 
             this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
             saveRDS(last.ra, this.ra.file)
+
             jab = jabba_stub(
                 junctions = this.ra.file,
                 seg = seg,
@@ -279,7 +289,7 @@ JaBbA = function(
             le = jab$segstats[jab$segstats$loose]
 
             ## Annotate ra.all
-            all.input = readRDS("junctions.all.rds")
+            all.input = readRDS(paste0(outdir, "/junctions.all.rds"))
             all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
             if (ncol(all.ov)==2){
                 all.ov = data.table(data.frame(all.ov))
@@ -289,7 +299,7 @@ JaBbA = function(
             } else {
                 values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
             }
-            saveRDS(all.input, "junctions.all.rds")
+            saveRDS(all.input, paste0(outdir, "/junctions.all.rds"))
 
             ## junction rescue
             ## rescues junctions that are within rescue.window bp of a loose end
@@ -307,7 +317,6 @@ JaBbA = function(
                 jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
             num.used.junc = length(which(jcn>0))
 
-
             t3 = values(new.ra)[, tfield]==3
             jmessage('Adding ', num.new.junc,
                      ' new junctions, including ', sum(t3),
@@ -316,7 +325,6 @@ JaBbA = function(
 
             if (any(t3))
                 values(new.ra)[t3, tfield] = 2
-
 
             if (num.new.junc==0 | this.iter >= reiterate)
                 continue = FALSE
@@ -351,6 +359,15 @@ JaBbA = function(
         system(sprintf('cp %s/* %s', this.iter.dir, outdir))
         jmessage('Done Iterating')
     } else  {
+        ## if all.in, convert all tier 3 to tier 2
+        if (all.in & length(ra.all)>0){
+            ## tfield.raw = paste0(tfield, ".raw")
+            ## values(ra.all)[, tfield.raw] <- values(ra.all)[, tfield]
+            t3 = (values(ra.all)[, tfield] == 3)
+            if (any(t3)){
+                values(ra.all)[t3, tfield] = 2
+            }            
+        }
         jab = jabba_stub(
             junctions = ra,
             seg = seg,
@@ -677,18 +694,21 @@ jabba_stub = function(
                           which.like.indel)
             }
             
-        if (verbose)
-        {
-            jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')
-            jmessage(length(which.like.indel), ' of them are INDEL like isolated events')
-        }
+            if (verbose)
+            {
+                jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')
+                if (exists("which.like.indel")){
+                    jmessage(length(which.like.indel), ' of them are INDEL like isolated events')
+                }                
+            }
 
-      ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
+            ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
 
-      if (verbose)
-      {
-        jmessage('Found tier field enforcing 0 CN at ', length(ab.exclude), ' junctions')
-      }
+            if (verbose)
+            {
+                jmessage('Found tier field enforcing 0 CN at ', length(ab.exclude), ' junctions')
+            }
+
     }
   }
 
@@ -1166,9 +1186,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
   if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
     pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
   tmp.kag = this.kag
-
-                                        #  tryres <- try( tmp.kag$segstats <- tmp.kag$segstats[ which( tmp.kag$segstats$ncn == 2 & !fix.sd & as.logical( strand(tmp.kag$segstats) =='+' ) ) ] )
-                                        #  if ( class( tryres ) == "try-error" ) browser()
 
     if (length(tmp.kag$segstats)<10)
         warning('number of segments used for purity ploidy extremely low .. check coverage data')
