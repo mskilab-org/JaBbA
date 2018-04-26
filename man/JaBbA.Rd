@@ -111,11 +111,4 @@ jun = read.junctions(junctions)
 ## tier 3 are only used in later iterations to rescue loose ends
 values(jun)$tier
 
-## here we will iterate JaBbA max 4 times, or until we run out of tier three junctions near loose ends
-jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, outdir = './iter')
-
-## can increase the window to rescue more junctions within 100kb of loose ends,
-## will overwrite original ./JaBbA outdir with overwrite = TRUE
-jab = JaBbA(junctions = jun, coverage = coverage, hets = hets, reiterate = 4, rescue.window = 1e5, overwrite = TRUE)
-
 }
