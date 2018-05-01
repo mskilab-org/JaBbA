@@ -209,7 +209,6 @@ JaBbA = function(
         values(ra.all)$id = 1:length(ra.all)
         saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
 
-        #' xtYao #' Wednesday, Apr 18, 2018 08:28:15 AM
         ## big change tonight, I'm gonna start with all of the tiers in the first round
         ## and then in each of following iterations keep the ones incorporated
         ## plus the ones that didn't but fall inside the range of a lo
@@ -220,7 +219,10 @@ JaBbA = function(
                      length(ra.all), ' total junctions\n')
 
             if (any(t3)){
-                values(ra.all)[t3, tfield] = 2
+                ## save every t3 except small indel
+                t3.indel = which.indel(ra.all[which(t3)])
+                t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+                values(ra.all)[t3.non.indel, tfield] = 2
             }
         }
         
@@ -358,8 +360,11 @@ JaBbA = function(
             ## values(ra.all)[, tfield.raw] <- values(ra.all)[, tfield]
             t3 = (values(ra.all)[, tfield] == 3)
             if (any(t3)){
-                values(ra.all)[t3, tfield] = 2
-            }            
+                ## save every t3 except small indel
+                t3.indel = which.indel(ra.all[which(t3)])
+                t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+                values(ra.all)[t3.non.indel, tfield] = 2
+            }
         }
         jab = jabba_stub(
             junctions = ra,
@@ -677,7 +682,7 @@ jabba_stub = function(
                     gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='2')
                 if (length(tier2.ix)>0){
                     which.like.indel = tier2.ix[
-                        which.indel(kag$junctions[tier2.ix], max.size = 1e4, mc.cores = mc.cores)
+                        which.indel(kag$junctions[tier2.ix], max.size = 1e4) ## max size hardcoded for now
                     ]
                 } else {
                     which.like.indel = numeric(0)
@@ -1726,7 +1731,9 @@ jbaMIP = function(
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
         ## is greater than k / slack.prior penalty (where k is some copy difference
         ## that we would never imagine a "reasonable" slack to have to over-rule
-        fix = as.integer(which(residual.diff>(8/slack.prior))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
+        ## fix = as.integer(which(residual.diff>(8/slack.prior)))
+        ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
+        fix = as.integer(which(residual.diff>(4/slack.prior))) ## 8 is a constant that is conservative, let's try 4
 
         ## If we have too few fixed nodes, we will have too many subgraphs to optimize, each smaller in size and isolated from others. This allows more loose ends to be used.
         if (verbose)
@@ -4198,74 +4205,6 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                                         #                      rafile[, str1 := ifelse(str1=='+', '-', '+')]
                                         #                      rafile[, str2 := ifelse(str2=='+', '-', '+')]
 
-    }
-    else if (grepl('(vcf$)|(vcf.gz$)', rafile))
-    {
-      vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-      if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
-        warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-        return(GRangesList());
-      }
-
-      ## vgr = rowData(vcf) ## parse BND format
-      vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
-
-      ## no events
-      if (length(vgr) == 0)
-        return (GRangesList())
-
-      ## fix mateids if not included
-      if (!"MATEID"%in%colnames(mcols(vgr))) {
-        nm <- vgr$MATEID <- names(vgr)
-        ix <- grepl("1$",nm)
-        vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-        vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-        vgr$SVTYPE="BND"
-      }
-
-      if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
-        stop("MATEID or SVTYPE not included. Required")
-
-      vgr$mateid = vgr$MATEID
-
-      if (!is.character(vgr$mateid))
-      {
-        vgr$mateid = unstrsplit(vgr$MATEID)
-        if (any(nix<-nchar(vgr$mateid)==0))
-          vgr$mateid[nix] = NA
-      }
-
-      if (is.null(vgr$SVTYPE))
-        vgr$svtype = vgr$SVTYPE
-      else
-        vgr$svtype = vgr$SVTYPE
-
-      if (!is.null(VariantAnnotation::info(vcf)$SCTG))
-        vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
-
-      if (force.bnd)
-        vgr$svtype = "BND"
-
-      if (sum(vgr$svtype == 'BND')==0)
-        warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
-
-      if (!all(vgr$svtype == 'BND'))
-        warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
-
-      bix = which(vgr$svtype == "BND")
-      vgr = vgr[bix]
-      alt <- sapply(vgr$ALT, function(x) x[1])
-      vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-      vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-      vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-      vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-      vgr$mcoord = gsub('chr', '', vgr$mcoord)
-
-      if (all(is.na(vgr$mateid)))
-        if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-        {
-          warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-          vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
@@ -4461,13 +4400,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
         }
-        else{
-            values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], VariantAnnotation::info(vcf)[bix[npix], ])
-        }
-
-        return(list(junctions = ra, loose.ends = vgr.loose))
-      }
-
+        else
+            rafile = read.delim(rafile)
     }
 
     if (is.data.table(rafile))
@@ -4570,7 +4504,6 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
 
     return(out)
 }
-
 
 
 #' @name karyograph
@@ -5673,8 +5606,7 @@ chr2num = function(x, xy = FALSE)
 #' with the correct orintation wil be called
 #' @return indices of the identified junctions
 which.indel = function(juncs,
-                       max.size = 1e4,
-                       mc.cores = 1){
+                       max.size = 1e4){
     bps = grl.unlist(juncs)
     sort.grl.ix = rle((bps %Q% (order(seqnames, start)))$grl.ix)
     ## criterion 1: they are non-overlapping with others
@@ -5685,7 +5617,7 @@ which.indel = function(juncs,
     }
     juncs.iso = juncs[out.ix]
     ## criterion 2: they are smaller than max.size
-    iso.sizes = sv.size(juncs.iso, mc.cores = mc.cores)
+    iso.sizes = sv.size(juncs.iso, ignore.strand = TRUE)
     small.ix = which(iso.sizes <= max.size)
     out.ix = iso.ix[small.ix]
     if (length(out.ix)==0){
@@ -5705,11 +5637,8 @@ which.indel = function(juncs,
 #' @param mc.cores parallel
 #' @param ignore.strand usually TRUE
 #' @return numerical vector of the same length, Inf means they r not facing each other
-sv.size = function(juncs, mc.cores=1, ignore.strand=TRUE){
-    sz = mclapply(juncs,
-                  function(x){
-                      ds = gUtils::gr.dist(x[1], x[2], ignore.strand=ignore.strand)
-                  },
-                  mc.cores=mc.cores)
-    return(unlist(sz))
+sv.size = function(juncs,
+                   ...){
+    bps = gUtils::grl.pivot(juncs)
+    return(IRanges::distance(bps[[1]], bps[[2]], ...))
 }
