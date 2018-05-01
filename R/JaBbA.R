@@ -86,7 +86,8 @@
 #' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param use.gurobi  logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE) .. up to user to make sure the respective package is already installed
 #' @param reiterate  integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end
-#'
+#' @param allin if TRUE, use all available junctions except for tier 3 INDELs in the first interation
+#' @param indel if TRUE, force the small isolated tier 2 events into the model
 #' @param rescue.window integer scalar bp window around which to rescue lower tier junctions
 #' @param strict logical flag specifying whether to only include junctions that exactly overlap segs
 #' @param mc.cores integer how many cores to use to fork subgraphs generation (default = 1)
@@ -120,7 +121,7 @@ JaBbA = function(
                  seg = NULL, # path to seg file, rds of GRanges
                  outdir = './JaBbA', # out directory to dump into
                  cfield = NULL, # character, junction confidence meta data field in ra
-                 tfield = NULL, # character, tier confidence meta data field in ra
+                 tfield = "tier", # character, tier confidence meta data field in ra
                  nudge.balanced = FALSE,  ## if TRUE nudge chains of balanced (or quasi balanced junctions)
                  thresh.balanced = 500, ## threshold for balanced junctions
                  nseg = NULL, # path to normal seg file with $cn meta data field
@@ -214,15 +215,15 @@ JaBbA = function(
         ## plus the ones that didn't but fall inside the range of a lo
         if (all.in & length(ra.all)>0){
             t3 = values(ra.all)[, tfield]==3
-            jmessage('All-in mode: ', sum(t3),
-                     ' tier 3 junctions being included yielding ',
-                     length(ra.all), ' total junctions\n')
 
             if (any(t3)){
                 ## save every t3 except small indel
                 t3.indel = which.indel(ra.all[which(t3)])
                 t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
                 values(ra.all)[t3.non.indel, tfield] = 2
+                jmessage('All-in mode: ', length(t3.non.indel),
+                         ' tier 3 junctions being included yielding ',
+                         sum(values(ra.all)[, tfield]==2), ' total junctions\n')
             }
         }
         
@@ -896,9 +897,9 @@ jabba_stub = function(
     values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
 
     if (is.null(jabd$agtrack))
-      gTrack::plot(c(td.cov, jabd$gtrack), links = jun)
+      plot(c(td.cov, jabd$gtrack), links = jun)
     else
-      gTrack::plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
+      plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
 
     dev.off()
   }
@@ -913,9 +914,9 @@ jabba_stub = function(
       pdf(gsub("png$", "pdf", jabba.simple.png.file), width = 20, height = 10)
 
     if (is.null(jabd.simple$agtrack))
-      gTrack::plot(c(td.cov, jabd.simple$gtrack), links = jun)
+      plot(c(td.cov, jabd.simple$gtrack), links = jun)
     else
-      gTrack::plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
+      plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
 
     dev.off()
   }
@@ -1180,8 +1181,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
   this.kag$ploidy = pp[1,]$ploidy
   this.kag$beta = pp[1,]$beta
   this.kag$gamma = pp[1,]$gamma
-  this.kag$segstats$cn = rel2abs(this.kag$segstats, purity = this.kag$purity, ploidy = this.kag$ploidy, field = 'mean')
-  if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
+    this.kag$segstats$cn = rel2abs(this.kag$segstats, purity = this.kag$purity, ploidy = this.kag$ploidy, field = 'mean')
+    saveRDS(this.kag, out.file)
+
+    if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
     pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
   tmp.kag = this.kag
 
@@ -1200,11 +1203,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
         pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
 
-    gTrack::plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
+    plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
                    gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
     dev.off()
-
-    saveRDS(this.kag, out.file)
 }
 
 ## diagnostic function used by karyograph_stub
