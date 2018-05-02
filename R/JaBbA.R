@@ -29,7 +29,7 @@
 #' @import data.table
 #' @import DNAcopy
 #' @import gUtils
-#' @importFrom graphics abline hist plot title
+#' @importFrom graphics abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table
@@ -805,9 +805,9 @@ jabba_stub = function(
     values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
 
     if (is.null(jabd$agtrack))
-      graphics::plot(c(td.cov, jabd$gtrack), links = jun)
+      plot(c(td.cov, jabd$gtrack), links = jun)
     else
-      graphics::plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
+      plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
 
     dev.off()
   }
@@ -822,9 +822,9 @@ jabba_stub = function(
       pdf(gsub("png$", "pdf", jabba.simple.png.file), width = 20, height = 10)
 
     if (is.null(jabd.simple$agtrack))
-      graphics::plot(c(td.cov, jabd.simple$gtrack), links = jun)
+      plot(c(td.cov, jabd.simple$gtrack), links = jun)
     else
-      graphics::plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
+      plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
 
     dev.off()
   }
@@ -1113,7 +1113,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
   if (is.character(tryCatch(png(paste(out.file, '.inputdata.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
     pdf(paste(out.file, '.inputdata.pdf', sep = ''), height = 10, width = 10)
 
-  graphics::plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
+  plot(c(gTrack(gr.fix(sample(this.cov, pmin(length(this.cov), 5e4)), this.kag$segstats), y.field = 'ratio', col = alpha('black', 0.3)),
                  gTrack(this.kag$segstats, y.field = 'mean', angle = 0, col = 'gray10', border = alpha('black', 0.2))), links = this.kag$junctions, y1 = y1)
   dev.off()
 
