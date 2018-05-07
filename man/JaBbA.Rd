@@ -5,13 +5,13 @@
 \title{JaBbA}
 \usage{
 JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
-  tfield = NULL, nudge.balanced = FALSE, thresh.balanced = 500,
+  tfield = "tier", nudge.balanced = FALSE, thresh.balanced = 500,
   nseg = NULL, hets = NULL, name = "tumor", purity = NA, ploidy = NA,
   field = "ratio", subsample = NULL, tilim = 1200, mem = 16,
   reiterate = 0, rescue.window = 10000, init = NULL, edgenudge = 0.1,
   use.gurobi = FALSE, slack.penalty = 100, overwrite = FALSE,
   mc.cores = 1, strict = FALSE, max.threads = Inf, max.mem = 16,
-  verbose = TRUE)
+  indel = TRUE, all.in = TRUE, verbose = TRUE)
 }
 \arguments{
 \item{junctions}{GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList}
@@ -58,9 +58,13 @@ JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
 
 \item{strict}{logical flag specifying whether to only include junctions that exactly overlap segs}
 
+\item{indel}{if TRUE, force the small isolated tier 2 events into the model}
+
 \item{cores}{number of cores to use (default 1)}
 
 \item{nseg}{path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
+
+\item{allin}{if TRUE, use all available junctions except for tier 3 INDELs in the first interation}
 }
 \value{
 gGraph (gGnome package) of balanced rearrangement graph

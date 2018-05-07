@@ -29,7 +29,7 @@
 #' @import data.table
 #' @import DNAcopy
 #' @import gUtils
-#' @importFrom graphics abline hist plot title
+#' @importFrom graphics abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table

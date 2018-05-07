@@ -14,6 +14,8 @@
 \alias{read.junctions}
 \alias{read_vcf}
 \alias{levapply}
+\alias{which.indel}
+\alias{sv.size}
 \alias{Rcplex2}
 \title{jabba_stub}
 \usage{
@@ -23,7 +25,7 @@ jabba_stub(junctions, coverage, seg = NULL, cfield = NULL, tfield = NULL,
   max.threads = Inf, max.mem = 16, purity = NA, ploidy = NA,
   strict = FALSE, mipstart = NULL, field = "ratio", subsample = NULL,
   tilim = 1200, mem = 16, init = NULL, edgenudge = 0.1,
-  slack.penalty = 100, use.gurobi = FALSE, overwrite = F,
+  slack.penalty = 100, use.gurobi = FALSE, indel = TRUE, overwrite = F,
   verbose = TRUE)
 
 karyograph_stub(seg.file, cov.file, nseg.file = NULL, het.file = NULL,
@@ -57,6 +59,10 @@ read_vcf(fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
   verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf", ...)
 
 levapply(x, by, FUN = "order")
+
+which.indel(juncs, max.size = 10000)
+
+sv.size(juncs, ...)
 
 Rcplex2(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
   control = list(), objsense = c("min", "max"), sense = "L",
@@ -107,12 +113,27 @@ Rcplex2(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
 
 \item{FUN}{function that takes a length k vector and outputs a length k vector, used for processing each "level" of by}
 
+\item{juncs}{GRangesList of junctions}
+
+\item{max.size}{the size cutoff in bp, any pair of breakpoints below this
+with the correct orintation wil be called}
+
 \item{nseg}{path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
+
+\item{juncs}{GRangesList of junctions}
+
+\item{mc.cores}{parallel}
+
+\item{ignore.strand}{usually TRUE}
 }
 \value{
 named vector indexed by levels of "by"
 
 length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
+
+indices of the identified junctions
+
+numerical vector of the same length, Inf means they r not facing each other
 }
 \description{
 Internal function to run single iteration of JaBbA
@@ -160,6 +181,11 @@ wrapper around variantAnnotation reads VCF into granges or data.table format
 
 Applies FUN locally to levels of x and returns vector of length()
 (eg can do a "local" order within levels)
+
+Among a GRangesList of junction set, find the indices of isolated, small scale tDup or DEL
+They are in the grey area from SV to INDEL.
+
+Simply the distance between pairs of breakpoints
 
 Modification of Rcplex which takes in mipcontrol parameters.
 }
