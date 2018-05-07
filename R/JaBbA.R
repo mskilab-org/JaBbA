@@ -115,8 +115,7 @@
 #' values(jun)$tier
 #'
 #' @import DNAcopy
-JaBbA = function(
-                 junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                  coverage, # path to cov file, rds of GRanges
                  seg = NULL, # path to seg file, rds of GRanges
                  outdir = './JaBbA', # out directory to dump into
@@ -276,7 +275,7 @@ JaBbA = function(
                 purity = as.numeric(purity),
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
-                verbose = as.numeric(verbose)        
+                verbose = as.numeric(verbose)
             )
             gc()
 
@@ -304,13 +303,15 @@ JaBbA = function(
             new.ra = ra.all[which(values(ra.all)$id %in% new.ra.id)]
             ## new.ra  = ra.all[union(values(last.ra)$id,
             ##                        values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
-            new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
+            ## new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
+            new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id)
             ## num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
             num.new.junc = length(new.junc.id)
             jcn = rep(0, nrow(jab$ab.edges))
             abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
-            if (any(abix))
+            if (any(abix)){
                 jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
+            }
             num.used.junc = length(which(jcn>0))
 
             t3 = values(new.ra)[, tfield]==3
@@ -319,8 +320,9 @@ JaBbA = function(
                      ' tier 3 junctions, yielding ', num.used.junc,
                      ' used junctions and ', length(new.ra), ' total junctions\n')
 
-            if (any(t3))
+            if (any(t3)){
                 values(new.ra)[t3, tfield] = 2
+            }
 
             if (num.new.junc==0 | this.iter >= reiterate)
                 continue = FALSE
@@ -610,7 +612,6 @@ jabba_stub = function(
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, seqlengths(coverage), drop = TRUE)
 
-
     if (!is.null(hets))
         if (!file.exists(hets))
         {
@@ -628,7 +629,6 @@ jabba_stub = function(
         jmessage('Leaving ', length(ra), ' junctions from an initial set of ', nog)
     }
     
-
     ra = junctions
 
     if (!is.character(ra))
@@ -682,15 +682,15 @@ jabba_stub = function(
                 tier2.ix = which(
                     gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='2')
                 if (length(tier2.ix)>0){
+                    ## max size hardcoded for now
                     which.like.indel = tier2.ix[
-                        which.indel(kag$junctions[tier2.ix], max.size = 1e4) ## max size hardcoded for now
+                        which.indel(kag$junctions[tier2.ix], max.size = 1e4) 
                     ]
                 } else {
                     which.like.indel = numeric(0)
                 }
-                ab.force =
-                    union(ab.force,
-                          which.like.indel)
+
+                ab.force =union(ab.force, which.like.indel)
             }
             
             if (verbose)
@@ -708,67 +708,110 @@ jabba_stub = function(
                 jmessage('Found tier field enforcing 0 CN at ', length(ab.exclude), ' junctions')
             }
 
-    }
-  }
-
-  gc()
-
-  juncs = kag$junctions
-  bpss = grl.unlist(juncs)
-
-
-  if (nudge.balanced) {
-    balanced.jix = c()
-    if (length(juncs)>0) {
-      balanced.jix = chromoplexy(kag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
-      dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
-      balanced.jix = setdiff(balanced.jix, dp.jix)
-    }
-    edgenudge = edgenudge * as.numeric(1:length(juncs) %in% balanced.jix) ## only adds edge nudge to the balanced junctions
-  } else { ## nudge everything ..
-    if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
-    if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
-      bps.cov = gr.val(bpss, coverage, val = 'ratio')
-                                        #        bps.cov = bpss %$% coverage
-      na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
-      if (length(na.jix)>0){
-        if (verbose)
-        {
-          jmessage("Cancel edge nudge for ", length(na.jix), " junctions.")
         }
-        edgenudge[na.jix] = 0
-      }
     }
-  }
 
-  saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
-  saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
+    gc()
 
-  if (!is.null(init))
-  {
-    if (is.character(init))
-      init = readRDS(init)
-  }
+    juncs = kag$junctions
+    bpss = grl.unlist(juncs)
 
-  if (overwrite | !file.exists(jabba.raw.rds.file))
-  { 
-    ramip_stub(kag.file, jabba.raw.rds.file, mc.cores = mc.cores, max.threads = max.threads, mem = mem, tilim = tilim, edge.nudge = edgenudge, use.gurobi = use.gurobi,
-               ab.force = ab.force, ab.exclude = ab.exclude, init = init, verbose = verbose,
-               purity.min = purity, mipstart = mipstart, purity.max = purity, ploidy.min = ploidy, ploidy.max = ploidy,
-               slack.prior = 1/slack.penalty)
-  }
 
-  kag = readRDS(kag.file)
-  jab = readRDS(jabba.raw.rds.file)
+    if (nudge.balanced) {
+        balanced.jix = c()
+        if (length(juncs)>0) {
+            balanced.jix = chromoplexy(kag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
+            balanced.jix = setdiff(balanced.jix, dp.jix)
+        }
+        edgenudge = edgenudge * as.numeric(1:length(juncs) %in% balanced.jix) ## only adds edge nudge to the balanced junctions
+    } else { ## nudge everything ..
+        if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
+        if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
+            bps.cov = gr.val(bpss, coverage, val = 'ratio')
+                                        #        bps.cov = bpss %$% coverage
+            na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
+            if (length(na.jix)>0){
+                ## if (verbose)
+                ## {
+                ##   jmessage("Cancel edge nudge for ", length(na.jix), " junctions.")
+                ## }
+                edgenudge[na.jix] = 0
+            }
+        }
+    }
 
-  if (overwrite | !file.exists(jabba.rds.file))
-  {
-    jabd = JaBbA.digest(jab, kag)
-  }
-  else
-  {
-    jabd = readRDS(jabba.rds.file)
-  }
+    ## some edges should be excluded:
+    ## both breakpoints in NA regions
+    junc.dt = data.table(data.frame(values(juncs)))
+    junc.dt = cbind(junc.dt, data.table(kag$ab.edges[,,1]))
+    junc.dt[, ":="(mean.a=kag$segstats$mean[from],
+                   mean.b=kag$segstats$mean[to],
+                   chr.a = as.character(seqnames(kag$segstats[from])),
+                   chr.b = as.character(seqnames(kag$segstats[to])))]
+    junc.dt[, both.na := is.na(mean.a) & is.na(mean.b)]
+    both.na.ix = junc.dt[, which(both.na==TRUE)] ## both breakpoint in NA
+    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+    no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)] ## either breakpoint in a contig that's completely NA
+    ## excluding those whose both bp in NA regions or mapped to completely NA contigs
+    ab.exclude = union(ab.exclude, union(both.na.ix, no.man.land))
+    ab.force = setdiff(ab.force, ab.exclude)
+    edgenudge[ab.exclude] = 0
+    ## furthermore, some extra edges should not be nudged
+    either.na.ix = junc.dt[, which(both.na==FALSE & (is.na(mean.a) | is.na(mean.b)))]
+    edgenudge[either.na.ix] = 0
+    
+    if (verbose){
+        jmessage("Excluding ", length(both.na.ix), " aberrant junctions whose both breakpoints are in NA coverage regions")
+        jmessage("Cancel nudge for ", length(either.na.ix), " aberrant junctions where one of the 2 breakpoint is in NA coverage regions")
+        jmessage("In sum, we are forcing ", length(ab.force),
+                 " junctions, excluding ", length(ab.exclude),
+                 " junctions, and nudging ", sum(edgenudge>0), " junctions")
+    }
+
+    saveRDS(ab.exclude, paste0(outdir, "/ab.exclude.rds"))
+    saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
+    saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
+
+    if (!is.null(init))
+    {
+        if (is.character(init))
+            init = readRDS(init)
+    }
+
+    if (overwrite | !file.exists(jabba.raw.rds.file))
+    { 
+        ramip_stub(kag.file,
+                   jabba.raw.rds.file,
+                   mc.cores = mc.cores,
+                   max.threads = max.threads,
+                   mem = mem,
+                   tilim = tilim,
+                   edge.nudge = edgenudge,
+                   use.gurobi = use.gurobi,
+                   ab.force = ab.force,
+                   ab.exclude = ab.exclude,
+                   init = init,
+                   verbose = verbose,
+                   purity.min = purity,
+                   mipstart = mipstart,
+                   purity.max = purity,
+                   ploidy.min = ploidy,
+                   ploidy.max = ploidy,
+                   slack.prior = 1/slack.penalty)
+    }
+
+    kag = readRDS(kag.file)
+    jab = readRDS(jabba.raw.rds.file)
+
+    if (overwrite | !file.exists(jabba.rds.file))
+    {
+        jabd = JaBbA.digest(jab, kag)
+    }
+    else
+    {
+        jabd = readRDS(jabba.rds.file)
+    }
 
   jabd$purity = jab$purity
   jabd$ploidy = jab$ploidy
@@ -1229,7 +1272,16 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 #' run ramip
 #' @name .ramip_stub
 #' @rdname internal
-ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem = 16, tilim = 1200, slack.prior = 0.001, gamma = NA, beta = NA, customparams = T,
+ramip_stub = function(kag.file,
+                      out.file,
+                      mc.cores = 1,
+                      max.threads = Inf,
+                      mem = 16,
+                      tilim = 1200,
+                      slack.prior = 0.001,
+                      gamma = NA,
+                      beta = NA,
+                      customparams = T,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -1306,6 +1358,7 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
         adj.lb = this.kag$adj*0
         adj.lb[rbind(this.kag$ab.edges[ab.force, ,1])[, 1:2, drop = FALSE]] = 1
         adj.lb[rbind(this.kag$ab.edges[ab.force, ,2])[, 1:2, drop = FALSE]] = 1
+        saveRDS(adj.lb, "adj.lb.rds")
     }
 
     if (!is.null(ab.exclude))
@@ -1318,11 +1371,12 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
             }
         }
         adj.ub = this.kag$adj*0
-        adj.ub[Matrix::which(this.kag$adj!=0, arr.ind = TRUE)] = Inf
-        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0
-        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0
+        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -1
+        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
+        saveRDS(adj.ub, "adj.ub.rds")
+    } else {
+        adj.ub = NULL
     }
-
 
     ## if mipstart is given (a gGnome or JaBBA) object
     ## here we create an mipstart "adj" matrix for the new graph
@@ -1361,7 +1415,23 @@ ramip_stub = function(kag.file, out.file, mc.cores = 1, max.threads = Inf, mem =
         mipstart = sparseMatrix(ijs$i, ijs$j, x = ijs$mipstart, dims = dim(this.kag$adj))
     }
 
-    ra.sol = jbaMIP(this.kag$adj, this.kag$segstats, beta.guess = this.kag$beta, gamma.guess = this.kag$gamma, tilim = tilim, slack.prior = slack.prior, cn.prior = NA, mipemphasis = 0, ignore.cons = T, mipstart = mipstart, adj.lb = adj.lb , use.gurobi = use.gurobi, mc.cores = mc.cores, adj.nudge = adj.nudge, cn.ub = rep(500, length(this.kag$segstats)), verbose = verbose)
+    ra.sol = jbaMIP(this.kag$adj,
+                    this.kag$segstats,
+                    beta.guess = this.kag$beta,
+                    gamma.guess = this.kag$gamma,
+                    tilim = tilim,
+                    slack.prior = slack.prior,
+                    cn.prior = NA,
+                    mipemphasis = 0,
+                    ignore.cons = T,
+                    mipstart = mipstart,
+                    adj.lb = adj.lb,
+                    adj.ub = adj.ub,
+                    use.gurobi = use.gurobi,
+                    mc.cores = mc.cores,
+                    adj.nudge = adj.nudge,
+                    cn.ub = rep(500, length(this.kag$segstats)),
+                    verbose = verbose)
     saveRDS(ra.sol, out.file)
     
     if (customparams)
@@ -1590,7 +1660,7 @@ segstats = function(target,
         target$sd[bad.nodes] = NA
         target$bad.nodes = seq_along(target) %in% bad.nodes
         jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
-        jmessage("Hard setting", sum(width(target[bad.nodes]))/1e6, "Mb of the genome to NA that didn't pass our quality threshold")      
+        jmessage("Hard setting ", sum(width(target[bad.nodes]))/1e6, " Mb of the genome to NA that didn't pass our quality threshold")      
     }
     
     return(target)
@@ -1658,8 +1728,7 @@ jmessage = function(..., pre = 'JaBbA')
 #' $cn.prior input cn.prior
 #' $slack.prior input slack.prior
 ############################################
-jbaMIP = function(
-                  adj, # binary n x n adjacency matrix ($adj output of karyograph)
+jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograph)
                   segstats, # n x 1 GRanges object with "mean" and "sd" value fields
                   mipstart = NULL, ## sparse adjacency matrix of mipstarts (0 = NA, 0+eps + 0, k>=1 = k)
 ########### optional args
@@ -1690,6 +1759,7 @@ jbaMIP = function(
                   cn.ub = cn.fix,
                   loose.ends = c(), ## integer vector specifies indices of "loose ends", slack won't be penalized at these vertices
                   adj.lb = 0*adj, # lower bounds for adjacency matrix
+                  adj.ub = NULL,
                   adj.nudge = 0*adj, # linear objective function coefficients for edges (only which(adj!=0) components considered)
                   na.node.nudge = TRUE,
                   ecn.out.ub = rep(NA, length(segstats)), ## upper bound for cn of edges leaving nodes
@@ -1710,13 +1780,11 @@ jbaMIP = function(
     if (is.null(adj.lb))
         adj.lb = 0*adj
 
-#####
-                                        # wrapper that calls jbaMIP recursively on subgraphs after "fixing"
-#####
+    ## wrapper that calls jbaMIP recursively on subgraphs after "fixing"
     if (partition & !is.na(gamma.guess) & !is.na(beta.guess))
     {
 
-                                        #      m = segstats$mean*beta.guess - gamma.guess
+        ##      m = segstats$mean*beta.guess - gamma.guess
 
         ## transform means from data space into copy number space
         m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
@@ -1833,6 +1901,7 @@ jbaMIP = function(
         args = as.list(match.call())[-1]
         args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
 
+
         if (is.null(ploidy.normal))
         {
             if (field.ncn %in% names(values(segstats)))
@@ -1841,6 +1910,7 @@ jbaMIP = function(
                 
             }
         }
+
 
         sols = mclapply(1:length(cll), function(k, args)
         {
@@ -1869,9 +1939,13 @@ jbaMIP = function(
 
             if (!is.null(mipstart))
                 args$mipstart = mipstart[uix, uix]
+
             args$adj.nudge = adj.nudge[uix, uix, drop = F]
             args$na.node.nudge = na.node.nudge
             args$adj.lb = adj.lb[uix, uix, drop = F]
+            if (!is.null(adj.ub)){
+                args$adj.ub = adj.ub[uix, uix, drop = F] ## xt added 5/4
+            }
             args$segstats = segstats[uix]
             args$cn.fix = cn.fix[uix]
             args$cn.lb = cn.lb[uix]
@@ -1881,6 +1955,7 @@ jbaMIP = function(
             args$ploidy.min = 0 ## no ploidy constraints
             ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
             args$ploidy.max = Inf
+
 
             if (verbose)
                 jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
@@ -1963,8 +2038,8 @@ jbaMIP = function(
 
         return(out)
     }
-
-                                        # map intervals to their reverse complement to couple their copy number (and edge variables)
+    
+    ## map intervals to their reverse complement to couple their copy number (and edge variables)
     pos.ix = which( as.logical( strand(segstats)=='+') )
     neg.ix = which( as.logical( strand(segstats)=='-') )
 
@@ -2034,11 +2109,12 @@ jbaMIP = function(
         n = n+2*length(v.ix);
     }
 
-    vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I'
+    vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I' ## edge and vertex copy numbers are integers
     lb = rep(0, n); lb[s.ix] = -Inf;
 
-    if (nrow(edges)>0)
-        lb[e.ix] = adj.lb[edges]
+    if (nrow(edges)>0){
+        lb[e.ix] = adj.lb[edges] ## lower bound on edges, some are forced in
+    }
 
     if (any(ix <<- !is.na(cn.fix)))
         if (verbose>1)
@@ -2047,13 +2123,21 @@ jbaMIP = function(
         }
 
     ## implement lower bounds and fixes
-    if (any(!is.na(cn.lb)))
+    if (any(!is.na(cn.lb))){
         lb[v.ix[!is.na(cn.lb)]] = cn.lb[!is.na(cn.lb)]
+    }
 
     ub = rep(Inf, n);
 
     if (any(!is.na(cn.ub)))
         ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
+
+    ## set upper bound for some edges
+    if (!is.null(adj.ub)){
+        ub[e.ix] = ifelse(adj.ub[edges]<0, 0, Inf) ## upper bound on edges, some are forced out
+        ## for debug only
+        saveRDS(ub, "ub.rds")
+    }
 
     varmeta$vtype = vtype
     varmeta$lb = vtype
@@ -2098,7 +2182,7 @@ jbaMIP = function(
 
     Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
 
-                                        # vertices that will actually have constraints (i.e. those that have non NA segstats )
+    ## vertices that will actually have constraints (i.e. those that have non NA segstats )
     ## XT: if some node's sd is 0, evaluate it to NA
     if (length(zero.sd.ix <- which(segstats$sd==0))>0){
         segstats$sd[zero.sd.ix] <- NA
@@ -2113,10 +2197,10 @@ jbaMIP = function(
     else
         mu.all = NA
 
-    if (verbose)
-    {
-                                        #      jmessage('cn constraints ..')
-    }
+    ## if (verbose)
+    ## {
+    ##                                     #      jmessage('cn constraints ..')
+    ## }
 
     if (length(v.ix.c)>0)
     {
@@ -2412,6 +2496,8 @@ jbaMIP = function(
                                         #        jmessage('Adding ', sum(adj.nudge[edges]), " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
         }
 
+        ## Future to do: weigh the edges in objective functions
+        ## what is the conversion from supporting reads to copy number space?
         cvec[e.ix] = -adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
     }
 
