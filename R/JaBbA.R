@@ -743,27 +743,35 @@ jabba_stub = function(
 
     ## some edges should be excluded:
     ## both breakpoints in NA regions
-    junc.dt = data.table(data.frame(values(juncs)))
-    junc.dt = cbind(junc.dt, data.table(kag$ab.edges[,,1]))
-    junc.dt[, ":="(mean.a=kag$segstats$mean[from],
-                   mean.b=kag$segstats$mean[to],
-                   chr.a = as.character(seqnames(kag$segstats[from])),
-                   chr.b = as.character(seqnames(kag$segstats[to])))]
-    junc.dt[, both.na := is.na(mean.a) & is.na(mean.b)]
-    both.na.ix = junc.dt[, which(both.na==TRUE)] ## both breakpoint in NA
-    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
-    no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)] ## either breakpoint in a contig that's completely NA
-    ## excluding those whose both bp in NA regions or mapped to completely NA contigs
-    ab.exclude = union(ab.exclude, union(both.na.ix, no.man.land))
-    ab.force = setdiff(ab.force, ab.exclude)
-    edgenudge[ab.exclude] = 0
-    ## furthermore, some extra edges should not be nudged
-    either.na.ix = junc.dt[, which(both.na==FALSE & (is.na(mean.a) | is.na(mean.b)))]
-    edgenudge[either.na.ix] = 0
+    if (length(juncs)>0){
+        junc.dt = data.table(data.frame(values(juncs)))
+        junc.dt = cbind(junc.dt,
+                        data.table(matrix(kag$ab.edges[,,1],
+                                          nrow=nrow(kag$ab.edges),
+                                          dimnames=dimnames(kag$ab.edges)[1:2])))
+        junc.dt[, ":="(mean.a=kag$segstats$mean[from],
+                       mean.b=kag$segstats$mean[to],
+                       chr.a = as.character(seqnames(kag$segstats[from])),
+                       chr.b = as.character(seqnames(kag$segstats[to])))]
+        junc.dt[, both.na := is.na(mean.a) & is.na(mean.b)]
+        both.na.ix = junc.dt[, which(both.na==TRUE)] ## both breakpoint in NA
+        nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+        no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)]
+        ## either breakpoint in a contig that's completely NA
+        ## excluding those whose both bp in NA regions or mapped to completely NA contigs
+        ab.exclude = union(ab.exclude, union(both.na.ix, no.man.land))
+        ab.force = setdiff(ab.force, ab.exclude)
+        edgenudge[ab.exclude] = 0
+        ## furthermore, some extra edges should not be nudged
+        either.na.ix = junc.dt[, which(both.na==FALSE & (is.na(mean.a) | is.na(mean.b)))]
+        edgenudge[either.na.ix] = 0
+        if (verbose){
+            jmessage("Excluding ", length(both.na.ix), " aberrant junctions whose both breakpoints are in NA coverage regions")
+            jmessage("Cancel nudge for ", length(either.na.ix), " aberrant junctions where one of the 2 breakpoint is in NA coverage regions")
+        }
+    }
     
     if (verbose){
-        jmessage("Excluding ", length(both.na.ix), " aberrant junctions whose both breakpoints are in NA coverage regions")
-        jmessage("Cancel nudge for ", length(either.na.ix), " aberrant junctions where one of the 2 breakpoint is in NA coverage regions")
         jmessage("In sum, we are forcing ", length(ab.force),
                  " junctions, excluding ", length(ab.exclude),
                  " junctions, and nudging ", sum(edgenudge>0), " junctions")
