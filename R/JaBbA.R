@@ -744,6 +744,7 @@ jabba_stub = function(
     ## some edges should be excluded:
     ## both breakpoints in NA regions
     if (length(juncs)>0){
+        browser()
         junc.dt = data.table(data.frame(values(juncs)))
         junc.dt = cbind(junc.dt,
                         data.table(matrix(kag$ab.edges[,,1],
