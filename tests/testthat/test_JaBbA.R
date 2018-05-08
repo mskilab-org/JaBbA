@@ -39,9 +39,9 @@ test_that("read.junctions", {
 test_that("JaBbA", {
     
     set.seed(42);
-    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE)
-    expect_equal(length(jab$segstats), 280)
-    expect_equal(round(jab$ploidy, 2), 2.58)
+    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE)
+    expect_equal(length(jab$segstats), 80)
+    expect_equal(round(jab$ploidy, 2), 2.56)
     ##expect_equal(all(jab$segstats$cn == c(2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)))
     ## this works ##expect_equal(abs(jab$ploidy-2.578136)<1e-6, TRUE)
     ## this works ##expect_equal(abs(jab$purity-1)<1e-6, TRUE)
@@ -51,7 +51,7 @@ test_that("JaBbA", {
     ##expect_equal(abs(jab$ploidy-3.754187)<1e-6, TRUE)
     ##expect_equal(abs(jab$purity-0.99)<1e-6, TRUE)
     ##expect_equal(length(jab$segstats), 290)
-    expect_equal(round(jab2$ploidy, 2), 3.76)
+    expect_equal(round(jab2$ploidy, 2), 3.74)
 
 })
 
