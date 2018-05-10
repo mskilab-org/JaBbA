@@ -53,6 +53,9 @@ test_that("JaBbA", {
     expect_equal(length(jab2$segstats), 100)
     expect_equal(round(jab2$ploidy, 2), 3.74)
 
+    jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+    expect_equal(length(jab.retiterate$segstats), 108)
+
 })
 
 
