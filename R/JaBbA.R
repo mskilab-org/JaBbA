@@ -742,6 +742,8 @@ jabba_stub = function(
     }
 
     ## some edges should be excluded:
+    ## completely "dark" reference contigs
+    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
     ## both breakpoints in NA regions
     if (length(juncs)>0){
         junc.dt = data.table(data.frame(values(juncs)))
@@ -755,7 +757,7 @@ jabba_stub = function(
                        chr.b = as.character(seqnames(kag$segstats[to])))]
         junc.dt[, both.na := is.na(mean.a) & is.na(mean.b)]
         both.na.ix = junc.dt[, which(both.na==TRUE)] ## both breakpoint in NA
-        nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+
         no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)]
         ## either breakpoint in a contig that's completely NA
         ## excluding those whose both bp in NA regions or mapped to completely NA contigs
@@ -765,10 +767,12 @@ jabba_stub = function(
         ## furthermore, some extra edges should not be nudged
         either.na.ix = junc.dt[, which(both.na==FALSE & (is.na(mean.a) | is.na(mean.b)))]
         edgenudge[either.na.ix] = 0
+
         if (verbose){
             jmessage("Excluding ", length(both.na.ix), " aberrant junctions whose both breakpoints are in NA coverage regions")
             jmessage("Cancel nudge for ", length(either.na.ix), " aberrant junctions where one of the 2 breakpoint is in NA coverage regions")
         }
+
     }
     
     if (verbose){
@@ -1423,14 +1427,32 @@ ramip_stub = function(kag.file,
 
         mipstart = sparseMatrix(ijs$i, ijs$j, x = ijs$mipstart, dims = dim(this.kag$adj))
     }
-
-    ra.sol = jbaMIP(this.kag$adj,
+    
+    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+    ## ra.sol = jbaMIP(this.kag$adj,
+    ##                 this.kag$segstats,
+    ##                 beta.guess = this.kag$beta,
+    ##                 gamma.guess = this.kag$gamma,
+    ##                 tilim = tilim,
+    ##                 slack.prior = slack.prior,
+    ##                 cn.prior = NA,## why not used?
+    ##                 mipemphasis = 0,
+    ##                 ignore.cons = T,
+    ##                 mipstart = mipstart,
+    ##                 adj.lb = adj.lb,
+    ##                 adj.ub = adj.ub,
+    ##                 use.gurobi = use.gurobi,
+    ##                 mc.cores = mc.cores,
+    ##                 adj.nudge = adj.nudge,
+    ##                 cn.ub = rep(500, length(this.kag$segstats)),
+    ##                 verbose = verbose)
+        ra.sol = jbaMIP(this.kag$adj,
                     this.kag$segstats,
                     beta.guess = this.kag$beta,
                     gamma.guess = this.kag$gamma,
                     tilim = tilim,
                     slack.prior = slack.prior,
-                    cn.prior = NA,
+                    cn.prior = NA,## why not used?
                     mipemphasis = 0,
                     ignore.cons = T,
                     mipstart = mipstart,
@@ -1439,7 +1461,9 @@ ramip_stub = function(kag.file,
                     use.gurobi = use.gurobi,
                     mc.cores = mc.cores,
                     adj.nudge = adj.nudge,
-                    cn.ub = rep(500, length(this.kag$segstats)),
+                    ## cn.ub = rep(500, length(this.kag$segstats)),
+                    cn.ub = ifelse(as.character(seqnames(this.kag$segstats)) %in% nothing.contig,
+                                   0, 500),
                     verbose = verbose)
     saveRDS(ra.sol, out.file)
     
@@ -1920,7 +1944,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             }
         }
 
-
         sols = mclapply(1:length(cll), function(k, args)
         {
             ix = node.map[cll[[k]]] ## indices in the original graph
@@ -1972,6 +1995,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
                                                                                                                                   length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
 
+            saveRDS(args, paste0(k, ".args.rds"))
             out = do.call('jbaMIP', args)
 
             gc() ## garbage collect .. not sure why this needs to be done
