@@ -3538,50 +3538,6 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 
 
-##
-##
-#' @name .correct.slack
-#' @rdname internal
-.correct.slack = function(ra.sol)
-{
-    adj = ra.sol$adj
-    eslack.out = ra.sol$segstats$eslack.out
-    eslack.in = ra.sol$segstats$eslack.in
-    cn = ra.sol$segstats$cn
-    str = as.logical(strand(ra.sol$segstats) == '+')
-    sn = as.character(seqnames(ra.sol$segstats))
-    for (i in (1:length(cn))[c(-1, -length(cn))])
-    {
-        if (str[i])
-        {
-            if (sn[i] == sn[i-1] & eslack.out[i-1]>0 & eslack.in[i]>0)
-            {
-                cat('+')
-                a = min(eslack.out[i-1], eslack.in[i])
-                eslack.out[i-1] = eslack.out[i-1]-a
-                eslack.in[i] = eslack.in[i]-a
-                adj[i-1, i] = adj[i-1, i] + a
-            }
-        }
-        else if (!str[i] & sn[i] == sn[i+1] & eslack.out[i+1]>0 & eslack.in[i]>0)
-        {
-            cat('-')
-            a = min(eslack.out[i+1], eslack.in[i])
-            eslack.out[i+1] = eslack.out[i+1]-a
-            eslack.in[i] = eslack.in[i]-a
-            adj[i+1, i] = adj[i+1, i] + a
-        }
-    }
-    ra.sol$adj = adj;
-    ra.sol$segstats$eslack.out = eslack.out
-    ra.sol$segstats$eslack.in = eslack.in
-    ra.sol$eslack.out = eslack.out
-    ra.sol$eslack.in = eslack.in
-                                        #    cat('\n')
-    return(ra.sol)
-}
-
-
 ## cplex set max threads (warning can only do once globally per machine, so be wary of multiple hosts running on same machine)
 ##
 .cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)

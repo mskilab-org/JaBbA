@@ -39,19 +39,24 @@ test_that("read.junctions", {
 test_that("JaBbA", {
     
     set.seed(42);
-    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
-    expect_equal(length(jab$segstats), 80)
-    expect_equal(round(jab$ploidy, 2), 2.56)
-    ##expect_equal(all(jab$segstats$cn == c(2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 4, 3, 1, 3, 4, 3, 2, 1, 2, 3, 2, 1, 2, 8, 17, 18, 17, 18, 17, 18, 17, 8, 14, 20, 21, 20, 21, 20, 21, 20, 21, 20, 21, 20, 22, 20, 21, 20, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 24, 22, 23, 22, 23, 22, 24, 22, 17, 20, 17, 21, 17, 20, 17, 20, 17, 22, 17, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 22, 23, 24, 23, 24, 23, 29, 16, 20, 16, 22, 24, 22, 23, 22, 23, 22, 24, 22, 21, 22, 18, 16, 17, 16, 18, 16, 3, 2, 3, 7, 2, 3, 2, 3, 2, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)))
-    ## this works ##expect_equal(abs(jab$ploidy-2.578136)<1e-6, TRUE)
-    ## this works ##expect_equal(abs(jab$purity-1)<1e-6, TRUE)
-    
-    jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE)
-    ##expect_equal(all(jab$segstats$cn == c(3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 3, 4, 3, 4, 3, 4, 5, 4, 5, 2, 5, 4, 3, 2, 3, 4, 3, 1, 3, 12, 24, 26, 24, 26, 24, 25, 24, 26, 24, 12, 21, 28, 29, 28, 29, 28, 29, 28, 29, 28, 29, 28, 30, 28, 29, 28, 30, 28, 30, 28, 30, 28, 31, 28, 31, 28, 31, 33, 31, 33, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 32, 31, 34, 31, 33, 31, 33, 31, 34, 31, 25, 28, 25, 28, 25, 28, 25, 29, 25, 31, 25, 32, 31, 32, 31, 33, 31, 32, 31, 33, 31, 33, 31, 32, 34, 32, 35, 32, 41, 22, 29, 22, 32, 34, 32, 33, 32, 35, 32, 31, 32, 27, 24, 25, 24, 25, 24, 5, 4, 3, 4, 9, 3, 4, 5, 4, 3, 4, 3, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)), TRUE)
-    ##expect_equal(abs(jab$ploidy-3.754187)<1e-6, TRUE)
-    ##expect_equal(abs(jab$purity-0.99)<1e-6, TRUE)
-    ##expect_equal(length(jab$segstats), 290)
+
+    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
+    expect_equal(length(jab$segstats), 100)
+    expect_equal(round(jab$ploidy, 2), 3.74)
+    expect_equal(jab$purity, 0.99)
+
+    jab_chromoplexy = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
+    expect_equal(length(jab_chromoplexy$segstats), 100)
+    expect_equal(round(jab_chromoplexy$ploidy, 2), 3.74)
+    expect_equal(jab_chromoplexy$purity, 0.99)
+
+    jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
+    expect_equal(length(jab2$segstats), 100)
+
     expect_equal(round(jab2$ploidy, 2), 3.74)
+
+    jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+    expect_equal(length(jab.retiterate$segstats), 108)
 
 })
 
