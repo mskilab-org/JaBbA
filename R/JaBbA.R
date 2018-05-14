@@ -1428,7 +1428,14 @@ ramip_stub = function(kag.file,
         mipstart = sparseMatrix(ijs$i, ijs$j, x = ijs$mipstart, dims = dim(this.kag$adj))
     }
     
-    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+    nothing.contig = gr2dt(this.kag$segstats)[
+      , .(nothing = all(is.na(mean))), by=seqnames][
+        nothing==TRUE, seqnames]
+    if (verbose){
+        jmessage("Finally ignoring ",
+                 length(nothing.contig),
+                 " contigs in the reference genome completely not covered.")
+    }
     ## ra.sol = jbaMIP(this.kag$adj,
     ##                 this.kag$segstats,
     ##                 beta.guess = this.kag$beta,
@@ -1995,7 +2002,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
                                                                                                                                   length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
 
-            saveRDS(args, paste0(k, ".args.rds"))
+            ## saveRDS(args, paste0(k, ".args.rds"))
             out = do.call('jbaMIP', args)
 
             gc() ## garbage collect .. not sure why this needs to be done
