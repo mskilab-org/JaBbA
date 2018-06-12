@@ -1,27 +1,23 @@
-
 library(JaBbA)   
 library(gUtils)
 library(testthat)
 
+context("test JaBbA functionality\n")
 
 junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
-
-
 library(Rcplex)
-
-cvec <- c(1,2,3)
-Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-bvec <- c(20,-30)
-ub <- c(40,Inf,Inf)
-res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
-print(res)
-
 
 test_that('testing Rcplex works', {
     
+    cvec <- c(1,2,3)
+    Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+    bvec <- c(20,-30)
+    ub <- c(40,Inf,Inf)
+    res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
+    ## print(res)
     expect_equal(res$xopt[1], 40)
     expect_equal(res$xopt[3], 42.5)
     expect_equal(res$obj, 202.5)
@@ -91,8 +87,8 @@ test_that("JaBbA", {
 ## munlist
 test_that('testing munlist() works', {
     
-    expect_equal(dim(munlist(gr2dt(example_genes)$start))[1], 18812)
-    expect_equal(dim(munlist(gr2dt(example_genes)$start))[2], 3)
+    ## expect_equal(dim(munlist(gr2dt(example_genes)$start))[1], 18812)
+    ## expect_equal(dim(munlist(gr2dt(example_genes)$start))[2], 3)
 
 })
 
@@ -119,11 +115,12 @@ test_that('testing alpha() works', {
 
 
 ## write.tab
-test_that('testing write.tab() works', {
+## test_that('testing write.tab() works', {
 
-    expect_error(write.tab(example_genes), NA) ## check works
+##     ## expect_error(write.tab(example_genes), NA) ## check works
+##     expect_error(wr)
 
-})
+## })
 
 
 
