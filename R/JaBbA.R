@@ -1252,7 +1252,21 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
         max.chunk = 1e3
         numchunks = ceiling(length(ss.tmp)/max.chunk)
-        pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp, purities = purity, ploidies = ploidy, verbose = verbose, mc.cores = mc.cores, numchunks = numchunks, ignore.sex = TRUE)
+        if (numchunks>2*length(purity)*length(ploidy)){
+            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                         purities = purity, ploidies = ploidy,
+                         verbose = verbose,
+                         mc.cores = mc.cores,
+                         ## numchunks = numchunks,
+                         ignore.sex = TRUE)
+        } else {
+            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                         purities = purity, ploidies = ploidy,
+                         verbose = verbose,
+                         mc.cores = mc.cores,
+                         numchunks = numchunks,
+                         ignore.sex = TRUE)
+        }        
     }
     ## else
     ##   {
@@ -1921,6 +1935,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (is.null(adj.lb))
         adj.lb = 0*adj
 
+    ## save the naive solutions
+    segstats$kag.cn = segstats$cn
+    
     ## wrapper that calls jbaMIP recursively on subgraphs after "fixing"
     if (partition & !is.na(gamma.guess) & !is.na(beta.guess))
     {
@@ -1943,9 +1960,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## that we would never imagine a "reasonable" slack to have to over-rule
         ## fix = as.integer(which(residual.diff>(8/slack.prior)))
         ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-        fix = as.integer(which(residual.diff>(4/slack.prior))) ## 8 is a constant that is conservative, let's try 4
+        ## fix = as.integer(which(residual.diff>(4/slack.prior)))
+        ## 8 is a constant that is conservative, let's try 4
+        ## let's not fix to zero
+        fix = as.integer(which(residual.diff>(4/slack.prior) &
+                               cnmle != 0))
 
-        ## If we have too few fixed nodes, we will have too many subgraphs to optimize, each smaller in size and isolated from others. This allows more loose ends to be used.
+        ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
+        ## each bigger and harder to solve
         if (verbose)
         {
             jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
@@ -2285,7 +2307,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (!is.null(adj.ub)){
         ub[e.ix] = ifelse(adj.ub[edges]<0, 0, Inf) ## upper bound on edges, some are forced out
         ## for debug only
-        saveRDS(ub, "ub.rds")
+        ## saveRDS(ub, "ub.rds")
     }
 
     varmeta$vtype = vtype
