@@ -20,7 +20,7 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#' @import gTrack
+#' 
 #' @import igraph
 #' @import Matrix
 #' @importFrom gplots col2hex
@@ -34,6 +34,7 @@
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table
 #' @importFrom methods as is
+#' @import gTrack
 #' @useDynLib JaBbA
 #' 
 
@@ -243,7 +244,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ## jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
         jmessage('Will progressively add junctions within ', rescue.window, 'bp of a loose end in prev iter')
         jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
-        jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
+        ## jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
         ##   }
 
         while (continue) {
@@ -974,10 +975,17 @@ jabba_stub = function(
         jun = jabd$junctions
         values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
 
-        if (is.null(jabd$agtrack))
-            plot(c(td.cov, jabd$gtrack), links = jun)
-        else
-            plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun)
+        if (is.null(jabd$agtrack)){
+            plotted = tryCatch(plot(c(td.cov, jabd$gtrack), links = jun), error = function(e) return(NULL))
+        } else {
+            plotted = tryCatch(plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun), error = function(e) return(NULL))
+        }
+        
+        if (is.null(plotted)){
+            if (verbose){
+                jmessage("Something wrong with plotting JaBbA results. Please try it later.")
+            }
+        }
 
         dev.off()
     }
@@ -991,11 +999,25 @@ jabba_stub = function(
         if (is.character(tryCatch(png(jabba.simple.png.file, width = 2000, height = 1000), error = function(e) 'bla')))
             pdf(gsub("png$", "pdf", jabba.simple.png.file), width = 20, height = 10)
 
-        if (is.null(jabd.simple$agtrack))
-            plot(c(td.cov, jabd.simple$gtrack), links = jun)
-        else
-            plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
+        ## if (is.null(jabd.simple$agtrack))
+        ##     plot(c(td.cov, jabd.simple$gtrack), links = jun)
+        ## else
+        ##     plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun)
 
+        if (is.null(jabd$agtrack)){
+            plotted = tryCatch(plot(c(td.cov, jabd.simple$gtrack), links = jun),
+                               error = function(e) return(NULL))
+        } else {
+            plotted = tryCatch(plot(c(jabd.simple$agtrack, td.cov, jabd.simple$gtrack), links = jun),
+                               error = function(e) return(NULL))
+        }
+        
+        if (is.null(plotted)){
+            if (verbose){
+                jmessage("Something wrong with plotting JaBbA simplified results. Please try it later.")
+            }
+        }
+        
         dev.off()
     }
 
