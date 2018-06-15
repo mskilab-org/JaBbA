@@ -1472,7 +1472,7 @@ ramip_stub = function(kag.file,
         adj.ub = this.kag$adj*0
         adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -1
         adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
-        saveRDS(adj.ub, paste0(outdir, "adj.ub.rds"))
+        saveRDS(adj.ub, paste0(outdir, "/adj.ub.rds"))
     } else {
         adj.ub = NULL
     }
