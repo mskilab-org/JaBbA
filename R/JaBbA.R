@@ -132,7 +132,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                  subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                  tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
-                 mem = 32, ## max memory for MIP portion
+                 ## mem = 32, ## max memory for MIP portion
                  reiterate = 0, ## how many (additional) times to iterate beyond the first iteration
                  rescue.window = 1e5, ## new 1e5 ## window around loose ends at which to rescue low tier junctions
                  init = NULL, ## previous JaBbA object to use as a solution
@@ -143,7 +143,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  mc.cores = 1,
                  strict = FALSE,
                  max.threads = Inf,
-                 max.mem = 16,
+                 ## max.mem = 16,
+                 max.mem = 32,
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
                  verbose = TRUE ## whether to provide verbose output
@@ -491,7 +492,7 @@ jabba_stub = function(
                       field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                       subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                       tilim = 1200, ## timeout for MIP portion
-                      mem = 16, ## max memory for MIP portion
+                      ## mem = 16, ## max memory for MIP portion
                       init = NULL, ## previous JaBbA object to use as a solution
                       edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
@@ -824,7 +825,8 @@ jabba_stub = function(
                    jabba.raw.rds.file,
                    mc.cores = mc.cores,
                    max.threads = max.threads,
-                   mem = mem,
+                   ## mem = mem,
+                   mem = max.mem,
                    tilim = tilim,
                    edge.nudge = edgenudge,
                    use.gurobi = use.gurobi,
@@ -1485,47 +1487,52 @@ ramip_stub = function(kag.file,
     ## here we create an mipstart "adj" matrix for the new graph
     ## by looking up the junctions in the current graph in the old object
     if (is.null(mipstart)){
-        jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
-        mipstart = gGnome::gread(kag.file)
-        segs = mipstart$segstats
-        segs$cn = pmax(round(segs$cn), 0) ## negative given 0
-        segs$cn[is.na(segs$cn)] = 0 ## NA given 0
+        if (file.exists("mipstart.gg.rds")){
+            jmessage("Using existing mipstart in the current directory")
+            mipstart = readRDS("mipstart.gg.rds")
+        } else {
+            jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
+            mipstart = gGnome::gread(kag.file)
+            segs = mipstart$segstats
+            segs$cn = pmax(round(segs$cn), 0) ## negative given 0
+            segs$cn[is.na(segs$cn)] = 0 ## NA given 0
 
-        es = mipstart$edges
-        es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
-        es = es[type != "loose"]
-        es[type=="reference", cn := 0]
-        es[type=="aberrant", cn := 0]
-        
-        if (!is.null(ab.force)){
-            jmatch = data.table(ra.overlaps(mipstart$junctions, this.kag$junctions))
-            ab.force.mipstart = jmatch[, setNames(ra1.ix, ra2.ix)][as.character(ab.force)]
-            jdt = data.table(data.frame(values(mipstart$junctions)))
-            jdt[ab.force.mipstart, force.in := TRUE]
-            jdt[, eid := paste(from1, to1)]
-            jdt[, reid := paste(from2, to2)]
-            es[eid %in% jdt[force.in==TRUE, c(eid, reid)] |
-               eid %in% jdt[force.in==TRUE, c(eid, reid)],
-               cn := 1]
-        }
-
-        es[, from.remain := from.cn - sum(cn), by=from]
-        es[, to.remain := to.cn - sum(cn), by=to]
-
-        if (any(es[, from.remain<0 | to.remain<0])){
-            segs$cn[es[from.remain<0, from]] = es[from.remain<0, abs(from.remain)]
-            segs$cn[es[to.remain<0, to]] = es[to.remain<0, abs(to.remain)]
-            ## re-annotate the es
+            es = mipstart$edges
             es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
+            es = es[type != "loose"]
+            es[type=="reference", cn := 0]
+            es[type=="aberrant", cn := 0]
+            
+            if (!is.null(ab.force)){
+                jmatch = data.table(ra.overlaps(mipstart$junctions, this.kag$junctions))
+                ab.force.mipstart = jmatch[, setNames(ra1.ix, ra2.ix)][as.character(ab.force)]
+                jdt = data.table(data.frame(values(mipstart$junctions)))
+                jdt[ab.force.mipstart, force.in := TRUE]
+                jdt[, eid := paste(from1, to1)]
+                jdt[, reid := paste(from2, to2)]
+                es[eid %in% jdt[force.in==TRUE, c(eid, reid)] |
+                   eid %in% jdt[force.in==TRUE, c(eid, reid)],
+                   cn := 1]
+            }
+
             es[, from.remain := from.cn - sum(cn), by=from]
             es[, to.remain := to.cn - sum(cn), by=to]
-        }
 
-        es[type=="reference", cn := pmin(from.remain, to.remain)]
+            if (any(es[, from.remain<0 | to.remain<0])){
+                segs$cn[es[from.remain<0, from]] = es[from.remain<0, abs(from.remain)]
+                segs$cn[es[to.remain<0, to]] = es[to.remain<0, abs(to.remain)]
+                ## re-annotate the es
+                es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
+                es[, from.remain := from.cn - sum(cn), by=from]
+                es[, to.remain := to.cn - sum(cn), by=to]
+            }
 
-        mipstart = gGraph$new(segs = segs, es = es)$make.balance()
-        mipstart = gGraph$new(segs = segs, es = es)$fillin()
-        saveRDS(mipstart, "mipstart.gg.rds")
+            es[type=="reference", cn := pmin(from.remain, to.remain)]
+
+            mipstart = gGraph$new(segs = segs, es = es)$make.balance()
+            mipstart = gGraph$new(segs = segs, es = es)$fillin()
+            saveRDS(mipstart, "mipstart.gg.rds")
+        }        
     }
     
     if (!is.null(mipstart)) 
@@ -2809,7 +2816,24 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             n_hat = varmeta[type == 'interval', mipstart]
             ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
             Bs = Amat[consmeta[type == 'EdgeSource', id],]
-            six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+
+            ## sometimes it's too big!
+            tmp.Bs.interval = Bs[, varmeta[type == "interval", id]]
+            if (prod(dim(tmp.Bs.interval))>.Machine$integer.max){
+                chunk.num = ceiling(ncol(tmp.Bs.interval)/floor(.Machine$integer.max/nrow(tmp.Bs.interval)))
+                chunk.ix = cut(seq_len(ncol(tmp.Bs.interval)), chunk.num, labels=FALSE)
+                six = lapply(seq_len(chunk.num),
+                             function(chunk){
+                                 jmessage("Processing chunk ", chunk)
+                                 apply(tmp.Bs.interval[, which(chunk.ix==chunk), drop=FALSE],
+                                       1, function(x) which(x!=0))
+                             })
+                six = unlist(six)
+            } else {
+                six = apply(tmp.Bs.interval, 1, function(x) which(x!=0))
+            }
+            rm("tmp.Bs.interval"); gc()
+
             s_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
                 s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
@@ -2818,7 +2842,24 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
             ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
             Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-            tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+            ## tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+            ## sometimes it's too big!
+            tmp.Bt.interval = Bt[, varmeta[type == "interval", id]]
+            if (prod(dim(tmp.Bt.interval))>.Machine$integer.max){
+                chunk.num = ceiling(ncol(tmp.Bt.interval)/floor(.Machine$integer.max/nrow(tmp.Bt.interval)))
+                chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
+                tix = lapply(seq_len(chunk.num),
+                             function(chunk){
+                                 jmessage("Processing chunk ", chunk)
+                                 apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
+                                       1, function(x) which(x!=0))
+                             })
+                tix = unlist(six)
+            } else {
+                tix = apply(tmp.Bt.interval, 1, function(x) which(x!=0))
+            }
+            rm("tmp.Bt.interval"); gc()
+            
             t_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
                 t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
