@@ -132,7 +132,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                  subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                  tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
-                 mem = 16, ## max memory for MIP portion
+                 mem = 32, ## max memory for MIP portion
                  reiterate = 0, ## how many (additional) times to iterate beyond the first iteration
                  rescue.window = 1e5, ## new 1e5 ## window around loose ends at which to rescue low tier junctions
                  init = NULL, ## previous JaBbA object to use as a solution
@@ -371,17 +371,20 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         jmessage('Done Iterating')
     } else  {
         ## if all.in, convert all tier 3 to tier 2
-        if (all.in & length(ra.all)>0){
-            ## tfield.raw = paste0(tfield, ".raw")
-            ## values(ra.all)[, tfield.raw] <- values(ra.all)[, tfield]
+        if (tfield %in% colnames(values(ra.all))){
             t3 = (values(ra.all)[, tfield] == 3)
-            if (any(t3)){
-                ## save every t3 except small indel
-                t3.indel = which.indel(ra.all[which(t3)])
-                t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
-                values(ra.all)[t3.non.indel, tfield] = 2
+            if (all.in & length(ra.all)>0){
+                if (any(t3)){
+                    ## save every t3 except small indel
+                    t3.indel = which.indel(ra.all[which(t3)])
+                    t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+                    values(ra.all)[t3.non.indel, tfield] = 2
+                }
+            } else {
+                ## if not all.in, only use t2 or t1
+                ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
             }
-        }
+        }        
         jab = jabba_stub(
             junctions = ra,
             seg = seg,
@@ -1274,7 +1277,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
         max.chunk = 1e3
         numchunks = ceiling(length(ss.tmp)/max.chunk)
-        if (numchunks>2*length(purity)*length(ploidy)){
+        if (numchunks>length(purity)*length(ploidy)){
             pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
                          purities = purity, ploidies = ploidy,
                          verbose = verbose,
@@ -1974,7 +1977,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         cnmle = round(m) ## MLE estimate for CN
         residual.min = ((m-cnmle)/(segstats$sd))^2
-        residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
+        residual.other =
+            apply(cbind(
+        (m-cnmle-1)/segstats$sd,
+        (m-cnmle+1)/segstats$sd
+        )^2,
+        1, min)
         residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
 
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
@@ -4465,8 +4473,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
-            vcf = suppressWarnings(readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-            if (!('SVTYPE' %in% names(info(vcf)))) {
+            vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+            if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
             }
@@ -4504,8 +4512,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
             else
                 vgr$svtype = vgr$SVTYPE
 
-            if (!is.null(info(vcf)$SCTG))
-                vgr$SCTG = info(vcf)$SCTG
+            if (!is.null(VariantAnnotation::info(vcf)$SCTG))
+                vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
 
             if (force.bnd)
                 vgr$svtype = "BND"
@@ -4652,7 +4660,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                 if (!is.null(tmp))
                     values(vgr.loose) = tmp
                 else
-                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ],
+                                              VariantAnnotation::info(vcf)[bix[npix], ])
 
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
