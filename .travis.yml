@@ -22,9 +22,12 @@ before_install:
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - tar -xvzf jabba.tar.gz
 - curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- R CMD INSTALL --configure-args="--with-cplex-dir=cplex" Rcplex_0.3-3.tar.gz
+- curl -OL https://cran.r-project.org/src/contrib/slam_0.1-43.tar.gz
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+install:
+- R CMD INSTALL slam_0.1-43.tar.gz
+- R CMD INSTALL --configure-args="--with-cplex-dir=cplex" Rcplex_0.3-3.tar.gz
 script:
 - "./travis-tool.sh run_tests"
 after_failure:
