@@ -22,6 +22,8 @@ before_install:
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - tar -xvzf jabba.tar.gz
 - export CPLEX_DIR=cplex
+- export CPLEX_INCLUDE_PATH=cplex/include
+- export CPLEX_LIB_PATH=cplex/lib
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
 script:
