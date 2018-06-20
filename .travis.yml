@@ -1,7 +1,7 @@
 language: r
 dist: trusty
 cache: package
-sudo: false
+sudo: required
 r: 3.4.1
 before_install:
 - curl -OL $URL
