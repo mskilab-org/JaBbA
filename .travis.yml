@@ -27,7 +27,7 @@ before_install:
 - chmod 755 ./travis-tool.sh
 install:
 - R CMD INSTALL slam_0.1-43.tar.gz
-- R CMD INSTALL --configure-args="--with-cplex-dir=cplex" Rcplex_0.3-3.tar.gz
+- R CMD INSTALL --configure-args="--with-cplex-dir=$HOME/cplex" Rcplex_0.3-3.tar.gz
 script:
 - "./travis-tool.sh run_tests"
 after_failure:
