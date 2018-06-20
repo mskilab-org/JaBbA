@@ -3,6 +3,26 @@ dist: trusty
 cache: package
 sudo: false
 r: 3.4.1
+before_install:
+- curl -OL $URL
+- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+- echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
+- tar -xvzf jabba.tar.gz --directory $HOME
+- curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
+- curl -OL https://cran.r-project.org/src/contrib/slam_0.1-43.tar.gz
+- curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+- chmod 755 ./travis-tool.sh
+install:
+- "./travis-tool.sh install_bioc_deps"
+- R CMD INSTALL slam_0.1-43.tar.gz
+- R CMD INSTALL --configure-args="--with-cplex-dir=$HOME/cplex" Rcplex_0.3-3.tar.gz
+- "./travis-tool.sh install_deps"
+- "./travis-tool.sh install_github r-lib/testthat"
+- "./travis-tool.sh install_github mskilab/gUtils"
+- "./travis-tool.sh install_github mskilab/gTrack"
+- "./travis-tool.sh install_github mskilab/gGnome"
+- "./travis-tool.sh install_github mskilab/Ppurple"
+- "./travis-tool.sh install_github mskilab/gTrack"
 r_packages:
 - covr
 - devtools
@@ -16,18 +36,6 @@ r_github_packages:
 - mskilab/gGnome
 - mskilab/gTrack
 - mskilab/Ppurple
-before_install:
-- curl -OL $URL
-- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-- echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
-- tar -xvzf jabba.tar.gz --directory $HOME
-- curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
-- curl -OL https://cran.r-project.org/src/contrib/slam_0.1-43.tar.gz
-- curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
-- chmod 755 ./travis-tool.sh
-install:
-- R CMD INSTALL slam_0.1-43.tar.gz
-- R CMD INSTALL --configure-args="--with-cplex-dir=$HOME/cplex" Rcplex_0.3-3.tar.gz
 script:
 - "./travis-tool.sh run_tests"
 after_failure:
