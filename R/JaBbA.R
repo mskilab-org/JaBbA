@@ -117,6 +117,7 @@
 #'
 #' @import DNAcopy
 JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+                 junctions.unfiltered = NULL, 
                  coverage, # path to cov file, rds of GRanges
                  seg = NULL, # path to seg file, rds of GRanges
                  outdir = './JaBbA', # out directory to dump into
@@ -143,8 +144,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  mc.cores = 1,
                  strict = FALSE,
                  max.threads = Inf,
-                 ## max.mem = 16,
-                 max.mem = 32,
+                 max.mem = 16,
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
                  verbose = TRUE ## whether to provide verbose output
@@ -169,8 +169,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         } else {
             ra.all = read.junctions(ra)
         }
-    } else
-    {
+    } else {
         ra.all = ra
     }
 
@@ -187,32 +186,54 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         reiterate = 0
     }
 
-    ## if we are iterating more than once
-    if (reiterate>1)  {
-        if (is.null(tfield))
-            tfield = 'tier'
-
-        if (!(tfield %in% names(values(ra.all))))
-        {
-            if (grepl("svaba.somatic.sv.vcf$", ra) & reiterate>0){
-                jmessage("Detected SvABA input. Expand to unfiltered set.")
-                svaba.uf = gsub("svaba.somatic.sv.vcf",
-                                "svaba.unfiltered.somatic.sv.vcf", ra)
-                ra.uf = read.junctions(svaba.uf)
-                ## Careful!!! swapping the un
-                ra.old = ra.all
-                ra.all = ra.uf
+    ## xtYao Tuesday, Jun 19, 2018 04:52:17 PM
+    ## Only when tier exists or unfiltered junctions provided, do we do the iterations
+    ## if unfiltered set is given first parse it
+    if (!is.null(junctions.unfiltered)){
+        if (inherits(junctions.unfiltered, "character") & file.exists(junctions.unfiltered)){
+            if (grepl(".rds$", junctions.unfiltered)){
+                ra.uf = readRDS(junctions.unfiltered)
+            } else {
+                ra.uf = read.junctions(junctions.unfiltered)
             }
-            else ## just give every rearrangement the same tier (2, i.e. optional)
-            {
-                warning("Tier field", field, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
-                values(ra.all)$tier = 2
-            }
+        } else if (inherits(junctions.unfiltered, "GRangesList")){
+            ra.uf = junctions.unfiltered
         }
+    }
+    
+    if (is.null(tfield)){
+        tfield = 'tier'
+    }
 
-        if (!all(unique(values(ra.all)[, tfield]) %in% 1:3))
-            stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+    ## if no tier field in junctions, set all of them to 2
+    if (!(tfield %in% names(values(ra.all))))
+    {
+        warning("Tier field", tfield, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
+        values(ra.all)$tier = 2
+    }
 
+    if (exists("ra.uf")){
+        ## merge ra.all with ra.uf
+        ## junctions from ra.all will always have tier 2
+        ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
+        ## those match a record in junction, will be assigned to the tier in junction       
+        values(ra.all.uf)$tier[which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
+                            values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+        ## the rest will be tier 3
+        values(ra.all.uf)$tier[which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
+        ra.all = ra.all.uf
+    } else {
+        jmessage("Only one tier of junctions found, cancel iteration if requested")
+        reiterate = 1
+    }
+
+    ## final sanity check before running
+    if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
+        stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+    }
+    
+    ## if we are iterating more than once
+    if (reiterate>1){
         continue = TRUE
         this.iter = 1;
 
@@ -2854,7 +2875,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                                  apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
                                        1, function(x) which(x!=0))
                              })
-                tix = unlist(six)
+                tix = unlist(tix)
             } else {
                 tix = apply(tmp.Bt.interval, 1, function(x) which(x!=0))
             }
@@ -5625,6 +5646,7 @@ chromoplexy = function(kag = NULL, # output of karyograph
     quasi.pairs = which(D<dist, arr.ind = T)
     quasi.pairs.which = D.which[quasi.pairs]
 
+
     ## now need to check .. depending on whether edge pair is deletion bridge or amp bridge or fully reciprocal
     ## whether associated vertices show a copy change "in the right direction"
 
@@ -5634,6 +5656,10 @@ chromoplexy = function(kag = NULL, # output of karyograph
     ## for reciprocal pairs, the source and sink will be the same
 
     adj.ref = kag$adj; adj.ref[ab.edges[, 1:2]] = 0
+    if (nrow(quasi.pairs) * nrow(adj.ref) > .Machine$integer.max){
+        warning("Exceeding size limit. Empty integer will be returned. We will fix it later.")
+        return(integer(0))
+    }
 
     del.bridge.candidate = which(quasi.pairs.which == 1)
     v1 = ab.edges[quasi.pairs[del.bridge.candidate, 1], 2]
@@ -5949,3 +5975,25 @@ sv.size = function(juncs,
     bps = gUtils::grl.pivot(juncs)
     return(IRanges::distance(bps[[1]], bps[[2]], ...))
 }
+
+## #' @name capply
+## #' @description
+## #' Wrapper around \{code}apply function
+## capply = function(X, MARGIN, FUN){
+##     if (prod(dim(X))<.Machine$integer.max){
+##         ## no need
+##         return(apply(X, margin, FUN))
+##     }
+##     ## if margin is 1, MARGIN.2 is 2, vise versa
+##     MARGIN.2 = ifelse(MARGIN==1, 2, 1)
+    
+##     chunk.num = ceiling(dim(tmp.Bt.interval)[margin] / floor(.Machine$integer.max/dim(tmp.Bt.interval)[]))
+##     chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
+##     tix = lapply(seq_len(chunk.num),
+##                  function(chunk){
+##                      jmessage("Processing chunk ", chunk)
+##                      apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
+##                            1, function(x) which(x!=0))
+##                  })
+##     tix = unlist(tix)
+## }
