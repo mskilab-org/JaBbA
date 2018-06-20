@@ -4,13 +4,14 @@
 \alias{JaBbA}
 \title{JaBbA}
 \usage{
-JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
-  tfield = "tier", nudge.balanced = FALSE, thresh.balanced = 500,
-  nseg = NULL, hets = NULL, name = "tumor", purity = NA, ploidy = NA,
+JaBbA(junctions, junctions.unfiltered = NULL, coverage, seg = NULL,
+  outdir = "./JaBbA", cfield = NULL, tfield = "tier",
+  nudge.balanced = FALSE, thresh.balanced = 500, nseg = NULL,
+  hets = NULL, name = "tumor", purity = NA, ploidy = NA,
   field = "ratio", subsample = NULL, tilim = 2400, reiterate = 0,
   rescue.window = 1e+05, init = NULL, edgenudge = 0.1,
   use.gurobi = FALSE, slack.penalty = 100, overwrite = FALSE,
-  mc.cores = 1, strict = FALSE, max.threads = Inf, max.mem = 32,
+  mc.cores = 1, strict = FALSE, max.threads = Inf, max.mem = 16,
   indel = TRUE, all.in = FALSE, verbose = TRUE)
 }
 \arguments{
