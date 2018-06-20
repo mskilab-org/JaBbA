@@ -18,6 +18,7 @@ r_github_packages:
 - mskilab/Ppurple
 before_install:
 - curl -OL $URL
+- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - tar -xvzf jabba.tar.gz
 - export CPLEX_DIR=cplex
