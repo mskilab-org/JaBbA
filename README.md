@@ -14,11 +14,15 @@ Installation (R package)
    The software is proprietary, but can be obtained for free under [IBM's academic
    initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
 
-2. Set CPLEX_DIR variable (e.g. in your shell or .bash_profile) to your CPLEX
-   Studio installation
+2. Set ${CPLEX_DIR} variable (e.g. in your shell or .bash_profile) to your CPLEX
+   Studio installation. Set/replace the ${CPLEX_INCLUDE_PATH} and ${CPLEX_LIB_PATH} with the
+   corresponding paths to the 'include' and 'lib' directories of your
+   CPLEX installation on your system.
 
 ```{sh}
 export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
+export CPLEX_INCLUDE_PATH=${CPLEX_DIR}/include
+export CPLEX_LIB_PATH=${CPLEX_DIR}/lib
 ```
 
 3. Install dependent packages and latest Bioconductor (if you haven't already)
