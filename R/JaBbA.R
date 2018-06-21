@@ -96,7 +96,7 @@
 #' @return gGraph (gGnome package) of balanced rearrangement graph
 #' @export
 #' @examples
-#'
+#'\dontrun{
 #' library(JaBbA)
 #' junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 #' coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
@@ -105,16 +105,13 @@
 #' ## run analysis without hets 
 #' jab = JaBbA(junctions = junctions, coverage = coverage)
 #'
-#' ## run analysis with hets in different subdir (default ./JaBbA)
-#' jab = JaBbA(junctions = junctions, coverage = coverage, hets = hets, outdir = './mydir')
-#'
 #' ## run analysis with "tiered" junctions, these have metadata field $tier (in this case inside the vcf)
 #' jun = read.junctions(junctions)
 #'
 #' ## these have metadata field tier, tier 1 junctions are forced to be included, tier 2 = are optional i.e. can be included,
 #' ## tier 3 are only used in later iterations to rescue loose ends
 #' values(jun)$tier
-#'
+#'}
 #' @import DNAcopy
 JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                  junctions.unfiltered = NULL, 
@@ -199,7 +196,6 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         } else if (inherits(junctions.unfiltered, "GRangesList")){
             ra.uf = junctions.unfiltered
         }
-
     }
     
     if (is.null(tfield)){
@@ -223,7 +219,9 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ## the rest will be tier 3
         values(ra.all.uf)$tier[which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
         ra.all = ra.all.uf
-    } else {
+    }
+
+    if (length(unique(values(ra.all)[, tfield]))==1) {
         jmessage("Only one tier of junctions found, cancel iteration if requested")
         reiterate = 1
     }
@@ -232,7 +230,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
         stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
     }
-    
+    browser()
     ## if we are iterating more than once
     if (reiterate>1){
         continue = TRUE
@@ -492,7 +490,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @import DNAcopy
-jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+jabba_stub = function(
+                      junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
@@ -742,7 +741,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 }                
             }
 
-          ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
+            ab.exclude = which(gsub('tier', '', as.character(values(kag$junctions)[, tfield]))=='3')
 
             if (verbose)
             {
@@ -770,11 +769,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (nudge.balanced) {
         balanced.jix = c()
         if (length(juncs)>0) {
-          ##  tmpkag = karyograph(juncs) ## make tmp graph with just junctions
-          ##  balanced.jix = chromoplexy(tmpkag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
-          balanced.jix = unlist(reciprocal.cycles(juncs, thresh = 1e3, mc.cores = mc.cores, verbose = verbose>1))
-          dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
-          balanced.jix = setdiff(balanced.jix, dp.jix)
+            balanced.jix = chromoplexy(kag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
+            balanced.jix = setdiff(balanced.jix, dp.jix)
         }
         edgenudge = edgenudge * as.numeric(1:length(juncs) %in% balanced.jix) ## only adds edge nudge to the balanced junctions
     } else { ## nudge everything ..
@@ -4027,7 +4024,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = cBind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -5529,6 +5526,273 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
     }
 }
 
+#################################################
+#' @name chromoplexy
+#' @rdname internal
+#' chromoplexy
+#'
+#' Determines chromoplexy paths from standard JaBbA output
+#'
+#' Outputs all chromoplexy paths and cycles
+#' (i.e. paths and cycles in breakpoint graph) allowing quasi-reciprocal
+#' rearrangements with amplification / deletion bridge distance threshold "dist"
+#'
+#' @param jab JaBbA object
+#' @param all logical flag whteher to enumerate all possible cycles, otherwise will return (an arbitrary) minimal decompositoin into the shortest "chains" of balanced rearrangements
+#' @param dist maximum distance at which to cluster junctions, i.e. in which to consider a deletion or amplification bridge
+#' @param cn.dist minimum distance at which to enforce copy concordance for deletion and amplification bridges
+#' @param paths logical flag if paths = T, will also try to compute paths (in addition to cycles), default = FALSE
+#' @return paths and cycles of as list of vectors of aberrant edge index sequences,
+#' aberrant edges refer to edges described in kag$ab.edges matrix
+#####################################################
+chromoplexy = function(kag = NULL, # output of karyograph
+                       jab = NULL, ## optional alternate input, if NOT null then this will be used in place of kag
+                       sol = NULL, ## if sol is null, then copy state is ignored when determining amp or del bridges
+                       all = F, ## if TRUE, will try to enumerate all possible cycles, otherwise will return (an arbitrary) minimal decomposition into the shortest "chains" of balanced rearrangements
+                       ref.only = F, ## if T will only compute distance criteria on reference (i.e. won't use any subsequent rearrangements)
+                       filt.jab = T, ## filter out 0 copy edges if input is a jabba object
+                       reciprocal = TRUE, ## aka deletion bridge
+                       hijacked = TRUE,  ## aka amplification bridge
+                       paths = F,
+                       dist = 1e3,
+                       cn.dist = dist,
+                       verbose = F,
+                       interval = 400,
+                       junc.only=TRUE,
+                       mc.cores = 1,
+                       chunksize = 5000)
+{
+    if (!is.null(jab))
+    {
+        if (filt.jab)
+        {
+            nnab = which(rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0)
+            edge.ix = which(jab$adj[rbind(jab$ab.edges[nnab, 1:2, 1])]>0)
+            jab$ab.edges = jab$ab.edges[edge.ix, ,,drop = F]
+        }
+        else
+            edge.ix = 1:nrow(kag$ab.edges)
+        kag = jab
+        sol = jab
+    }
+    else
+        edge.ix = 1:nrow(kag$ab.edges)
+
+    G = kag$G
+
+    if (is.null(kag$tile))
+        kag$tile = kag$segstats
+
+    nnab = which(rowSums(is.na(rbind(kag$ab.edges[, 1:2, 1])))==0)
+    if (ref.only)
+    {
+        adj2 = kag$adj
+        adj2[kag$ab.edges[nnab, 1:2, 1]] = 0
+        adj2[kag$ab.edges[nnab, 1:2, 2]] = 0
+        G = graph(as.numeric(t(Matrix::which(adj2!=0, arr.ind = T))), n = length(kag$segstats), directed = T)
+    }
+
+    ## define edge source to edge sink distance
+    ## this is minimum between (1) sum of vertex width of path from e2 source to e1 sink (excluding source and sink)
+    ## and (2) sum of vertex width of path from e1 sink to e2 source (including source and sink)
+
+    tmp = igraph::get.edges(G, E(G))
+    E(G)$from = tmp[,1]
+    E(G)$to = tmp[,2]
+    E(G)$weights.source = width(kag$tile[E(G)$from])
+
+    ab.edges = cbind(rbind(kag$ab.edges[nnab, c('from', 'to'), '+'], kag$ab.edges[nnab, c('from', 'to'), '-']), junc.id = rep(nnab,2))
+
+    if (nrow(ab.edges)==0)
+        return(list(cycles = NULL, paths = NULL))
+
+                                        #    emap = c(1:nrow(kag$ab.edges), -(1:nrow(kag$ab.edges)))
+    emap = c(nnab, -nnab)
+
+    D1 = D2 = array(Inf, dim = rep(nrow(ab.edges),2))
+
+    uix = unique(c(ab.edges[,1], ab.edges[,2]))
+    uixmap1 = match(ab.edges[,1], uix)
+    uixmap2 = match(ab.edges[,2], uix)
+
+    tmp = shortest.paths(G, uix, uix, weights = E(G)$weights.source, mode = 'out')
+
+
+    ## deletion bridge, or reciprocal
+    if (reciprocal)
+    {
+        ## "deletion bridge", i.e. source to sink bridge
+        D1 = t(sweep(tmp[uixmap1, uixmap2],
+                     1, width(kag$tile[ab.edges[,1]]))) ## subtract width of first vertex from path length (second vertex already excluded)
+        D1[do.call('rbind', lapply(ab.edges[,2], function(x) ab.edges[,1] %in% x))] = NA ## edge case where e1 sink = e2 source
+    }
+
+    ## "amplification bridge", i.e. sink to source bridge
+    if (hijacked)
+    {
+        D2 = sweep(tmp[uixmap2, uixmap1],
+                   2, -width(kag$tile[ab.edges[,1]])) ## add width of last vertex to path (first vertex already included)
+    }
+
+
+    D = matrix(pmin(D1, D2, na.rm = T), nrow = nrow(D1), ncol = nrow(D2))
+    D.which = matrix(ifelse(D1<D2, 1, 2), nrow = nrow(D1), ncol = nrow(D2))
+    D.which[is.na(D.which)] = 2
+    D[is.infinite(D)] = NA
+    D[cbind(1:nrow(D), 1:nrow(D))] = NA
+
+    ## quasi pairvvs are ab edge pairs within a certain distance of each other on the graph
+    quasi.pairs = which(D<dist, arr.ind = T)
+    quasi.pairs.which = D.which[quasi.pairs]
+
+
+    ## now need to check .. depending on whether edge pair is deletion bridge or amp bridge or fully reciprocal
+    ## whether associated vertices show a copy change "in the right direction"
+
+    ## to do this, we need to examine the vertices "in between" for a deletion bridge and the source / sink vertices
+    ## in an amplification bridge, and see if they show a copy change with respect their reference parents
+
+    ## for reciprocal pairs, the source and sink will be the same
+
+    adj.ref = kag$adj; adj.ref[ab.edges[, 1:2]] = 0
+    if (nrow(quasi.pairs) * nrow(adj.ref) > .Machine$integer.max){
+        warning("Exceeding size limit. Empty integer will be returned. We will fix it later.")
+        return(integer(0))
+    }
+
+    del.bridge.candidate = which(quasi.pairs.which == 1)
+    v1 = ab.edges[quasi.pairs[del.bridge.candidate, 1], 2]
+    v1.parent = apply(adj.ref[, v1, drop = FALSE], 2, function(x) which(x != 0)[1])
+    v1.child = apply(adj.ref[v1, , drop = FALSE], 1, function(x) which(x != 0)[1])
+    v2 = ab.edges[quasi.pairs[del.bridge.candidate, 2], 1]
+    v2.child = apply(adj.ref[v2, , drop = FALSE], 1, function(x) which(x != 0)[1])
+    v2.parent = apply(adj.ref[, v2, drop = FALSE], 2, function(x) which(x != 0)[1])
+
+    recip = del.bridge.candidate[which(v2.child == v1)]
+    nonrecip = which(v2.child != v1) ## these need to fulfill the "deletion bridge criterion"
+
+                                        # test for deletion bridge criterion, i.e. does v1 have greater copy number than its
+                                        # child, and does v2 have greater copy number than its parent?
+    if (!is.null(sol))
+        del.bridge = del.bridge.candidate[nonrecip[(sol$segstats$cn[v2.child[nonrecip]] < sol$segstats$cn[v2[nonrecip]] & sol$segstats$cn[v1.parent[nonrecip]] < sol$segstats$cn[v1[nonrecip]]) | D[quasi.pairs][del.bridge.candidate[nonrecip]] < cn.dist]]
+    else
+        del.bridge = del.bridge.candidate
+
+    amp.bridge.candidate = which(quasi.pairs.which == 2)
+    v1 = ab.edges[quasi.pairs[amp.bridge.candidate, 1], 2]
+    v1.parent = apply(adj.ref[, v1, drop = FALSE], 2, function(x) which(x != 0)[1])
+    v2 = ab.edges[quasi.pairs[amp.bridge.candidate, 2], 1]
+    v2.child = apply(adj.ref[v2,,drop = FALSE], 1, function(x) which(x != 0)[1])
+
+                                        # test for amp bridge criterion, does v1 have higher copy number than its parent, does v2 have higher copy number than its child?
+
+    if (!is.null(sol))
+        amp.bridge = amp.bridge.candidate[(sol$segstats$cn[v1.parent] < sol$segstats$cn[v1] & sol$segstats$cn[v2.child] < sol$segstats$cn[v2])
+                                          | D[quasi.pairs][amp.bridge.candidate] < cn.dist]
+    else
+        amp.bridge = amp.bridge.candidate
+
+    ## now put together all surviving edges into a graph and try to find cycles
+
+    ## store data frame of edge pairs for bp graph
+    ## NOTE: every node in bp graph is an edge in the original karyograph, and thus edges in the bp graph represent ordered <edge pairs>
+    bp.df = data.frame(
+        e1 = quasi.pairs[c(recip, del.bridge, amp.bridge), 1], e2 = quasi.pairs[c(recip, del.bridge, amp.bridge), 2],
+        from = ab.edges[quasi.pairs[c(recip, del.bridge, amp.bridge), 1], 1],
+        to = ab.edges[quasi.pairs[c(recip, del.bridge, amp.bridge), 2], 2],
+        type = c(rep('recip', length(recip)), rep('del', length(del.bridge)), rep('amp', length(amp.bridge))), stringsAsFactors = F)
+
+    bp.df = bp.df[!is.na(bp.df$e1) & !is.na(bp.df$e2), ]
+
+    ## make adj matrix of breakpoints, basically by matching bp1 and bp2 if "to" field of bp1 = "from" field of bp2
+    ## here we are looking for <exact> matches because we are now going to join an edge to another edge if the target
+    ## of one edge is the source of the next
+                                        #    adj.bp = matrix(0, nrow = nrow(bp.df), ncol = nrow(bp.df))
+                                        #    for (i in 1:ncol(adj.bp))
+                                        #      adj.bp[i,] = bp.df$from %in% bp.df$to[i] & !is.na(bp.df$to[i])
+
+    ## breakpoint graph links every edge to every other edge via "quasi pair" connection
+    ## we find cycles and paths in this graph
+    adj.bp = sparseMatrix(i = bp.df$e1, j = bp.df$e2, x = 1, dims = rep(nrow(ab.edges), 2))
+
+    if (junc.only){
+        G.bp = igraph::graph_from_adjacency_matrix(adj.bp)
+        comp = components(G.bp, "strong")
+        good.comp = which(comp$csize>1)
+        good.ix = which(comp$membership %in% good.comp)
+        return(unique(ab.edges[good.ix, 3]))
+    } else {
+        if (verbose)
+            if (paths)
+                cat(sprintf('Running with paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
+            else
+                cat(sprintf('Running without paths on breakpoint graph with dim %s vertices and %s edges\n', nrow(adj.bp), sum(adj.bp)))
+
+        if (prod(dim(adj.bp))>0)
+        {
+            ## want to exclude any paths involving breaks and their pairs
+                                        #        tmp = split(1:nrow(ab.edges), ab.edges[,'junc.id'])
+                                        #        exclude.ij = cbind(ab.edges[,3], unlist(tmp))
+                                        #        exclude = sparseMatrix(exclude.ij[,1], exclude.ij[,2], x = 1)
+            exclude = NULL
+            dt = data.table(i = 1:nrow(adj.bp), j = mmatch(adj.bp, adj.bp[!duplicated(as.matrix(adj.bp)), , drop = F]), key = 'j')
+            dtu = dt[!duplicated(j), ]
+            pc = all.paths(adj.bp[dtu$i, dtu$i, drop = FALSE], all = paths, verbose = verbose, interval = interval, chunksize = chunksize, exclude = exclude)
+            if (length(pc$cycles)>0)
+                pc$cycles = lapply(pc$cycles, function(x) dtu[x, ]$i)
+            if (length(pc$paths)>0)
+                pc$paths = lapply(pc$paths, function(x) dtu[x, ]$i)
+        }
+        else
+            return(list(paths = c(), cycles = c()))
+
+        ## if there are other possible "bridge links" between members of a cycle that do not involve
+        ## members of the cycle.  Fix: Best way to fix this would be actually recompute shortest paths after removing
+        ## edges cresponding to edges in the path.
+        .check.pc = function(x, is.cycle = F)
+        {
+            if (is.cycle)
+                tmp.edges = cbind(x, c(x[-1], x[1]))
+            else
+                tmp.edges = cbind(x[-length(x)], x[-1])
+            tmp.D.which = D.which[tmp.edges]  ## D.which keeps track of whether we linked these edges via D1 or D2
+            if (any(ix <- tmp.D.which==1)) ## if 1 then we are looking for path from col 2 to col 1, so flip
+                tmp.edges[ix,] = tmp.edges[ix, c(2:1)]
+            tmp.ab.edges = cbind(ab.edges[cbind(tmp.edges[,1], tmp.D.which)], ab.edges[cbind(tmp.edges[,2], ifelse(tmp.D.which == 1, 2, 1))])
+            tmp.sp = lapply(1:nrow(tmp.ab.edges), function(i)
+                get.shortest.paths(G, tmp.ab.edges[i,1], tmp.ab.edges[i,2], weights = E(G)$weights.source, mode = 'out')$vpath[[1]])
+            if (any(ix <- tmp.D.which==1))
+                tmp.sp[ix] = lapply(tmp.sp[ix], function(x) x[-c(1, length(x))])
+            bp.id = unique(unlist(lapply(tmp.sp, function(x) E(G, path = x)$bp.id)))
+            return(any(x %in% bp.id))
+        }
+
+
+        ## xtYao modified: mclapply to replace lapply and sapply
+        if (length(pc$cycles)>0)
+        {
+            pc$cycles = pc$cycles[!unlist(mclapply(pc$cycles, .check.pc, is.cycle = T, mc.cores=mc.cores))]
+            pc$cycles = mclapply(pc$cycles, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores=mc.cores)
+            pc$cycles = pc$cycles[!duplicated(unlist(mclapply(pc$cycles, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores=mc.cores)))]
+            pc$cycles = pc$cycles[order(-unlist(mclapply(pc$cycles, length, mc.cores = mc.cores)))]
+        }
+
+        if (length(pc$paths)>0)
+        {
+            pc$paths = pc$paths[!unlist(mclapply(pc$paths, .check.pc, is.cycle = F, mc.cores = mc.cores))]
+            pc$paths = mclapply(pc$paths, function(x) sign(emap[x])*edge.ix[abs(emap[x])], mc.cores = mc.cores)
+            pc$paths = pc$paths[!duplicated(unlist(mclapply(pc$paths, function(x) paste(unique(sort(x)), collapse = ' '), mc.cores = mc.cores)))]
+            pc$paths = pc$paths[order(-unlist(mclapply(pc$paths, length, mc.cores = mc.cores)))]
+        }
+
+        return(pc)
+    }
+}
+
+
+
+
+
 
 #' @name read_vcf
 #' @rdname internal
@@ -5711,114 +5975,6 @@ sv.size = function(juncs,
     return(IRanges::distance(bps[[1]], bps[[2]], ...))
 }
 
-#' @name reciprocal.cycles
-#' @rdname internal
-#' @description
-#' Returns indices (subset of 1:length(junc) corresponding to cycles of (quasi) reciprocal cycles
-#' @param juncs GRangesList of junctions
-#' @param mc.cores parallel
-#' @param ignore.strand usually TRUE
-#' @return numerical vector of the same length, Inf means they r not facing each other
-reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
-{
-  bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
-
-  ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
-  ixu = unlist(ix)
-  eps = 1e-9
-  ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-  adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
-
-  ## matrix of (strand aware) reference distances between breakpoint pairs
-  adj[ixu, ] = do.call(rbind, mclapply(ix,
-                 function(iix)
-                 {
-                   if (verbose)
-                       cat('.')
-                   tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
-                   tmpm[is.na(tmpm)] = 0
-                   tmpm[tmpm>thresh] = 0
-                   tmpm = as(tmpm>0, 'Matrix')
-                 },
-                 mc.cores = mc.cores))
-  if (verbose)
-    cat('\n')
-
-  adj = adj | t(adj) ## symmetrize
-
-  ## bidirected graph --> skew symmetric directed graph conversion
-  ## split each junction (bp pair) into two nodes, one + and -
-  ## arbitrarily call each bp1-->bp2 junction is "+" orientation
-  ## then all odd proximities adjacent to bp1 will enter the "+"
-  ## version of that junction and exit the "-" version
-
-  ## new matrix will be same dimension as adj
-  ## however the nodes will represents + and -
-  ## orientation of junctions
-  ## using the foollowing conversion
-
-  ## i.e. 
-  ## bp2 --> bp1 + +
-  ## bp2 --> bp2 + -
-  ## bp1 --> bp1 - +
-  ## bp1 --> bp2 - -
-
-  ## we'll use the same indices just to keep things confusing
-  junpos = bp1 = bp$grl.iix == 1
-  junneg = bp2 = bp$grl.iix == 2
-
-  adj2 = adj & FALSE ## clear out adj for new skew symmetric version
-  adj2[junpos, junpos] = adj[bp2, bp1]
-  adj2[junpos, junneg] = adj[bp2, bp2]
-  adj2[junneg, junpos] = adj[bp1, bp1]
-  adj2[junneg, junneg] = adj[bp1, bp2]
-
-  ## strongly connected components consists of (possibly nested) cycles
-  cl = split(1:length(bp), clusters(graph.adjacency(adj2), 'strong')$membership)
-
-  ## choose only clusters with length > 1
-  cl = cl[elementNROWS(cl)>1]
-  cl = cl[order(elementNROWS(cl))]
-
-
-  jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
-  jcls = sapply(jcl, paste, collapse = ' ')
-  jcl = jcl[!duplicated(jcls)]
-
-  if (paths)
-    {
-      adj3 = adj2
-      
-      ## remove all cycles and enumerate remaining paths > 1
-      adj3[unlist(jcl), unlist(jcl)] = FALSE
-      sinks = which(rowSums(adj3)==0)
-      sources = which(colSums(adj3)==0)
-      
-      cl2 = split(1:length(bp), clusters(graph.adjacency(adj3), 'weak')$membership)
-      cl2 = cl2[elementNROWS(cl2)>1]
-
-      if (any(ix <- elementNROWS(cl2)>2))
-        { ## only need to do this for connected components that have 3 or more junctions
-          cl3 = do.call(c, mclapply(cl2[ix], function(x)
-          {
-            tmp.adj = adj3[x, x]
-            lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
-          }, mc.cores = mc.cores))
-
-          cl2 = c(cl2[!ix], cl3)
-        }
-      jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
-      jcls2 = sapply(jcl2, paste, collapse = ' ')
-      jcl2 = jcl2[!duplicated(jcls2)]
-
-      return(list(cycles = jcl, paths = jcl2))
-    }
-       
-  return(jcl)
-}
-
-
-
 ## #' @name capply
 ## #' @description
 ## #' Wrapper around \{code}apply function
@@ -5840,4 +5996,3 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 ##                  })
 ##     tix = unlist(tix)
 ## }
-
