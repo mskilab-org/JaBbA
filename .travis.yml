@@ -31,11 +31,6 @@ bioc_packages:
 - GenomicRanges
 - VariantAnnotation
 - DNAcopy
-r_github_packages:
-- mskilab/gUtils
-- mskilab/gGnome
-- mskilab/gTrack
-- mskilab/Ppurple
 script:
 - "./travis-tool.sh run_tests"
 after_failure:
