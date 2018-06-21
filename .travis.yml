@@ -22,7 +22,6 @@ install:
 - "./travis-tool.sh install_github mskilab/gGnome"
 - "./travis-tool.sh install_github mskilab/bamUtils"
 - "./travis-tool.sh install_github mskilab/Ppurple"
-- "./travis-tool.sh install_github mskilab/gTrack"
 r_packages:
 - covr
 - devtools
