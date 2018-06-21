@@ -4028,7 +4028,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cBind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -5720,7 +5720,7 @@ sv.size = function(juncs,
 #' @param mc.cores parallel
 #' @param ignore.strand usually TRUE
 #' @return numerical vector of the same length, Inf means they r not facing each other
-reciprocal.cycles = function(juncs, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
+reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
 {
   bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
 
@@ -5784,8 +5784,37 @@ reciprocal.cycles = function(juncs, thresh = 1e3, mc.cores = 1, verbose = FALSE,
 
   jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
   jcls = sapply(jcl, paste, collapse = ' ')
-
   jcl = jcl[!duplicated(jcls)]
+
+  if (paths)
+    {
+      adj3 = adj2
+      
+      ## remove all cycles and enumerate remaining paths > 1
+      adj3[unlist(jcl), unlist(jcl)] = FALSE
+      sinks = which(rowSums(adj3)==0)
+      sources = which(colSums(adj3)==0)
+      
+      cl2 = split(1:length(bp), clusters(graph.adjacency(adj3), 'weak')$membership)
+      cl2 = cl2[elementNROWS(cl2)>1]
+
+      if (any(ix <- elementNROWS(cl2)>2))
+        { ## only need to do this for connected components that have 3 or more junctions
+          cl3 = do.call(c, mclapply(cl2[ix], function(x)
+          {
+            tmp.adj = adj3[x, x]
+            lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+          }, mc.cores = mc.cores))
+
+          cl2 = c(cl2[!ix], cl3)
+        }
+      jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+      jcls2 = sapply(jcl2, paste, collapse = ' ')
+      jcl2 = jcl2[!duplicated(jcls2)]
+
+      return(list(cycles = jcl, paths = jcl2))
+    }
+       
   return(jcl)
 }
 
