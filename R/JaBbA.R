@@ -230,7 +230,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
         stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
     }
-    browser()
+
     ## if we are iterating more than once
     if (reiterate>1){
         continue = TRUE
