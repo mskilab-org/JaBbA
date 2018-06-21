@@ -4,14 +4,15 @@
 \alias{JaBbA}
 \title{JaBbA}
 \usage{
-JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
-  tfield = "tier", nudge.balanced = FALSE, thresh.balanced = 500,
-  nseg = NULL, hets = NULL, name = "tumor", purity = NA, ploidy = NA,
-  field = "ratio", subsample = NULL, tilim = 1200, mem = 16,
-  reiterate = 0, rescue.window = 10000, init = NULL, edgenudge = 0.1,
+JaBbA(junctions, junctions.unfiltered = NULL, coverage, seg = NULL,
+  outdir = "./JaBbA", cfield = NULL, tfield = "tier",
+  nudge.balanced = FALSE, thresh.balanced = 500, nseg = NULL,
+  hets = NULL, name = "tumor", purity = NA, ploidy = NA,
+  field = "ratio", subsample = NULL, tilim = 2400, reiterate = 0,
+  rescue.window = 1e+05, init = NULL, edgenudge = 0.1,
   use.gurobi = FALSE, slack.penalty = 100, overwrite = FALSE,
   mc.cores = 1, strict = FALSE, max.threads = Inf, max.mem = 16,
-  indel = TRUE, all.in = TRUE, verbose = TRUE)
+  indel = TRUE, all.in = FALSE, verbose = TRUE)
 }
 \arguments{
 \item{junctions}{GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList}
@@ -38,8 +39,6 @@ JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
 
 \item{tilim}{integer scalar timeout in seconds for jbaMIP computation (default 1200 seconds)}
 
-\item{mem}{numeric scalar max memory in GB for MIP portion of algorithm (default 16)}
-
 \item{reiterate}{integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end}
 
 \item{rescue.window}{integer scalar bp window around which to rescue lower tier junctions}
@@ -63,6 +62,8 @@ JaBbA(junctions, coverage, seg = NULL, outdir = "./JaBbA", cfield = NULL,
 \item{cores}{number of cores to use (default 1)}
 
 \item{nseg}{path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number}
+
+\item{mem}{numeric scalar max memory in GB for MIP portion of algorithm (default 16)}
 
 \item{allin}{if TRUE, use all available junctions except for tier 3 INDELs in the first interation}
 }
