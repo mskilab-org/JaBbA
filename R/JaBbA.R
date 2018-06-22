@@ -94,25 +94,18 @@
 #' @param mc.cores integer how many cores to use to fork subgraphs generation (default = 1)
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @return gGraph (gGnome package) of balanced rearrangement graph
-#' @export
+#' 
 #' @examples
 #'\dontrun{
 #' library(JaBbA)
 #' junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 #' coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
-#' hets = system.file("extdata", "hets.txt", package = 'JaBbA')
-#'
+#' 
 #' ## run analysis without hets 
 #' jab = JaBbA(junctions = junctions, coverage = coverage)
-#'
-#' ## run analysis with "tiered" junctions, these have metadata field $tier (in this case inside the vcf)
-#' jun = read.junctions(junctions)
-#'
-#' ## these have metadata field tier, tier 1 junctions are forced to be included, tier 2 = are optional i.e. can be included,
-#' ## tier 3 are only used in later iterations to rescue loose ends
-#' values(jun)$tier
 #'}
 #' @import DNAcopy
+#' @export
 JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                  junctions.unfiltered = NULL, 
                  coverage, # path to cov file, rds of GRanges
