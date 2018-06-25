@@ -772,7 +772,8 @@ jabba_stub = function(
         balanced.jix = c()
         if (length(juncs)>0) {
           ##  tmpkag = karyograph(juncs) ## make tmp graph with just junctions
-          ##  balanced.jix = chromoplexy(tmpkag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            ##  balanced.jix = chromoplexy(tmpkag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            jmessage("Brand new function for reciprocal junctions calling.")
           balanced.jix = unlist(reciprocal.cycles(juncs, thresh = 1e3, mc.cores = mc.cores, verbose = verbose>1))
           dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
           balanced.jix = setdiff(balanced.jix, dp.jix)
