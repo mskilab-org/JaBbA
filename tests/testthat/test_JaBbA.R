@@ -8,20 +8,20 @@ junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
-cvec <- c(1,2,3)
-Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-bvec <- c(20,-30)
-ub <- c(40,Inf,Inf)
-res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
+## cvec <- c(1,2,3)
+## Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+## bvec <- c(20,-30)
+## ub <- c(40,Inf,Inf)
+## res <- Rcplex2(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
 
-test_that('testing Rcplex works', {
+## test_that('testing Rcplex works', {
 
-    expect_equal(res$xopt[1], 40)
-    expect_equal(res$xopt[3], 42.5)
-    expect_equal(res$obj, 202.5)
-    expect_equal(res$extra$slack[1], 0)
+##     expect_equal(res$xopt[1], 40)
+##     expect_equal(res$xopt[3], 42.5)
+##     expect_equal(res$obj, 202.5)
+##     expect_equal(res$extra$slack[1], 0)
 
-})
+## })
 
 
 test_that("read.junctions", {
