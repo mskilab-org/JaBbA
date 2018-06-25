@@ -12,6 +12,7 @@ before_install:
 - ls -l $HOME/my.cplex && echo "Look at this!!!"
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+- ./travis-tool.sh bootstrap
 r_packages:
 - covr
 - devtools
