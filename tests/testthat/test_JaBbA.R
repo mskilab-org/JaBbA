@@ -38,15 +38,15 @@ test_that("JaBbA", {
     
     set.seed(42);
 
-    expect_equal(length(jab$segstats), 96)
+    expect_equal(length(jab$segstats), 98)
     expect_equal(round(jab$ploidy, 1), 3.7)
     expect_equal(jab$purity, 0.99)
 
-    expect_equal(length(jab_chromoplexy$segstats), 96)
+    expect_equal(length(jab_chromoplexy$segstats), 94)
     expect_equal(round(jab_chromoplexy$ploidy, 1), 3.7)
     expect_equal(jab_chromoplexy$purity, 0.99)
 
-    expect_equal(length(jab2$segstats), 96)
+    expect_equal(length(jab2$segstats), 98)
     expect_equal(round(jab2$ploidy, 1), 3.7)
 
     expect_equal(length(jab.retiterate$segstats), 108)
