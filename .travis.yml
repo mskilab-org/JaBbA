@@ -10,6 +10,8 @@ before_install:
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
 - ls -l $HOME/my.cplex/cplex
+- curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+- chmod 755 ./travis-tool.sh
 r_packages:
 - devtools
 - testthat
