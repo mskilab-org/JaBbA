@@ -8,7 +8,6 @@ junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
-XT: idk why Rcplex is not executable in the testing environment, ignore for now
 cvec <- c(1,2,3)
 Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
 bvec <- c(20,-30)
