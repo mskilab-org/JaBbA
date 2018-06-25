@@ -8,21 +8,21 @@ junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 
-## XT: idk why Rcplex is not executable in the testing environment, ignore for now
-## cvec <- c(1,2,3)
-## Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-## bvec <- c(20,-30)
-## ub <- c(40,Inf,Inf)
-## res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
+XT: idk why Rcplex is not executable in the testing environment, ignore for now
+cvec <- c(1,2,3)
+Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
+bvec <- c(20,-30)
+ub <- c(40,Inf,Inf)
+res <- Rcplex(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
 
-## test_that('testing Rcplex works', {
+test_that('testing Rcplex works', {
 
-##     expect_equal(res$xopt[1], 40)
-##     expect_equal(res$xopt[3], 42.5)
-##     expect_equal(res$obj, 202.5)
-##     expect_equal(res$extra$slack[1], 0)
+    expect_equal(res$xopt[1], 40)
+    expect_equal(res$xopt[3], 42.5)
+    expect_equal(res$obj, 202.5)
+    expect_equal(res$extra$slack[1], 0)
 
-## })
+})
 
 
 test_that("read.junctions", {
@@ -56,70 +56,6 @@ test_that("JaBbA", {
 })
 
 
-
-
-
-## JaBbA
-
-## jabba_stub
-
-## karyograph_stub
-
-## .plot_ppfit
-
-## ramip_stub
-
-## segstats 
-
-## jmessage
-
-## jbaMIP
-
-## JaBbA.digest
-
-## jbaMIP.process
-
-## jabba.alleles
-
-## pp.nll
-
-## munlist
-## test_that('testing munlist() works', {
-    
-##     ## expect_equal(dim(munlist(gr2dt(example_genes)$start))[1], 18812)
-##     ## expect_equal(dim(munlist(gr2dt(example_genes)$start))[2], 3)
-
-## })
-
-## ## .correct.slack
-
-## ## .cplex_customparams
-## test_that('testing alpha() works', {
-    
-##     ## not sure how to test this properly
-##     expect_error(.cplex_customparams('out.txt'), NA) ## check no error
-
-## })
-
-## gr.tile.map 
-## test_that('testing gr.tile.map() works', {
-## 
-##     > gr.tile.map(example_genes, example_dnase)
-##     Error in m[, 2] : subscript out of bounds
-## 
-## })
-
-
-## vaggregate  ### this should be replaced! data.table
-
-
-## write.tab
-## test_that('testing write.tab() works', {
-
-##     ## expect_error(write.tab(example_genes), NA) ## check works
-##     expect_error(wr)
-
-## })
 
 
 
