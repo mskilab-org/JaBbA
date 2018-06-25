@@ -1,8 +1,9 @@
 language: r
 dist: trusty
-cache: package
+cache: packages
 sudo: false
 r: 3.4.1
+r_check_args: --no-build-vignettes --no-manual --as-cran --no-tests --no-examples
 before_install:
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
