@@ -29,27 +29,26 @@ test_that("read.junctions", {
 })
 
 
+jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
+jab_chromoplexy = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
+jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
+jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
 
 test_that("JaBbA", {
     
     set.seed(42);
 
-    jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
     expect_equal(length(jab$segstats), 96)
     expect_equal(round(jab$ploidy, 1), 3.7)
     expect_equal(jab$purity, 0.99)
 
-    jab_chromoplexy = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
     expect_equal(length(jab_chromoplexy$segstats), 96)
     expect_equal(round(jab_chromoplexy$ploidy, 1), 3.7)
     expect_equal(jab_chromoplexy$purity, 0.99)
 
-    jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
     expect_equal(length(jab2$segstats), 96)
-
     expect_equal(round(jab2$ploidy, 1), 3.7)
 
-    jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
     expect_equal(length(jab.retiterate$segstats), 108)
 
 })
