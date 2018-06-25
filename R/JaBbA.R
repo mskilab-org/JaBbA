@@ -752,7 +752,10 @@ jabba_stub = function(
     if (nudge.balanced) {
         balanced.jix = c()
         if (length(juncs)>0) {
-            balanced.jix = chromoplexy(kag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            ##  tmpkag = karyograph(juncs) ## make tmp graph with just junctions
+            ##  balanced.jix = chromoplexy(tmpkag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
+            jmessage("Brand new function for reciprocal junctions calling.")
+            balanced.jix = unlist(reciprocal.cycles(juncs, thresh = 1e3, mc.cores = mc.cores, verbose = verbose>1))
             dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
             balanced.jix = setdiff(balanced.jix, dp.jix)
         }
@@ -4011,7 +4014,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cBind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -5960,6 +5963,112 @@ sv.size = function(juncs,
                    ...){
     bps = gUtils::grl.pivot(juncs)
     return(IRanges::distance(bps[[1]], bps[[2]], ...))
+}
+
+#' @name reciprocal.cycles
+#' @rdname internal
+#' @description
+#' Returns indices (subset of 1:length(junc) corresponding to cycles of (quasi) reciprocal cycles
+#' @param juncs GRangesList of junctions
+#' @param mc.cores parallel
+#' @param ignore.strand usually TRUE
+#' @return numerical vector of the same length, Inf means they r not facing each other
+reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
+{
+    bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
+
+    ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+    ixu = unlist(ix)
+    eps = 1e-9
+    ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+    adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+
+    ## matrix of (strand aware) reference distances between breakpoint pairs
+    adj[ixu, ] = do.call(rbind, mclapply(ix,
+                                         function(iix)
+                                         {
+                                             if (verbose)
+                                                 cat('.')
+                                             tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
+                                             tmpm[is.na(tmpm)] = 0
+                                             tmpm[tmpm>thresh] = 0
+                                             tmpm = as(tmpm>0, 'Matrix')
+                                         },
+                                         mc.cores = mc.cores))
+    if (verbose)
+        cat('\n')
+
+    adj = adj | t(adj) ## symmetrize
+
+    ## bidirected graph --> skew symmetric directed graph conversion
+    ## split each junction (bp pair) into two nodes, one + and -
+    ## arbitrarily call each bp1-->bp2 junction is "+" orientation
+    ## then all odd proximities adjacent to bp1 will enter the "+"
+    ## version of that junction and exit the "-" version
+
+    ## new matrix will be same dimension as adj
+    ## however the nodes will represents + and -
+    ## orientation of junctions
+    ## using the foollowing conversion
+
+    ## i.e. 
+    ## bp2 --> bp1 + +
+    ## bp2 --> bp2 + -
+    ## bp1 --> bp1 - +
+    ## bp1 --> bp2 - -
+
+    ## we'll use the same indices just to keep things confusing
+    junpos = bp1 = bp$grl.iix == 1
+    junneg = bp2 = bp$grl.iix == 2
+
+    adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+    adj2[junpos, junpos] = adj[bp2, bp1]
+    adj2[junpos, junneg] = adj[bp2, bp2]
+    adj2[junneg, junpos] = adj[bp1, bp1]
+    adj2[junneg, junneg] = adj[bp1, bp2]
+
+    ## strongly connected components consists of (possibly nested) cycles
+    cl = split(1:length(bp), clusters(graph.adjacency(adj2), 'strong')$membership)
+
+    ## choose only clusters with length > 1
+    cl = cl[elementNROWS(cl)>1]
+    cl = cl[order(elementNROWS(cl))]
+
+
+    jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+    jcls = sapply(jcl, paste, collapse = ' ')
+    jcl = jcl[!duplicated(jcls)]
+
+    if (paths)
+    {
+        adj3 = adj2
+        
+        ## remove all cycles and enumerate remaining paths > 1
+        adj3[unlist(jcl), unlist(jcl)] = FALSE
+        sinks = which(rowSums(adj3)==0)
+        sources = which(colSums(adj3)==0)
+        
+        cl2 = split(1:length(bp), clusters(graph.adjacency(adj3), 'weak')$membership)
+        cl2 = cl2[elementNROWS(cl2)>1]
+
+        if (any(ix <- elementNROWS(cl2)>2))
+        { ## only need to do this for connected components that have 3 or more junctions
+            cl3 = do.call(c, mclapply(cl2[ix], function(x)
+            {
+                tmp.adj = adj3[x, x]
+                lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+            }, mc.cores = mc.cores))
+
+            cl2 = c(cl2[!ix], cl3)
+        }
+        jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+        jcls2 = sapply(jcl2, paste, collapse = ' ')
+        jcl2 = jcl2[!duplicated(jcls2)]
+
+        return(list(cycles = jcl, paths = jcl2))
+    }
+    
+    return(jcl)
 }
 
 ## #' @name capply
