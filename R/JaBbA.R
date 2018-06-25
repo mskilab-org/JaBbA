@@ -1741,6 +1741,7 @@ segstats = function(target,
         ##           }
 
         vall = vall[match(gr.stripstrand(target), utarget)]
+       
 
         if (is.na(prior_mean))
         {
@@ -1820,13 +1821,16 @@ segstats = function(target,
         ## loess var estimation
         ## i.e. we fit loess function to map segment mean to variance across the sample
         ## the assumption is that such a function exists 
-        sample.var = sapply(vall, var, na.rm = TRUE)        ## computing sample variance for each segment
+        sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
         ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
         target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
         target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
         target$nbins.nafrac = 1-target$nbins/target$nbins.tot
 
-        tmp = data.table(var = sample.var, mean = target$mean, nbins = target$nbins, na.frac = target$nbins.nafrac)
+        tmp = data.table(var = sample.var,
+                         mean = target$mean,
+                         nbins = target$nbins,
+                         na.frac = target$nbins.nafrac)
         loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
 
         ## inferring segment specific variance using loess fit of mean to sample variance across dataset
