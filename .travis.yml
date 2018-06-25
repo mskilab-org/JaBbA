@@ -39,3 +39,4 @@ env:
   - CPLEX_DIR=$HOME/my.cplex/
   - CPLEX_INCLUDE_PATH=$HOME/my.cplex/include
   - CPLEX_LIB_PATH=$HOME/my.cplex/lib
+  - R_CHECK_ARGS="--no-build-vignettes --no-manual --as-cran --no-tests --no-examples"
