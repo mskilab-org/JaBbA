@@ -9,15 +9,7 @@ before_install:
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
-- ls -l $HOME/my.cplex && echo "Look at this!!!"
-- curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
-- chmod 755 ./travis-tool.sh
-r_packages:
-- covr
-- devtools
-- testthat
-bioc_packages:
-- GenomicRanges
+- ls -l $HOME/my.cplex/cplex
 - VariantAnnotation
 - DNAcopy
 r_github_packages:
