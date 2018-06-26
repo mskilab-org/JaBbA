@@ -186,7 +186,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     }
 
     ## if no tier field in junctions, set all of them to 2
-    if (!(tfield %in% names(values(ra.all))))
+    if (!(tfield %in% names(values(ra.all))) & length(ra.all)>0)
     {
         warning("Tier field", tfield, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
         values(ra.all)$tier = 2
@@ -204,14 +204,16 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ra.all = ra.all.uf
     }
 
-    if (length(unique(values(ra.all)[, tfield]))==1) {
-        jmessage("Only one tier of junctions found, cancel iteration if requested")
-        reiterate = 1
-    }
+    if (length(ra.all)>0){
+        if (length(unique(values(ra.all)[, tfield]))==1) {
+            jmessage("Only one tier of junctions found, cancel iteration if requested")
+            reiterate = 1
+        }
 
-    ## final sanity check before running
-    if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
-        stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+        ## final sanity check before running
+        if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
+            stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+        }
     }
 
     ## if we are iterating more than once
