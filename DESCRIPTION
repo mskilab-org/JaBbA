@@ -26,10 +26,7 @@ Imports:
   stats,
   utils
 Suggests:  
-  testthat (>= 2.0), 
-  covr,
-  slam, 
-  Rcplex
+  testthat (>= 2.0)
 License: GPL-2
 LazyData: true
 RoxygenNote: 6.0.1
