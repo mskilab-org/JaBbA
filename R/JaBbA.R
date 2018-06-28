@@ -2079,7 +2079,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
 
         ## find connected components in these graphs
-        cl = clusters(G.unfix, 'weak')
+        cl = igraph::clusters(G.unfix, 'weak')
         cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
 
         ## combine components with their reverse complement components
@@ -4106,7 +4106,7 @@ collapse.paths = function(G, verbose = T)
     if (length(singletons)>0)
     {
         tmp = out[singletons, singletons]
-        cl = clusters(graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
+        cl = igraph::clusters(graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
         dix = unique(cl)
         if (length(dix)>0)
         {
@@ -6032,7 +6032,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     adj2[junneg, junneg] = adj[bp1, bp2]
 
     ## strongly connected components consists of (possibly nested) cycles
-    cl = split(1:length(bp), clusters(graph.adjacency(adj2), 'strong')$membership)
+    cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
 
     ## choose only clusters with length > 1
     cl = cl[elementNROWS(cl)>1]
@@ -6052,7 +6052,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
         sinks = which(rowSums(adj3)==0)
         sources = which(colSums(adj3)==0)
         
-        cl2 = split(1:length(bp), clusters(graph.adjacency(adj3), 'weak')$membership)
+        cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
         cl2 = cl2[elementNROWS(cl2)>1]
 
         if (any(ix <- elementNROWS(cl2)>2))
