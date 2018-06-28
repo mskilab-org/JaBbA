@@ -2721,7 +2721,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         if (verbose>1)
         {
-            jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s', sum(Qobj[cbind(s.ix, s.ix)]), sum(cvec[cbind(es.s.ix, es.t.ix)])))
+            jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s',
+                             sum(Qobj[cbind(s.ix, s.ix)]),
+                             sum(cvec[cbind(es.s.ix, es.t.ix)])))
         }
         if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
             jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")

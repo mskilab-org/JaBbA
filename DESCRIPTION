@@ -25,6 +25,11 @@ Imports:
   grDevices,
   stats,
   utils
+Remotes:
+  mskilab/gUtils
+  mskilab/gTrack
+  mskilab/gGnome
+  mskilab/Ppurple
 Suggests:  
   testthat (>= 2.0)
 License: GPL-2
