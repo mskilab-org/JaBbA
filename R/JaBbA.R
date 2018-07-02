@@ -1826,11 +1826,12 @@ segstats = function(target,
                          mean = target$mean,
                          nbins = target$nbins,
                          na.frac = target$nbins.nafrac)
+        ## loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
         loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
 
         ## inferring segment specific variance using loess fit of mean to sample variance across dataset
         target$var = pmax(predict(loe, target$mean), min(sample.var, na.rm = TRUE))
-
+        
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
         ## basically assign all means below the left domain bound of the function the variance of the left domain bound
         ## and analogously for all means above the right domain bound
@@ -2830,23 +2831,24 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             n_hat = varmeta[type == 'interval', mipstart]
             ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
             Bs = Amat[consmeta[type == 'EdgeSource', id],]
+            six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
 
             ## sometimes it's too big!
-            tmp.Bs.interval = Bs[, varmeta[type == "interval", id]]
-            if (prod(dim(tmp.Bs.interval))>.Machine$integer.max){
-                chunk.num = ceiling(ncol(tmp.Bs.interval)/floor(.Machine$integer.max/nrow(tmp.Bs.interval)))
-                chunk.ix = cut(seq_len(ncol(tmp.Bs.interval)), chunk.num, labels=FALSE)
-                six = lapply(seq_len(chunk.num),
-                             function(chunk){
-                                 jmessage("Processing chunk ", chunk)
-                                 apply(tmp.Bs.interval[, which(chunk.ix==chunk), drop=FALSE],
-                                       1, function(x) which(x!=0))
-                             })
-                six = unlist(six)
-            } else {
-                six = apply(tmp.Bs.interval, 1, function(x) which(x!=0))
-            }
-            rm("tmp.Bs.interval"); gc()
+            ## tmp.Bs.interval = Bs[, varmeta[type == "interval", id]]
+            ## if (prod(dim(tmp.Bs.interval))>.Machine$integer.max){
+            ##     chunk.num = ceiling(ncol(tmp.Bs.interval)/floor(.Machine$integer.max/nrow(tmp.Bs.interval)))
+            ##     chunk.ix = cut(seq_len(ncol(tmp.Bs.interval)), chunk.num, labels=FALSE)
+            ##     six = lapply(seq_len(chunk.num),
+            ##                  function(chunk){
+            ##                      jmessage("Processing chunk ", chunk)
+            ##                      apply(tmp.Bs.interval[, which(chunk.ix==chunk), drop=FALSE],
+            ##                            1, function(x) which(x!=0))
+            ##                  })
+            ##     six = unlist(six)
+            ## } else {
+            ##     six = apply(tmp.Bs.interval, 1, function(x) which(x!=0))
+            ## }
+            ## rm("tmp.Bs.interval"); gc()
 
             s_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
@@ -2856,23 +2858,24 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
             ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
             Bt = Amat[consmeta[type == 'EdgeTarget', id],]
+            tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
             ## tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
             ## sometimes it's too big!
-            tmp.Bt.interval = Bt[, varmeta[type == "interval", id]]
-            if (prod(dim(tmp.Bt.interval))>.Machine$integer.max){
-                chunk.num = ceiling(ncol(tmp.Bt.interval)/floor(.Machine$integer.max/nrow(tmp.Bt.interval)))
-                chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
-                tix = lapply(seq_len(chunk.num),
-                             function(chunk){
-                                 jmessage("Processing chunk ", chunk)
-                                 apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
-                                       1, function(x) which(x!=0))
-                             })
-                tix = unlist(tix)
-            } else {
-                tix = apply(tmp.Bt.interval, 1, function(x) which(x!=0))
-            }
-            rm("tmp.Bt.interval"); gc()
+            ## tmp.Bt.interval = Bt[, varmeta[type == "interval", id]]
+            ## if (prod(dim(tmp.Bt.interval))>.Machine$integer.max){
+            ##     chunk.num = ceiling(ncol(tmp.Bt.interval)/floor(.Machine$integer.max/nrow(tmp.Bt.interval)))
+            ##     chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
+            ##     tix = lapply(seq_len(chunk.num),
+            ##                  function(chunk){
+            ##                      jmessage("Processing chunk ", chunk)
+            ##                      apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
+            ##                            1, function(x) which(x!=0))
+            ##                  })
+            ##     tix = unlist(tix)
+            ## } else {
+            ##     tix = apply(tmp.Bt.interval, 1, function(x) which(x!=0))
+            ## }
+            ## rm("tmp.Bt.interval"); gc()
             
             t_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
@@ -2999,7 +3002,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
         sol$adj = adj*0;
         if (length(v.ix.c)>0)
-            sol$nll.cn = (sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]]
+            sol$nll.cn = ((sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]])[1,1]
         else
             sol$nll.cn = NA
 

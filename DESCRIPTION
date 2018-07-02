@@ -26,10 +26,10 @@ Imports:
   stats,
   utils
 Remotes:
-  mskilab/gUtils
-  mskilab/gTrack
-  mskilab/gGnome
-  mskilab/Ppurple
+  github::mskilab/gUtils,
+  github::mskilab/gTrack,
+  github::mskilab/gGnome,
+  github::mskilab/Ppurple
 Suggests:  
   testthat (>= 2.0)
 License: GPL-2
