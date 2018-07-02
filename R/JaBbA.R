@@ -1231,10 +1231,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (length(hets.gr)>0){
         ## pretend we don't have hets at all
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores)
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores, verbose = verbose)
     }
     else
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores)
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores, verbose = verbose)
 
     this.kag$segstats$ncn = 2
 
@@ -1677,6 +1677,7 @@ segstats = function(target,
                     max.chunk = 1e8,
                     max.slice = 2e4,
                     na.thresh = 0.2,
+                    verbose = FALSE,
                     subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
@@ -1718,148 +1719,95 @@ segstats = function(target,
     if (!is.null(signal))
     {
 
-        if (!(field %in% names(values(signal))))
-            stop('Field not found in signal GRanges')
+      if (!(field %in% names(values(signal))))
+        stop('Field not found in signal GRanges')
+      
+      utarget = unique(gr.stripstrand(target))
+      
+      map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
+      val = values(signal)[, field]
+      val[is.infinite(val)] = NA
+      vall = lapply(map, function(x) val[x])      
+      vall = vall[match(gr.stripstrand(target), utarget)]
+                  
+      sample.mean = sapply(vall, mean, na.rm = TRUE)
+      ix = !is.na(sample.mean)
 
-        utarget = unique(gr.stripstrand(target))
+      target$mean = NA;
+      target$mean[ix] = sample.mean[ix]
 
-        map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
-        val = values(signal)[, field]
-        val[is.infinite(val)] = NA
-        vall = lapply(map, function(x) val[x])
-
-        ## do subsampling before we dedup
-        ##         if (!is.null(subsample))
-        ##           {
-        ##             subsample = pmax(0, pmin(1, subsample))
-        ##             vall = lapply(vall, function(x) if (length(x)==0) NA else if (all(is.na(x))) NA else sample(x, ceiling(length(x)*subsample)))
-        ##           }
-
-        vall = vall[match(gr.stripstrand(target), utarget)]
-       
-
-        if (is.na(prior_mean))
-        {
-            tmp = sapply(vall, mean, na.rm = T)
-            tmp.ix = !is.na(tmp)
-            prior_mean = sum(as.numeric(width(target)*tmp)[tmp.ix])/sum(as.numeric(width(target))[tmp.ix])
-        }
-
-        if (is.na(prior_alpha) | is.na(prior_beta))
-        {
-            ## guessing alpha and beta priors for inverse gamma (for variance estimation)
-            ## we want to bias this estimate by looking at a bunch of local "variance" samples
-            ## from signal .. i.e. a hundred adjacent markers
-                                        #            tmp.sig = r$signal[!is.na(r$signal)]
-            tmp.sig = val[!is.na(val)]
-
-            if (length(tmp.sig)<ksamp_prior)
-                stop('Something wrong, number of samples smaller than data sample size')
-
-            vars = sapply(1:nsamp_prior, function(x) var(sample(tmp.sig, ksamp_prior)))
-            E_var = mean(vars, na.rm = T)
-            var_var = var(vars, na.rm = T)
-            prior_alpha = E_var^2/var_var + 2
-            prior_beta = E_var * (E_var^2/var_var + 1)
-        }
-
-        .postmean = function(x)
-        {
-            x_bar = mean(x, na.rm = T)
-            n = sum(!is.na(x))
-            if (is.na(x_bar))
-                x_bar = 0
-            return((prior_mean*prior_weight + n*x_bar)/(n + prior_weight))
-        }
-
-        .postsd = function(x, subsample = NULL)
-        {
-            var_bar = var(x, na.rm = T)
-            n = sum(!is.na(x))
-            if (!is.null(subsample)) ## apply penalty to simulate subsampling
-            {
-                                        #                print('subsampling')
-                n = ceiling(n*subsample)
-            }
-            post_alpha = prior_alpha + n/2 - 1/2
-            post_beta = prior_beta + 1/2*var_bar*n
-
-            sigma2_mode = post_beta/(post_alpha + 1) ## only using modal value of igamma posterior
-            if (is.na(post_beta))
-                sigma2_mode = prior_beta/(prior_alpha+1)
-            return(sqrt(sigma2_mode/(n + prior_weight)))
-        }
-
-        mu = sapply(vall, .postmean)
-        sd = sapply(vall, .postsd, subsample)
-                                        #    pc.na = sapply(vall, function(x) sum(is.na(x))/length(x))
-
-                                        #   mu[which(pc.na>na.thresh)] = NA
-                                        #   sd[which(pc.na>na.thresh)] = NA
-
-        target$mean = NA;
-        target$sd = sqrt(prior_beta / (prior_alpha + 1)); ## These are prior parameters
-
-        mu = sapply(vall, mean, na.rm = TRUE)
-        ix = !is.na(mu)
-        target$mean[ix] = mu[ix]
-
-        ## ## loess var estimation
-        ## ## i.e. we fit loess function to map segment mean to variance across the sample
-        ## ## the assumption is that such a function exists 
-        ## var = sapply(vall, var, na.rm = TRUE)       
-        ## ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
-        ## loe = loess(var ~ mu, weights = target$nbins)
-        ## target$var = pmax(predict(loe, target$mean), min(var, na.rm = TRUE))
-        
-        ## loess var estimation
-        ## i.e. we fit loess function to map segment mean to variance across the sample
-        ## the assumption is that such a function exists 
-        sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
-        ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
-        target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        target$nbins.nafrac = 1-target$nbins/target$nbins.tot
-
-        tmp = data.table(var = sample.var,
-                         mean = target$mean,
-                         nbins = target$nbins,
-                         na.frac = target$nbins.nafrac)
-        loe = tmp[nbins>2 & na.frac<0.5, loess(var ~ mean, weights = nbins)]
-
-        ## inferring segment specific variance using loess fit of mean to sample variance across dataset
-        target$var = pmax(predict(loe, target$mean), min(sample.var, na.rm = TRUE))
-
-        ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
-        ## basically assign all means below the left domain bound of the function the variance of the left domain bound
-        ## and analogously for all means above the right domain bound
-        na.var = is.na(target$var)
-        rrm = range(target$mean[!na.var])
-        rrv = predict(loe, rrm)
-        target$var[target$mean<=rrm[1]] = rrv[1]
-        target$var[target$mean>=rrm[2]] = rrv[2]    
-
-        ## computing sd / sem for each target 
-        target$sd = sqrt((2*target$var)/target$nbins)
-
-        ## final clean up
-        good.bin = signal[which(!is.na(values(signal)[, field]) & !is.infinite(values(signal)[, field]))]
-        ## target$good.prop = (target+5e5) %O% good.bin
-        target$good.prop = (target+1e5) %O% good.bin
-        ## table(target$good.prop < 0.85)
-        ## t.td = gTrack(target %Q% (good.prop<0.75))
-        ## c.td = gTrack(signal, y.field = field, circles=T, lwd.border=0.2)
-        ## ppdf(plot(c(c.td, t.td), streduce((target %Q% (good.prop < 0.75))+1e6)[1:20]), width=25)
-        ## bad.nodes = which(target$good.prop < 0.75)
-        bad.nodes = which(target$good.prop < 0.9)
-        target$raw.mean = target$mean
-        target$raw.sd = target$sd
+      ## final clean up
+      target$raw.mean = target$mean
+      target$raw.sd = target$sd
+      
+      good.bin = signal[which(!is.na(values(signal)[, field]) & !is.infinite(values(signal)[, field]))]
+      target$good.prop = (target+1e5) %O% good.bin
+      target$bad = FALSE
+      if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
+      {        
         target$mean[bad.nodes] = NA
         target$sd[bad.nodes] = NA
-        target$bad.nodes = seq_along(target) %in% bad.nodes
-        jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
-        jmessage("Hard setting ", sum(width(target[bad.nodes]))/1e6, " Mb of the genome to NA that didn't pass our quality threshold")      
+        target$bad = seq_along(target) %in% bad.nodes
+
+        if (verbose)
+        {
+          jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
+          jmessage("Hard setting ", sum(width(target[bad.nodes]))/1e6, " Mb of the genome to NA that didn't pass our quality threshold")
+        }
+      }
+      ## ## loess var estimation
+      ## ## i.e. we fit loess function to map segment mean to variance across the sample
+      ## ## the assumption is that such a function exists
+
+      ## loess var estimation
+      ## i.e. we fit loess function to map segment mean to variance across the sample
+      ## the assumption is that such a function exists 
+      sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
+      ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+      target$nbins = sapply(vall, function(x) sum(!is.na(x)))[as.character(abs(as.numeric(names(target))))]
+      target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+      target$nbins.nafrac = 1-target$nbins/target$nbins.tot
+
+      MINBIN = 20
+      tmp = data.table(var = sample.var,
+                       mean = target$mean,
+                       nbins = target$nbins,
+                       bad = target$bad)[var>0 & nbins>MINBIN & !bad, ]
+
+      if (verbose)
+      {
+        jmessage('Using loess to fit mean to variance relationship in segments with greater than ', MINBIN, ' bins')
+      }
+
+      if (nrow(tmp)<10)
+      {
+        warning(sprintf('Could not find enough (>=10) segments with more than %s bins for modeling mean to variance relationship in data.  Data might be hypersegmented.', MINBIN))
+      }
+      loe = tmp[, loess(var ~ mean, weights = nbins)]
+
+      ## inferring segment specific variance using loess fit of mean to sample variance across dataset
+      min.var = min(tmp$var, na.rm = TRUE) ## min allowable var 
+      target$var = pmax(predict(loe, target$mean), min.var)
+
+      ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
+      ## basically assign all means below the left domain bound of the function the variance of the left domain bound
+      ## and analogously for all means above the right domain bound
+      na.var = is.na(target$var)
+      rrm = range(target$mean[!na.var])
+      rrv = pmax(predict(loe, rrm), min.var)
+      target$var[target$mean<=rrm[1]] = rrv[1]
+      target$var[target$mean>=rrm[2]] = rrv[2]    
+
+      ## computing sd / sem for each target
+      target$sd = sqrt((2*target$var)/target$nbins)
+
+      var.ratio = max(target$var,na.rm = TRUE)/min(target$var, na.rm = TRUE)
+
+      if ((var.ratio)>1e7)
+      {
+        warning('Ratio of highest and lowest segment variances exceed 1e7. This could result from very noisy bin data and/or extreme hypersegmentation.  Downstream optimization results may be unstable.')
+      }
+     
     }
 
     return(target)
@@ -1934,7 +1882,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   beta = NA, # beta guess (optional)
                   gamma = NA, # gamma guess (optional)
                   field.ncn = 'ncn', # will use this field to take into account normal copy number in transformation of relative to integer copy number
-                  tilim = 20, mipemphasis = 0, epgap = 0.01, # MIP params
+                  tilim = 20, mipemphasis = 0, epgap = 1e-4, # MIP params
                   ploidy.min = 0.1, # ploidy bounds (can be generous)
                   ploidy.max = 20,
                   ploidy.normal = NULL, ## usually inferred from ncn field but can be entered for subgraph analysis
@@ -1997,12 +1945,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         cnmle = round(m) ## MLE estimate for CN
         residual.min = ((m-cnmle)/(segstats$sd))^2
         residual.other =
-            apply(cbind(
-        (m-cnmle-1)/segstats$sd,
-        (m-cnmle+1)/segstats$sd
-        )^2,
-        1, min)
-        residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
+          apply(cbind(
+          (m-cnmle-1)/segstats$sd,
+          (m-cnmle+1)/segstats$sd
+          )^2,
+          1, min)
+      residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
 
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
         ## is greater than k / slack.prior penalty (where k is some copy difference
@@ -2013,7 +1961,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## 8 is a constant that is conservative, let's try 4
         ## let's not fix to zero
         fix = as.integer(which(residual.diff>(4/slack.prior) &
-                               cnmle != 0))
+                               cnmle >= 0))
 
         ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
         ## each bigger and harder to solve
@@ -2079,7 +2027,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
 
         ## find connected components in these graphs
-        cl = clusters(G.unfix, 'weak')
+        cl = igraph::clusters(G.unfix, 'weak')
         cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
 
         ## combine components with their reverse complement components
@@ -2166,7 +2114,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             args$ploidy.min = 0 ## no ploidy constraints
             ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
             args$ploidy.max = Inf
-
 
             if (verbose)
                 jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
@@ -2968,8 +2915,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         if (!is.null(mipstart)) ## apply mipstart if provided
             control$mipstart = varmeta$mipstart
 
-        ## slightly adjust the mipstart
-        
+        if (verbose)
+          jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
+
         sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = control)
     }
     if (is.null(sol$xopt))
@@ -2984,7 +2932,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     segstats$mean = mu
     segstats$sd = sd
     segstats$ncn = ncn
-
 
     sol.l = lapply(sol.l, function(sol)
     {
@@ -4104,7 +4051,7 @@ collapse.paths = function(G, verbose = T)
     if (length(singletons)>0)
     {
         tmp = out[singletons, singletons]
-        cl = clusters(graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
+        cl = igraph::clusters(graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))), n = nrow(tmp)), 'weak')$membership
         dix = unique(cl)
         if (length(dix)>0)
         {
@@ -4707,7 +4654,6 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                 npix = is.na(vgr$mix)
                 vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
 
-                ## NOT SURE WHY BROKEN
                 tmp =  tryCatch( values(vgr)[bix[npix], ],
                                 error = function(e) NULL)
                 if (!is.null(tmp))
@@ -6030,7 +5976,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     adj2[junneg, junneg] = adj[bp1, bp2]
 
     ## strongly connected components consists of (possibly nested) cycles
-    cl = split(1:length(bp), clusters(graph.adjacency(adj2), 'strong')$membership)
+    cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
 
     ## choose only clusters with length > 1
     cl = cl[elementNROWS(cl)>1]
@@ -6050,7 +5996,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
         sinks = which(rowSums(adj3)==0)
         sources = which(colSums(adj3)==0)
         
-        cl2 = split(1:length(bp), clusters(graph.adjacency(adj3), 'weak')$membership)
+        cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
         cl2 = cl2[elementNROWS(cl2)>1]
 
         if (any(ix <- elementNROWS(cl2)>2))
