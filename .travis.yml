@@ -27,10 +27,12 @@ r_github_packages:
 - mskilab/bamUtils
 - mskilab/Ppurple
 script:
+- Rscript -e 'sessionInfo()'
+- Rscript -e "source('tests/testthat/test_JaBbA.R')"
 - travis_wait 45 ./travis-tool.sh run_tests
 after_failure:
 - "./travis-tool.sh dump_logs"
-after_success:
+after_success:  
 - travis_wait 45 Rscript -e 'covr::codecov()'
 env:
   global:

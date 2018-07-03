@@ -1,4 +1,4 @@
-library(JaBbA)   
+library(JaBbA)
 library(gUtils)
 library(testthat)
 
@@ -24,10 +24,28 @@ test_that("reciprocal.cycles", {
 set.seed(42);
 TILIM = 60
 jab = JaBbA(junctions = junctions, coverage = coverage, seg = segs, slack.penalty = 1e4, hets = hets, tilim = TILIM, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=NA)
+jab2 = readRDS('JaBbA/jabba.rds')
 jab.reiterate = JaBbA(junctions = junctions, coverage = coverage, seg = segs, slack.penalty = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+jab.reiterate2 = readRDS('JaBbA/jabba.rds')
+
+print(table(readRDS('JaBbA/karyograph.rds')$segstats$cn))
+print(table(readRDS('JaBbA/jabba.raw.rds')$segstats$cn))
+print(table(readRDS('JaBbA/jabba.simple.rds')$segstats$cn))
+
+print('ha')
+print(length(jab$segstats))
+print(jab$ploidy)
+print(jab$purity)
+print(length(jab.reiterate$segstats))
+
+print('yep')
+print(length(jab2$segstats))
+print(jab2$ploidy)
+print(jab2$purity)
+print(length(jab.reiterate2$segstats))
 
 
-test_that("JaBbA", {   
+test_that("JaBbA", {
   expect_equal(length(jab$segstats), 68)
   expect_equal(round(jab$ploidy, 1), 3.6)
   expect_equal(jab$purity, 0.99)
