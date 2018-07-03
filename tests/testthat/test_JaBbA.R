@@ -2,6 +2,8 @@ library(JaBbA)
 library(gUtils)
 library(testthat)
 
+context('JaBbA')
+
 junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
