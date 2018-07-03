@@ -1,8 +1,6 @@
 library(JaBbA)   
 library(gUtils)
 library(testthat)
-## library(Rcplex)
-context("test JaBbA functionality\n")
 
 junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
@@ -21,30 +19,16 @@ test_that("reciprocal.cycles", {
 })
 
 set.seed(42);
+TILIM = 2
+jab = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, hets = hets, tilim = TILIM, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=NA)
+jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
 
-jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
-jab_chromoplexy = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
-jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
-jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
 
-jab.pp = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=1, ploidy=3.82, purity=NA)  
-
-test_that("JaBbA", {
-  expect_equal(length(jab$segstats), 96)
-  expect_equal(round(jab$ploidy, 1), 3.7)
+test_that("JaBbA", {   
+  expect_equal(length(jab$segstats), 68)
+  expect_equal(round(jab$ploidy, 1), 3.6)
   expect_equal(jab$purity, 0.99)
-  
-  expect_equal(length(jab_chromoplexy$segstats), 100)
-  expect_equal(round(jab_chromoplexy$ploidy, 1), 3.8)
-  expect_equal(jab_chromoplexy$purity, 0.99)
-  
-  expect_equal(length(jab2$segstats), 96)
-  expect_equal(round(jab2$ploidy, 1), 3.7)
-
-  expect_equal(jab.pp$purity, 1)
-
-  expect_equal(length(jab.retiterate$segstats), 100)
-
+  expect_equal(length(jab.retiterate$segstats), 72)
 })
 
 

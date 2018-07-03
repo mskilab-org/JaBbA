@@ -989,12 +989,12 @@ jabba_stub = function(
         values(jun)$col = ifelse(values(jun)$cn>0, 'red', alpha('gray', 0.2))
 
         if (is.null(jabd$agtrack)){
-            plotted = tryCatch(plot(c(td.cov, jabd$gtrack), links = jun), error = function(e) return(NULL))
+            plotted = tryCatch(plot(c(td.cov, jabd$gtrack), links = jun), error = function(e) return(1))
         } else {
-            plotted = tryCatch(plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun), error = function(e) return(NULL))
+            plotted = tryCatch(plot(c(jabd$agtrack, td.cov, jabd$gtrack), links = jun), error = function(e) return(1))
         }
-        
-        if (is.null(plotted)){
+
+        if (!is.null(plotted)){
             if (verbose){
                 jmessage("Something wrong with plotting JaBbA results. Please try it later.")
             }
