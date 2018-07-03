@@ -21,16 +21,16 @@ test_that("reciprocal.cycles", {
 })
 
 set.seed(42);
-TILIM = 2
+TILIM = 10
 jab = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, hets = hets, tilim = TILIM, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=NA)
-jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+jab.reiterate = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
 
 
 test_that("JaBbA", {   
   expect_equal(length(jab$segstats), 68)
   expect_equal(round(jab$ploidy, 1), 3.6)
   expect_equal(jab$purity, 0.99)
-  expect_equal(length(jab.retiterate$segstats), 72)
+  expect_equal(length(jab.reiterate$segstats), 72)
 })
 
 
