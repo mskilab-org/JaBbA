@@ -9,7 +9,7 @@ before_install:
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
 - echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
-- ls -l $HOME/my.cplex/cplex
+# - ls -l $HOME/my.cplex/cplex
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
 r_packages:
@@ -27,8 +27,7 @@ r_github_packages:
 - mskilab/bamUtils
 - mskilab/Ppurple
 script:
-- Rscript -e 'sessionInfo()'
-- Rscript -e "source('tests/testthat/test_JaBbA.R')"
+- Rscript -e "devtools::install(); source('tests/testthat/test_JaBbA.R'); sessionInfo()"
 - travis_wait 45 ./travis-tool.sh run_tests
 after_failure:
 - "./travis-tool.sh dump_logs"
