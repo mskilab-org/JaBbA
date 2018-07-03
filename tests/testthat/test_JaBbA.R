@@ -8,6 +8,7 @@ junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
+segs = system.file("extdata", "segs.rds", package = 'JaBbA')
 
 test_that("read.junctions", {
 	expect_equal(all(values(read.junctions(junctions))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
@@ -21,16 +22,16 @@ test_that("reciprocal.cycles", {
 })
 
 set.seed(42);
-TILIM = 10
-jab = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, hets = hets, tilim = TILIM, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=NA)
-jab.reiterate = JaBbA(junctions = junctions, coverage = coverage, slack = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+TILIM = 60
+jab = JaBbA(junctions = junctions, coverage = coverage, seg = segs, slack.penalty = 1e4, hets = hets, tilim = TILIM, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=NA)
+jab.reiterate = JaBbA(junctions = junctions, coverage = coverage, seg = segs, slack.penalty = 1e4, tilim = TILIM, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
 
 
 test_that("JaBbA", {   
   expect_equal(length(jab$segstats), 68)
   expect_equal(round(jab$ploidy, 1), 3.6)
   expect_equal(jab$purity, 0.99)
-  expect_equal(length(jab.reiterate$segstats), 72)
+  expect_equal(length(jab.reiterate$segstats), 68)
 })
 
 
