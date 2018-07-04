@@ -20,10 +20,10 @@
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#'
 #' @import igraph
 #' @import Matrix
 #' @importFrom gplots col2hex
+#' @importFrom graphics plot
 #' @import GenomicRanges
 #' @import parallel
 #' @import data.table
@@ -37,6 +37,10 @@
 #' @import gTrack
 #' @useDynLib JaBbA
 #'
+
+## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
+ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
+
 
 #' @name JaBbA
 #' @title JaBbA
@@ -551,7 +555,7 @@ jabba_stub = function(
         else
         {
             jmessage('Importing seg from UCSC format')
-            coverage = import.ucsc(coverage)
+            coverage = rtracklayer::import(coverage)
             field = 'score';
             coverage = gr.fix(coverage)
         }
@@ -592,7 +596,7 @@ jabba_stub = function(
             }
             set.seed(42)
             vals = values(coverage)[, field]
-            new.sl = seqlengths(coverage)
+            new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
             cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
             seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
@@ -602,7 +606,7 @@ jabba_stub = function(
                 jmessage('Segmentation finished')
             }
             seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
-            seg = gr.fix(seg, seqlengths(coverage), drop = T)
+            seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverage), drop = T)
 
             if (verbose)
             {
@@ -626,7 +630,7 @@ jabba_stub = function(
                 else
                 {
                     jmessage('Importing seg from UCSC format')
-                    seg = import.ucsc(seg)
+                    seg = rtracklayer::import(seg)
                     field = 'score';
                 }
             }
@@ -636,7 +640,7 @@ jabba_stub = function(
     saveRDS(seg, seg.fn)
 
     if (!inherits(seg, 'GRanges'))
-        seg = dt2gr(seg, seqlengths(coverage), drop = TRUE)
+        seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
 
     if (!is.null(hets))
         if (!file.exists(hets))
@@ -784,7 +788,7 @@ jabba_stub = function(
 
     ## some edges should be excluded:
     ## completely "dark" reference contigs
-    nothing.contig = gr2dt(kag$segstats)[, .(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
+    nothing.contig = gr2dt(kag$segstats)[, list(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
     ## both breakpoints in NA regions
     if (length(juncs)>0){
         junc.dt = data.table(data.frame(values(juncs)))
@@ -848,7 +852,7 @@ jabba_stub = function(
                    verbose = verbose,
                    purity.min = purity,
                    mipstart = mipstart,
-                   epgap = epgap, 
+                   epgap = epgap,
                    purity.max = purity,
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
@@ -1114,7 +1118,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             this.cov = readRDS(cov.file)
         else
         {
-            this.cov = import.ucsc(cov.file)
+            this.cov = rtracklayer::import(cov.file)
             field = 'score';
         }
     }
@@ -1122,10 +1126,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         this.cov = cov.file
 
     ## now make sure we have the "best" seqlengths
-    .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
+    .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(GenomeInfoDb::seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
 
     if (is.null(force.seqlengths))
-        sl = .fixsl(seqlengths(this.ra), this.cov)
+        sl = .fixsl(GenomeInfoDb::seqlengths(this.ra), this.cov)
     else
         sl = .fixsl(force.seqlengths, this.cov)
                                         #      sl = .fixsl(seqlengths(this.ra), this.cov)
@@ -1236,7 +1240,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (length(hets.gr)>0){
         ## pretend we don't have hets at all
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afield = c('ref', 'alt'), mc.cores = mc.cores, verbose = verbose)
+        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, asignal = hets.gr, afields = c('ref', 'alt'), mc.cores = mc.cores, verbose = verbose)
     }
     else
         this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores, verbose = verbose)
@@ -1293,14 +1297,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         max.chunk = 1e3
         numchunks = ceiling(length(ss.tmp)/max.chunk)
         if (numchunks>length(purity)*length(ploidy)){
-            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+            pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
                          purities = purity, ploidies = ploidy,
                          verbose = verbose,
                          mc.cores = mc.cores,
                          ## numchunks = numchunks,
                          ignore.sex = TRUE)
         } else {
-            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+            pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
                          purities = purity, ploidies = ploidy,
                          verbose = verbose,
                          mc.cores = mc.cores,
@@ -1386,9 +1390,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     abline(v = 1/kag$beta*(0:1000) + kag$gamma/kag$beta, col = alpha('red', 0.3), lty = c(4, rep(2, 1000)))
 }
 
-#' run ramip
-#' @name .ramip_stub
+#' @name ramip_stub
 #' @rdname internal
+#' @noRd
 ramip_stub = function(kag.file,
                       out.file,
                       mc.cores = 1,
@@ -1404,7 +1408,7 @@ ramip_stub = function(kag.file,
                       init = NULL,
                       mipstart = NULL,
                       use.gurobi = FALSE,
-                      epgap = 1e-4, 
+                      epgap = 1e-4,
                       verbose = FALSE,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
                       ab.force = NULL, ## indices of aberrant junctions to force include into the solution
@@ -1501,9 +1505,9 @@ ramip_stub = function(kag.file,
     ## here we create an mipstart "adj" matrix for the new graph
     ## by looking up the junctions in the current graph in the old object
     if (is.null(mipstart)){
-        if (file.exists("mipstart.gg.rds")){
+        if (file.exists(paste0(outdir, "/mipstart.gg.rds"))){
             jmessage("Using existing mipstart in the current directory")
-            mipstart = readRDS("mipstart.gg.rds")
+            mipstart = readRDS(paste0(outdir, "/mipstart.gg.rds"))
         } else {
             jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
             mipstart = gGnome::gread(kag.file)
@@ -1543,9 +1547,9 @@ ramip_stub = function(kag.file,
 
             es[type=="reference", cn := pmin(from.remain, to.remain)]
 
-            mipstart = gGraph$new(segs = segs, es = es)$make.balance()
-            mipstart = gGraph$new(segs = segs, es = es)$fillin()
-            saveRDS(mipstart, "mipstart.gg.rds")
+            mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()
+            mipstart = gGnome::gGraph$new(segs = segs, es = es)$fillin()
+            saveRDS(mipstart, paste0(outdir, "/mipstart.gg.rds"))
         }
     }
 
@@ -1576,7 +1580,7 @@ ramip_stub = function(kag.file,
 
         mcn = mipstart$segstats$cn[gr.match(this.kag$segstats, mipstart$segstats)]
         ## for all remaining ref edges just pick the cn as the cn of the segment that it matches in mipstart
-        ijs[gstr %in% mijs$mstr, mipstart := mijs[.(gstr), cn]]
+        ijs[gstr %in% mijs$mstr, mipstart := mijs[list(gstr), cn]]
         ijs[is.na(mipstart) & is.ref==TRUE, mipstart := pmin(mcn[i], mcn[j])]
         ijs[is.na(mipstart), mipstart := 0] ## all remaining are 0
 
@@ -1610,6 +1614,7 @@ ramip_stub = function(kag.file,
                     use.gurobi = use.gurobi,
                     mc.cores = mc.cores,
                     adj.nudge = adj.nudge,
+                    outdir = outdir,
                     cn.ub = rep(500, length(this.kag$segstats)),
                     ## cn.ub = ifelse(as.character(seqnames(this.kag$segstats)) %in% nothing.contig,
                     ##                0, 500),
@@ -1921,6 +1926,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   nsolutions = 1,
                   verbose = F,
                   debug = F,
+                  outdir = NULL,
                   mc.cores = 1, ## only matters if partition = T
                   ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE,
                   slack.prior = 1,
@@ -2126,9 +2132,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ', length(unique(seqnames((segstats[uix])))),
                          ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
                                                                                                                                   length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
-
             if (k==1){
-                saveRDS(args, "first.args.rds")
+                saveRDS(args, paste0(outdir, "/first.args.rds"))
             }
 
             out = do.call('jbaMIP', args)
@@ -2691,14 +2696,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.mipstart-ncn/2*gamma.mipstart, 0)
             ix = varmeta[type == 'interval', id]
             ## n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
-            cnr = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
-            cnc = mips.dt[, .(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
-            varmeta[type == 'interval', mipstart := cnc[.(subid), cn]]
-            varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[.(subid), cn], na.rm = TRUE)]
+            cnr = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
+            cnc = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
+            varmeta[type == 'interval', mipstart := cnc[list(subid), cn]]
+            varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(subid), cn], na.rm = TRUE)]
             varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
 
 
-            varmeta[type == 'edge', mipstart := mips.dt[.(as.data.table(edges[subid, ])), cn]]
+            varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[subid, ])), cn]]
             varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
             varmeta[, mipstart := pmax(pmin(mipstart, ub), lb)]
             ## ## mipstart each edge copy number by iterating through edges and peeling off the min copy number of source
@@ -3067,7 +3072,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     segstats$set.id = collapsed$map
     out$segstats = gr.fix(gr.simplify(segstats[unlist(lapply(collapsed$sets, sort))], val = rep(1:length(collapsed$sets), sapply(collapsed$sets, length))), segstats)
 
-    tmp.ss = gr.string(gr.stripstrand(out$segstats), other.col = 'loose')
+    tmp.ss = gr.string(gr.stripstrand(out$segstats), other.cols = 'loose')
     check1 = all(table(match(tmp.ss, tmp.ss)))
     check2 = identical(1:length(collapsed$sets), sort(out$segstats$set.id))
 
@@ -3500,7 +3505,7 @@ jabba.alleles = function(
     if (verbose)
         jmessage('Annotating allelic vertices')
 
-    tmp.string = gr.string(asegstats, mb = F, other.col = 'type'); tmp.string2 = gr.string(gr.flipstrand(asegstats), mb = F, other.col = 'type')
+    tmp.string = gr.string(asegstats, mb = F, other.cols = 'type'); tmp.string2 = gr.string(gr.flipstrand(asegstats), mb = F, other.cols = 'type')
     asegstats$flip.ix = match(tmp.string, tmp.string2)
     asegstats$phased = !unphased
 
@@ -3524,9 +3529,9 @@ jabba.alleles = function(
     hh$ywid = 0.5
     atd = c(
         gTrack(hh, angle = 0, y.field = 'count', y0 = 0,
-               colormap = list(type = c('high' = alpha('red', 0.3), 'low' = alpha('blue', 0.3))), name = 'hets', y.quantile = 0.001, lwd.border = 2),
+               colormaps = list(type = c('high' = alpha('red', 0.3), 'low' = alpha('blue', 0.3))), name = 'hets', y.quantile = 0.001, lwd.border = 2),
         gTrack(asegstats.final, angle = 0, y.field = 'cn', y0 = 0,
-               colormap = list(type = c('high' = alpha('red', 0.3), 'low' = alpha('blue', 0.3), 'total' = alpha('purple', 0.3))), name = 'alleles')
+               colormaps = list(type = c('high' = alpha('red', 0.3), 'low' = alpha('blue', 0.3), 'total' = alpha('purple', 0.3))), name = 'alleles')
     )
 
     out = list(
@@ -3681,6 +3686,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' @param subject Subject
 #' @param mc.cores number of cores
 #' @param verbose Default FALSE
+#' @noRd
 ############################################
 gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
 {
@@ -3755,6 +3761,7 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
 #' @param ... arguments to aggregate
 #' @return named vector indexed by levels of "by"
 #' @author Marcin Imielinski
+#' @noRd
 ##################################
 vaggregate = function(...)
 {
@@ -3764,6 +3771,7 @@ vaggregate = function(...)
 
 #' @name write.tab
 #' @rdname internal
+#' @noRd
 write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
 {
     if (!is.data.frame(x))
@@ -3772,6 +3780,10 @@ write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
 
+
+
+#' @name alpha
+#' @noRd
 alpha = function(col, alpha)
 {
     col.rgb = col2rgb(col)
@@ -3798,6 +3810,7 @@ alpha = function(col, alpha)
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
 #' @return
 #' numeric vector of integer copy numbers
+#' @noRd
 ############################################
 rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
 {
@@ -3845,6 +3858,7 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 #' @return list of integer vectors corresponding to indices in A (i.e. vertices)
 #' $paths = paths indices
 #' $cycles = cycle indices
+#' @noRd
 #####################################################
 all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.vertices = sources, sink.vertices = sinks,
                      exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and
@@ -3948,6 +3962,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 #' $adj = m x m matrix
 #' #map = length n with indices 1 .. m
 #'
+#' @noRd
 ###############################################
 collapse.paths = function(G, verbose = T)
 {
@@ -4101,6 +4116,7 @@ collapse.paths = function(G, verbose = T)
 #' returns k1 x k2 matrix C whose entries ij = 1 if the set of nonzero components of row i of A is
 #' a (+/- strict) subset of the nonzero components of row j of B
 #'
+#' @noRd
 ###############################################
 sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 {
@@ -4130,9 +4146,10 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     return(C)
 }
 
-##################################
+
 #' @name convex.basis
 #' @rdname internal
+#' @description
 #' convex.basis
 #'
 #' Outputs a matrix K of the convex basis of matrix A
@@ -4151,9 +4168,7 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #' any non-neg linear comb of any intermediate-basis vector that satisfies this property will satisfy it,
 #' as a result we can exclude these vectors when we see them.
 #'
-#'
-#'
-##################################
+#' @noRd
 convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL, exclude.range = NULL, maxchunks = Inf,
                         verbose = F)
 {
@@ -4392,7 +4407,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
-            vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
+            vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, GenomeInfoDb::Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
             if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
@@ -4421,7 +4436,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
 
             if (!is.character(vgr$mateid))
             {
-                vgr$mateid = unstrsplit(vgr$MATEID)
+                vgr$mateid = S4Vectors::unstrsplit(vgr$MATEID)
                 if (any(nix<-nchar(vgr$mateid)==0))
                     vgr$mateid[nix] = NA
             }
@@ -4672,8 +4687,8 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
     }
     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
     {
-        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges::IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges::IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
         out = grl.pivot(GRangesList(ra1, ra2))
     }
 
@@ -4769,7 +4784,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         sgn2 = c('-'=-1, '+'=1)[as.character(strand(bp2))]
 
 ### HACK HACK to force seqlengths to play with each other if malformedo
-        tmp.sl = seqlengths(grbind(bp1, bp2))
+        tmp.sl = GenomeInfoDb::seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
                                         #        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
         tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end+1, na.rm = TRUE), keyby = seqnames][names(tmp.sl.og), structure(pmax(V1, tmp.sl.og, na.rm = TRUE), names = names(tmp.sl.og))]
@@ -4852,7 +4867,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     tile = disjoin(gr.stripstrand(tile[order(gr.stripstrand(tile))]))
     strand(tile) = '+'
     tile = gr.fix(tile);
-    tile$is.tel = start(tile)==1 | end(tile) == seqlengths(tile)[as.character(seqnames(tile))]
+    tile$is.tel = start(tile)==1 | end(tile) == GenomeInfoDb::seqlengths(tile)[as.character(seqnames(tile))]
     values(tile)$tile.id = 1:length(tile);
 
                                         # find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
@@ -5064,6 +5079,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @param hg human genome as BSgenome or ffTrack
 #' @param cnv flag whether to dump in CNV format
 #' @return returns character string or writes to file if specified
+#' @noRd
 #########################################
 jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE)
 {
@@ -5191,20 +5207,20 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
             gr.loose = GRanges()
 
                                         # make header
-        sl = seqlengths(jab$segstats)
+        sl = GenomeInfoDb::seqlengths(jab$segstats)
         header = '##fileformat=VCFv4.2'
         header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
         header = c(header, '##source=JaBbAV0.1')
         if (inherits(hg, "BSgenome"))
         {
-            header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+            header = c(header, sprintf("##reference=%s", BSgenome::sourceUrl(hg)))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, BSgenome::providerVersion(hg), BSgenome::organism(hg)), names(sl), sl)))
         }
         else
       {
         if (!is.null(hg))
         {
-          header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+          header = c(header, sprintf("##reference=%s", BSgenome::filename(hg)['rds']))
         }
         header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
         }
@@ -5305,19 +5321,19 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
     }
     else ## CNV mode
     {
-        sl = seqlengths(jab$segstats)
+        sl = GenomeInfoDb::seqlengths(jab$segstats)
         header = '##fileformat=VCFv4.2'
         header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
         header = c(header, '##source=JaBbAV0.1 CNV')
 
         if (inherits(hg, "BSgenome"))
         {
-            header = c(header, sprintf("##reference=%s", sourceUrl(hg)))
-            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, providerVersion(hg), organism(hg)), names(sl), sl)))
+            header = c(header, sprintf("##reference=%s", BSgenome::sourceUrl(hg)))
+            header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s,assembly=%s,species="%s">', x, y, BSgenome::providerVersion(hg), BSgenome::organism(hg)), names(sl), sl)))
         }
         else if (inherits(hg, "ffTrack"))
         {
-            header = c(header, sprintf("##reference=%s", filename(hg)['rds']))
+            header = c(header, sprintf("##reference=%s", BSgenome::filename(hg)['rds']))
             header = c(header, unlist(mapply(function(x, y) sprintf('##contig=<ID=%s,length=%s>', x, y), names(sl), sl)))
         }
         else
@@ -5396,6 +5412,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #' wrapper around variantAnnotation reads VCF into granges or data.table format
 #'
 #' @author Marcin Imielinski
+#' @noRd
 read_vcf = function(fn, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
 {
     in.fn = fn
@@ -5478,6 +5495,7 @@ read_vcf = function(fn, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = 
 #' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
 #' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
 #' @author Marcin Imielinski
+#' @noRd
 levapply = function(x, by, FUN = 'order')
 {
     if (!is.list(by))
@@ -5492,6 +5510,13 @@ levapply = function(x, by, FUN = 'order')
     return(out)
 }
 
+#' @name chr2num
+#' @description
+#' Strips chromosome numbers
+#'
+#' @param x character vector to strip
+#' @param xy logical flag specifying whether to keep X and Y or convert to 23 and 24
+#' @noRd
 chr2num = function(x, xy = FALSE)
 {
     if (inherits(x, 'factor') | inherits(x, 'Rle'))
@@ -5549,6 +5574,7 @@ which.indel = function(juncs,
 #' @param mc.cores parallel
 #' @param ignore.strand usually TRUE
 #' @return numerical vector of the same length, Inf means they r not facing each other
+#' @noRd
 sv.size = function(juncs,
                    ...){
     bps = gUtils::grl.pivot(juncs)
@@ -5563,6 +5589,7 @@ sv.size = function(juncs,
 #' @param mc.cores parallel
 #' @param ignore.strand usually TRUE
 #' @return numerical vector of the same length, Inf means they r not facing each other
+#' @noRd
 reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
 {
     bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
@@ -5621,8 +5648,8 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
 
     ## choose only clusters with length > 1
-    cl = cl[elementNROWS(cl)>1]
-    cl = cl[order(elementNROWS(cl))]
+    cl = cl[S4Vectors::elementNROWS(cl)>1]
+    cl = cl[order(S4Vectors::elementNROWS(cl))]
 
 
     jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
@@ -5639,9 +5666,9 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
         sources = which(colSums(adj3)==0)
 
         cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
-        cl2 = cl2[elementNROWS(cl2)>1]
+        cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
 
-        if (any(ix <- elementNROWS(cl2)>2))
+        if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
         { ## only need to do this for connected components that have 3 or more junctions
             cl3 = do.call(c, mclapply(cl2[ix], function(x)
             {
@@ -5661,24 +5688,102 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     return(jcl)
 }
 
-## #' @name capply
-## #' @description
-## #' Wrapper around \{code}apply function
-## capply = function(X, MARGIN, FUN){
-##     if (prod(dim(X))<.Machine$integer.max){
-##         ## no need
-##         return(apply(X, margin, FUN))
-##     }
-##     ## if margin is 1, MARGIN.2 is 2, vise versa
-##     MARGIN.2 = ifelse(MARGIN==1, 2, 1)
+#' @name ra.merge
+#' Merges rearrangements represented by \code{GRangesList} objects
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @param ... GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @examples
+#'
+#' # generate some junctions
+#' gr1 <- GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' gr2 <- GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' ra1 = split(gr1, rep(1:5, each = 2))
+#' ra2 = split(gr2, rep(1:5, each = 2))
+#'
+#' ram = ra.merge(ra1, ra2)
+#' values(ram) # shows the metadata with TRUE / FALSE flags
+#'
+#' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
+#' values(ram2)
+#'
+#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' values(ram3)
+#' @noRd
+ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+    ra = list(...)
+    ra = ra[which(!sapply(ra, is.null))]
+    nm = names(ra)
+    if (is.null(nm)){
+        nm = paste('ra', 1:length(ra), sep = '')
+    }
+    nm = paste('seen.by', nm, sep = '.')
+    if (length(nm)==0){
+        return(NULL)
+    }
+    out = ra[[1]]
+    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
 
-##     chunk.num = ceiling(dim(tmp.Bt.interval)[margin] / floor(.Machine$integer.max/dim(tmp.Bt.interval)[]))
-##     chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
-##     tix = lapply(seq_len(chunk.num),
-##                  function(chunk){
-##                      jmessage("Processing chunk ", chunk)
-##                      apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
-##                            1, function(x) which(x!=0))
-##                  })
-##     tix = unlist(tix)
-## }
+    if (!ind){
+        values(out)[, nm[1]] = TRUE
+    } else{
+        values(out)[, nm[1]] = 1:length(out)
+    }
+
+    if (length(ra)>1){
+        for (i in 2:length(ra)){
+            this.ra = ra[[i]]
+            if (length(this.ra)>0){
+                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
+                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+
+                if (!ind){
+                    values(this.ra)[[nm[i]]] = TRUE
+                } else{
+                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
+                }
+
+                if (!ind){
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = TRUE
+                    }
+                } else{
+                    values(out)[, nm[i]] = NA
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
+                    }
+                }
+                ## which are new ranges not already present in out, we will add these
+                if (!all(is.na(ovix))){
+                    nix = setdiff(1:length(this.ra), ovix[,2])
+                } else{
+                    nix = 1:length(this.ra)
+                }
+
+                if (length(nix)>0){
+                    val1 = values(out)
+                    val2 = values(this.ra)
+                    if (ind){
+                        val2[, nm[1:(i-1)]] = NA
+                    }
+                    else{
+                        val2[, nm[1:(i-1)]] = FALSE
+                    }
+                    values(out) = NULL
+                    values(this.ra) = NULL
+                    out = grl.bind(out, this.ra[nix])
+                    values(out) = rrbind(val1, val2[nix, ])
+                }
+            }
+        }
+    }
+    return(out)
+}

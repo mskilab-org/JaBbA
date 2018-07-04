@@ -27,8 +27,8 @@ r_github_packages:
 - mskilab/bamUtils
 - mskilab/Ppurple
 script:
-- ls -alh JaBbA
-- Rscript -e "devtools::install(); source('tests/testthat/test_JaBbA.R'); print(sessionInfo())"
+#- ls -alh JaBbA
+#- Rscript -e "devtools::install(); source('tests/testthat/test_JaBbA.R'); print(sessionInfo())"
 - travis_wait 45 ./travis-tool.sh run_tests
 after_failure:
 - "./travis-tool.sh dump_logs"
