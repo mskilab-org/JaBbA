@@ -125,6 +125,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
+                 epgap = 1e-4,
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
                  verbose = TRUE ## whether to provide verbose output
@@ -282,7 +283,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 strict = strict,
                 name = name,
                 use.gurobi = as.logical(use.gurobi),
-                field = field,
+              field = field,
+              epgap = epgap,
                 subsample = subsample,
                 slack.penalty = as.numeric(slack.penalty),
                 mipstart = init,
@@ -406,7 +408,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             max.mem = as.numeric(max.mem),
             edgenudge = as.numeric(edgenudge),
             tilim = as.numeric(tilim),
-            strict = strict,
+          strict = strict,
+          epgap = epgap,
             name = name,
             use.gurobi = as.logical(use.gurobi),
             field = field,
@@ -491,6 +494,7 @@ jabba_stub = function(
                       max.threads = Inf,
                       max.mem = 16,
                       purity = NA,
+                      epgap = 1e-4,
                       ploidy = NA,
                       strict = FALSE,
                       mipstart = NULL,
@@ -844,6 +848,7 @@ jabba_stub = function(
                    verbose = verbose,
                    purity.min = purity,
                    mipstart = mipstart,
+                   epgap = epgap, 
                    purity.max = purity,
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
@@ -1399,6 +1404,7 @@ ramip_stub = function(kag.file,
                       init = NULL,
                       mipstart = NULL,
                       use.gurobi = FALSE,
+                      epgap = 1e-4, 
                       verbose = FALSE,
                       edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
                       ab.force = NULL, ## indices of aberrant junctions to force include into the solution
@@ -1599,6 +1605,7 @@ ramip_stub = function(kag.file,
                     ignore.cons = T,
                     mipstart = mipstart, ## make mipstart if not provided
                     adj.lb = adj.lb,
+                    epgap = epgap,
                     adj.ub = adj.ub,
                     use.gurobi = use.gurobi,
                     mc.cores = mc.cores,
@@ -2861,7 +2868,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     }
     else
     {
-        control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap ,mipemphasis = mipemphasis))
+        control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, mipemphasis = mipemphasis))
         if (!is.null(mipstart)) ## apply mipstart if provided
             control$mipstart = varmeta$mipstart
 
