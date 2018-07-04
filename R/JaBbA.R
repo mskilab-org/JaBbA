@@ -4357,7 +4357,7 @@ read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(
                           get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
                           )
 {
-    if (is.character(rafile))
+    if (is.character(rafile) & length(rafile)==1)
     {
         if (grepl('(.bedpe$)', rafile))
         {
@@ -5413,7 +5413,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #'
 #' @author Marcin Imielinski
 #' @noRd
-read_vcf = function(fn, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
+read_vcf = function(fn, hg = 'hg19', swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
 {
     in.fn = fn
 
@@ -5445,36 +5445,6 @@ read_vcf = function(fn, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = 
     values(out) = cbind(values(out), VariantAnnotation::info(vcf))
   else
     values(out) = VariantAnnotation::info(vcf)
-
-    if (!is.null(geno))
-    {
-
-        if (!is.logical(geno))
-            geno = TRUE
-
-
-        if (geno)
-            for (g in  names(geno(vcf)))
-            {
-                geno = names(geno(vcf))
-                warning(sprintf('Loading all geno fields:\n\t%s', paste(geno, collapse = ',')))
-            }
-
-        gt = NULL
-        if (length(g)>0)
-        {
-            for (g in geno)
-            {
-                m = as.data.frame(geno(vcf)[[g]])
-                names(m) = paste(g, names(m), sep = '_')
-                if (is.null(gt))
-                    gt = m
-                else
-                    gt = cbind(gt, m)
-            }
-            values(out) = cbind(values(out), as(gt, 'DataFrame'))
-        }
-    }
 
     if (add.path)
         values(out)$path = in.fn
