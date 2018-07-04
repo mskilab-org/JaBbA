@@ -35,6 +35,7 @@ print(jab$ploidy)
 print(jab$purity)
 print(length(jab.reiterate$segstats))
 
+
 test_that("JaBbA", {
   expect_equal(length(jab$segstats), 68)
   expect_equal(round(jab$ploidy, 1), 3.6)
