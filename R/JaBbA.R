@@ -174,6 +174,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ## xtYao Tuesday, Jun 19, 2018 04:52:17 PM
     ## Only when tier exists or unfiltered junctions provided, do we do the iterations
     ## if unfiltered set is given first parse it
+    ra.uf = NULL
     if (!is.null(junctions.unfiltered)){
         if (inherits(junctions.unfiltered, "character") & file.exists(junctions.unfiltered)){
             if (grepl(".rds$", junctions.unfiltered)){
@@ -193,19 +194,19 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ## if no tier field in junctions, set all of them to 2
     if (!(tfield %in% names(values(ra.all))) & length(ra.all)>0)
     {
-        warning("Tier field", tfield, "missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
-        values(ra.all)$tier = 2
+      warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
+      values(ra.all)[, tfield] = 2
     }
 
-    if (exists("ra.uf")){
+    if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
         ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
         ## those match a record in junction, will be assigned to the tier in junction
-        values(ra.all.uf)$tier[which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
+        values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
                             values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
         ## the rest will be tier 3
-        values(ra.all.uf)$tier[which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
+        values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
         ra.all = ra.all.uf
     }
 
@@ -643,11 +644,17 @@ jabba_stub = function(
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
 
     if (!is.null(hets))
-        if (!file.exists(hets))
+    {
+      if (is.character(hets))
         {
+          if (!file.exists(hets))
+          {
             warning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
             hets = NULL
+          }
         }
+    }
+
 
     if (strict)
     {
@@ -1184,11 +1191,19 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (!is.null(het.file))
     {
-        if (grepl(".rds$", het.file)){
+      if (is.character(het.file))
+        {
+          if (grepl(".rds$", het.file)){
             hets = readRDS(het.file)
-        } else {
+          } else {
             hets = fread(het.file)
+          }
         }
+      else
+        hets = het.file
+
+      if (!is.data.table(hets))
+        hets = as.data.table(hets)
 
         if (verbose)
         {
@@ -1200,7 +1215,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 ## old format, apply het filter ourselves
             {
                 hets$ref.frac.n = hets$alt.count.n / (hets$alt.count.n + hets$ref.count.n)
-                ##      hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>20, ])
                 hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
                 hets.gr$alt = hets.gr$alt.count.t
                 hets.gr$ref = hets.gr$ref.count.t
@@ -1604,7 +1618,6 @@ ramip_stub = function(kag.file,
                     gamma.guess = this.kag$gamma,
                     tilim = tilim,
                     slack.prior = slack.prior,
-                    cn.prior = NA,## why not used?
                     mipemphasis = 0,
                     ignore.cons = T,
                     mipstart = mipstart, ## make mipstart if not provided
@@ -1885,7 +1898,6 @@ jmessage = function(..., pre = 'JaBbA')
 #' $gap.cn total gap between MLE fit without junction constraints and JaBbA fit
 #' $ploidy.constraints input ploidy constraints
 #' $beta.constraints input beta constrinats
-#' $cn.prior input cn.prior
 #' $slack.prior input slack.prior
 ############################################
 jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograph)
@@ -1907,13 +1919,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   gamma.guess = NA,
                   gamma.min = gamma.guess,
                   gamma.max = gamma.guess,
-                  cn.sd = 1, # sd of cn prior (mean is ploidy) - i.e. sd of local copy number from ploidy
-                  cn.prior = cn.sd,
                   partition = T, ## whether to partition the problem into MIP subproblems depending on the relationships of the segment standard deviation and the value of the slack.prior (only works if gamma.guess, beta.guess are specified)
-                  purity.prior.mean = NA,
-                  purity.prior.sd = 0.3,
-                  purity.prior.strength = 1,
-                  purity.prior = c(purity.prior.mean, purity.prior.sd),
                   cn.fix = rep(NA, length(segstats)), ## vector of NA's and (integer) values to which to "fix" copy states, only non NA's are incorporated
                   cn.lb = cn.fix,
                   cn.ub = cn.fix,
@@ -2149,7 +2155,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         }, args, mc.cores = mc.cores)
 
         out = list()
-        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'cn.prior', 'slack.prior')) ## scalar fields --> length(cluster) vector
+        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')) ## scalar fields --> length(cluster) vector
             out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
 
         for (f in c('ploidy.constraints', 'beta.constraints')) ## length 2 fields --> length(cluster) x 2 matrix
@@ -2261,23 +2267,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     beta.ix = max(c(s.ix, e.ix))+2;
     varmeta = rbind(varmeta, data.frame(id = c(gamma.ix, beta.ix), subid = rep(1, 2), label = c('gamma', 'beta'), type = 'global', stringsAsFactors = F))
 
-    ## add cn prior variables
-    if (!is.na(cn.prior))
-    {
-        d.ix = v.ix + n;
-        varmeta = rbind(varmeta, data.frame(id = d.ix, subid = 1:length(d.ix), label = paste('cn.prior', 1:length(d.ix), sep = ''), type = 'cn.prior', stringsAsFactors = F))
-        ploidy.ix = max(d.ix)+1;
-        n = length(v.ix)+n+1;
-        varmeta = rbind(varmeta, data.frame(id = ploidy.ix, subid = 1, label = c('ploidy.prior'), type = 'global', stringsAsFactors = F))
-    }
-
-    if (!any(is.na(purity.prior)))
-    {
-        pd.ix = n + 1; ## measure our deviation from the purity prior target
-        n = n + 1
-        varmeta = rbind(varmeta, data.frame(id = pd.ix, subid = 1, label = c('purity.prior'), type = 'global', stringsAsFactors = F))
-    }
-
     if (edge.slack) # slack on edge consistency constraints
     {
         es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
@@ -2352,9 +2341,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     ## #      print(ignore.cons)
     ##     }
 
-    if (!is.na(gamma.guess) & !is.na(beta.guess))
-        cn.prior = cn.sd = NA
-
     if (edge.slack)
         vtype[c(es.s.ix, es.t.ix)] = 'I'
 
@@ -2418,32 +2404,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     }
     else
     { ## abort abort!
-        sol = list()
-        sol$residual = NA
-        sol$beta = beta.guess
-        sol$gamma = gamma.guess
-        sol$purity = NA
-        sol$ploidy = NA
-        sol$adj = adj*NA
-        sol$nll.cn = NA
-        sol$nll.opt = NA
-        sol$gap.cn = NA
-        sol$segstats = segstats[, c('mean', 'sd')]
-        sol$segstats$cn = NA
-        sol$segstats$ecn.in = NA
-        sol$segstats$ecn.out = NA
-        segstats$ncn = NA
-        sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats))
-        if (edge.slack)
-        {
-            sol$segstats$eslack.in = NA
-            sol$segstats$eslack.out = NA
-        }
-        sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-        sol$beta.constraints = c(beta.min, beta.max)
-        sol$cn.prior = cn.prior
-        sol$slack.prior = slack.prior
-        return(sol)
+        sol = list(); sol$residual = NA; sol$beta = beta.guess; sol$gamma = gamma.guess; sol$purity = NA; sol$ploidy = NA; sol$adj = adj*NA; sol$nll.cn = NA; sol$nll.opt = NA; sol$gap.cn = NA; sol$segstats = segstats[, c('mean', 'sd')]; sol$segstats$cn = NA; sol$segstats$ecn.in = NA; sol$segstats$ecn.out = NA; segstats$ncn = NA;  sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats)); sol$segstats$eslack.in = NA; sol$segstats$eslack.out = NA; sol$ploidy.constraints = c(ploidy.min, ploidy.max); sol$beta.constraints = c(beta.min, beta.max); sol$slack.prior = slack.prior; return(sol)
     }
 
     ## dup constraints on vertices
@@ -2475,43 +2436,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     Acn = rbind(Acn, Dcn)
     bcn = c(bcn, dcn)
     sensecn = c(sensecn, sensedcn)
-
-    ## if (!is.na(cn.prior))
-    ## {
-    ##     if (verbose)
-    ##         cat('cn prior .. \n')
-    ##     Pcn = Zero[rep(1, length(v.ix)+1), ]
-    ##     Pcn[cbind(v.ix, v.ix)] = 1
-    ##     Pcn[v.ix, ploidy.ix] = -1
-    ##     Pcn[cbind(v.ix, d.ix)] = -1
-    ##     Pcn[length(v.ix)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)))
-    ##     Pcn[length(v.ix)+1, ploidy.ix] = -1;
-    ##     bpcn = rep(0, nrow(Pcn))
-    ##     Acn = rbind(Acn, Pcn)
-    ##     bcn = c(bcn, bpcn)
-    ##     sensecn = c(sensecn, rep("E", length(bpcn)))
-    ##     lb[d.ix] = -Inf;
-
-    ##     consmeta = rbind(consmeta, data.frame(type = 'CNPrior', label = paste('CNPrior', 1:nrow(Pcn)), sense = 'E', b = bpcn, stringsAsFactors = F))
-    ## }
-
-    if (!any(is.na(purity.prior)))
-    {
-        if (verbose)
-            cat('purity prior .. \n')
-
-        Ppd = Zero[1, , drop = FALSE]
-        Ppd[1, gamma.ix] = 1
-        Ppd[1, pd.ix] = -1
-        bpd = 2/purity.prior[1] - 2
-        Acn = rbind(Acn, Ppd)
-        bcn = c(bcn, bpd)
-        sensecn = c(sensecn, 'E')
-        lb[pd.ix] = -Inf;
-        ub[pd.ix] = -Inf;
-
-        consmeta = rbind(consmeta, data.frame(type = 'PurityPrior', label = paste('PurityPrior', 1:nrow(Ppd)), sense = 'E', b = bpd, stringsAsFactors = F))
-    }
 
     if (is.na(beta.guess) | is.na(gamma.guess))
     {
@@ -2658,19 +2582,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         cvec[e.ix] = e.penalty-adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
     }
-
-
-    ## if (!is.na(cn.prior))
-    ##     Qobj[cbind(d.ix, d.ix)] = 1/cn.prior^2
-
-    ## the slack prior will determine the degree of "coupling" enforced between neighboring copy states
-    ## this should be high if we think that our rearrangement annotation is quite complete
-    ## in the end, there will be tension between enforcing edge consistency and consistency with means / sd
-    ## abundances at intervals
-
-
-    if (!any(is.na(purity.prior)))
-        Qobj[cbind(pd.ix, pd.ix)] = 1/purity.prior[2]^2
 
     if (!is.null(mipstart))
     {
@@ -2937,7 +2848,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         sol$ploidy.constraints = c(ploidy.min, ploidy.max)
         sol$beta.constraints = c(beta.min, beta.max)
-        sol$cn.prior = cn.prior
         sol$slack.prior = slack.prior
 
         return(sol)
@@ -3860,10 +3770,7 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 #' $cycles = cycle indices
 #' @noRd
 #####################################################
-all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.vertices = sources, sink.vertices = sinks,
-                     exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and
-                     ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
-                     verbose = FALSE,...)
+all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.vertices = sources, sink.vertices = sinks, verbose = FALSE,...)
 {
     blank.vertices = which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
 
@@ -3884,9 +3791,6 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 
     A = A[node.ix, node.ix]
 
-    if (!is.null(exclude))
-        exclude = sign(abs(exclude[, node.ix]))
-
     ij = which(A!=0, arr.ind = T)
     B = sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
     I = diag(rep(1, nrow(A)))
@@ -3899,7 +3803,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
 
-    K = convex.basis(B2, verbose = verbose, exclude.range = exclude, ...)
+    K = convex.basis(B2, verbose = verbose, ...)
 
     if (all(is.na(K)))
         return(out)
@@ -4157,19 +4061,8 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #' i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to
 #' Ax = 0, x>=0
 #'
-#' exclude.basis =  0, 1 matrix of dimension k x ncol(A) specifying k sparsity patterns that we would
-#' like to exclude from the convex.basis.  This can speed up computation since any non-negative
-#' combinations of vectors that satisfy an exclusion property will also be excludable, and thus
-#' we can remove such vectors as soon as we detect them..
-#'
-#' exclude.range = 9, 1 matrix of dimension k x nrow(A) specifying k sparsity patterns that we would like
-#' exclude, but these are specified in terms of the range of abs(A) .. i.e. we want to exclude all
-#' basis vectors v such that nz(exclude.ranges[i, ]) C  nz(abs(A)*v)) for some pattern i.  Again
-#' any non-neg linear comb of any intermediate-basis vector that satisfies this property will satisfy it,
-#' as a result we can exclude these vectors when we see them.
-#'
 #' @noRd
-convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL, exclude.range = NULL, maxchunks = Inf,
+convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
                         verbose = F)
 {
     ZERO = 1e-8;
@@ -4182,22 +4075,6 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
                                         #    A_i = as(A %*% K_i, 'sparseMatrix');
     K_i = I = diag(rep(1, ncol(A)))
     A_i = A %*% K_i
-
-    if (!is.null(exclude.basis))
-    {
-        exclude.basis = sign(exclude.basis)
-        exclude.basis = exclude.basis[rowSums(exclude.basis)>0, ]
-        if (nrow(exclude.basis) == 0)
-            exclude.basis = NULL
-    }
-
-    if (!is.null(exclude.range))
-    {
-        exclude.range = sign(exclude.range)
-        exclude.range = exclude.range[rowSums(exclude.range)>0, ]
-        if (nrow(exclude.range) == 0)
-            exclude.range = NULL
-    }
 
                                         # vector to help rescale matrix (avoid numerical issues)
     mp  = apply(abs(A), 1, min); # minimum value of each column
@@ -4303,33 +4180,6 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 
         if (nrow(K_i)==0)
             return(matrix())
-
-        if (!is.null(exclude.basis)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-        {
-            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks)
-            {
-                print('Exceeding maximum number of chunks in convex.basis computation')
-                stop('Exceeding maximum number of chunks in convex.basis computation')
-            }
-            keep = Matrix::colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
-            if (verbose)
-                cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
-            K_i = K_i[keep, , drop = F]
-        }
-
-        if (!is.null(exclude.range)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-        {
-            A_i_abs = abs(A) %*% t(K_i)
-            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks)
-            {
-                print('Exceeding maximum number of chunks in convex.basis computation')
-                stop('Exceeding maximum number of chunks in convex.basis computation')
-            }
-            keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
-            if (verbose)
-                cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
-            K_i = K_i[keep, , drop = F]
-        }
 
         A_i = A %*% t(K_i)
     }
@@ -5286,7 +5136,6 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                 if (any(gtix))
                     out[gtix] = paste(genos[[1]][gtix][1], '/', paste(2:length(genos), collapse = '/'), sep = '') ## add "fake allele names"
 
-
                 if (any(mergeix))
                     out[mergeix] = sapply(which(mergeix), function(x)
                         paste(sapply(genos, function(y) y[[x]]), collapse = ','))
@@ -5420,23 +5269,23 @@ read_vcf = function(fn, hg = 'hg19', swap.header = NULL, verbose = FALSE, add.pa
     if (verbose)
         cat('Loading', fn, '\n')
 
-    if (!is.null(swap.header))
-    {
-        if (!file.exists(swap.header))
-            stop(sprintf('Swap header file %s does not exist\n', swap.header))
-
-        system(paste('mkdir -p', tmp.dir))
-        tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
-        if (grepl('gz$', fn))
-          system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
-        else
-            system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
-
-    system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
-    vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
-    system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
-  }
-  else
+  ##   if (!is.null(swap.header))
+  ##   {
+  ##     if (!file.exists(swap.header))
+  ##       stop(sprintf('Swap header file %s does not exist\n', swap.header))
+      
+  ##     system(paste('mkdir -p', tmp.dir))
+  ##     tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+  ##     if (grepl('gz$', fn))
+  ##       system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
+  ##     else
+  ##       system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
+      
+  ##     system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
+  ##     vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
+  ##     system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
+  ##   }
+  ## else
     vcf = VariantAnnotation::readVcf(fn, hg, ...)
 
     out = granges(vcf)
@@ -5750,7 +5599,7 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
                     values(out) = NULL
                     values(this.ra) = NULL
                     out = grl.bind(out, this.ra[nix])
-                    values(out) = rrbind(val1, val2[nix, ])
+                    values(out) = rbind(as.data.table(val1), as.data.table(val2[nix, ]), fill = TRUE)
                 }
             }
         }
