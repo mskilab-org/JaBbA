@@ -16,7 +16,7 @@ Depends:
   Ppurple(>= 0.2.0)
 Imports:
   VariantAnnotation (>= 1.24),
-  DNAcopy (>= 1.52),
+  DNAcopy (>= 1.48),
   data.table (>= 1.9),
   igraph (>= 1.1),  
   methods,

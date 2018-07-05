@@ -1,153 +1,68 @@
-library(JaBbA)   
+library(JaBbA)
 library(gUtils)
 library(testthat)
-## library(Rcplex)
-context("test JaBbA functionality\n")
+
+context('JaBbA')
 
 junctions = system.file("extdata", "junctions.vcf", package = 'JaBbA')
+bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
 coverage = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
-
-## cvec <- c(1,2,3)
-## Amat <- matrix(c(-1,1,1,-1,3,-1),byrow=TRUE,nc=3)
-## bvec <- c(20,-30)
-## ub <- c(40,Inf,Inf)
-## res <- Rcplex2(cvec, Amat, bvec, ub=ub, objsense="max", sense=c('L','G'))
-
-## test_that('testing Rcplex works', {
-
-##     expect_equal(res$xopt[1], 40)
-##     expect_equal(res$xopt[3], 42.5)
-##     expect_equal(res$obj, 202.5)
-##     expect_equal(res$extra$slack[1], 0)
-
-## })
+segs = system.file("extdata", "segs.rds", package = 'JaBbA')
 
 
 test_that("read.junctions", {
 	expect_equal(all(values(read.junctions(junctions))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
+  expect_equal(as.data.table(unlist(read.junctions(junctions))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
+  junc.tab = fread(bedpe)[, .(chr1 = V1, pos1 = V2, chr2 = V4, pos2 = V5, str1 = V9, str2 = V10)];
+  expect_equal(as.data.table(unlist(read.junctions(junc.tab))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
+})
+
+test_that("reciprocal.cycles", {
+  pc = JaBbA:::reciprocal.cycles(read.junctions(junctions), paths = TRUE)
+  expect_equal(unlist(pc$paths),
+               structure(c(32, 33, 69, 72, 37, 38, 41, 42), names = c('631', '632', '1251', '1252', '711', '712', '751', '752')))
+})
+
+junc = read.junctions(junctions)
+values(junc)$nudge = 0
+junc = rep(junc, 2)  
+
+test_that("ra.merge", {
+  ram = JaBbA:::ra.merge(read.junctions(junctions), read.junctions(bedpe), read.junctions(junctions))
+  expect_equal(ncol(values(ram)), 29)
+  expect_equal(length(ram), 83)
+  junc2 = GenomicRanges::split(GenomicRanges::shift(unlist(junc),400), rep(c(1,2), each = length(junc)))
+  ram = JaBbA:::ra.merge(junc, junc2)
+  expect_equal(length(ram), 168)
 })
 
 
-jab = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
-jab_chromoplexy = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, nudge.balanced=TRUE, ploidy=3.72, purity=0.99)
-jab2 = JaBbA(junctions = junctions, coverage = coverage, hets = hets, tilim = 10, verbose = 1, overwrite = TRUE, ploidy=3.72, purity=0.99)
-jab.retiterate = JaBbA(junctions = junctions, coverage = coverage, tilim = 10, verbose = 1, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99)  ## reiterate > 1
+set.seed(42);
+TILIM = 3600
+nsegs = readRDS(segs)
+nsegs$cn = 2
+jab = JaBbA(junctions = junc, coverage = coverage, seg = segs, nseg = nsegs, strict = TRUE, slack.penalty = 1e4, hets = hets, tilim = TILIM, cfield = 'nudge', verbose = 2, overwrite = TRUE, ploidy=3.72, purity=NA, epgap = 0.8, all.in = TRUE, junctions.unfiltered = junctions, tfield = 'nothing', nudge.balanced = TRUE)
+hets.gr = dt2gr(fread(hets))
+jab.reiterate = JaBbA(junctions = junctions, coverage = coverage, hets = hets.gr, slack.penalty = 1e4, tilim = TILIM, verbose = 2, overwrite = TRUE, reiterate=3, ploidy=3.72, purity=0.99, epgap = 0.8)  ## reiterate > 1
+
+test_that("karyograph", {
+  kag = JaBbA:::karyograph(junctions = junc)
+  expect_equal(length(kag$tile), 336)
+  seqlevels(nsegs) = as.character(1:22)
+  kag = JaBbA:::karyograph(junctions = junc, tile = nsegs, label.edges = TRUE)
+  expect_equal(length(kag$tile), 1144)
+  kag = JaBbA:::karyograph(junctions = NULL, tile = nsegs)
+  expect_equal(length(kag$tile), 812)
+})
+
+
 
 test_that("JaBbA", {
-    
-    set.seed(42);
-
-    expect_equal(length(jab$segstats), 98)
-    expect_equal(round(jab$ploidy, 1), 3.7)
-    expect_equal(jab$purity, 0.99)
-
-    expect_equal(length(jab_chromoplexy$segstats), 94)
-    expect_equal(round(jab_chromoplexy$ploidy, 1), 3.7)
-    expect_equal(jab_chromoplexy$purity, 0.99)
-
-    expect_equal(length(jab2$segstats), 98)
-    expect_equal(round(jab2$ploidy, 1), 3.7)
-
-    expect_equal(length(jab.retiterate$segstats), 108)
-
+  expect_equal(length(jab$segstats), 88)
+  expect_equal(round(jab$ploidy, 1), 3.6)
+  expect_equal(jab$purity, 0.99)
+  expect_equal(length(jab.reiterate$segstats), 86)
 })
 
 
-
-
-
-## alpha()
-test_that('testing alpha() works', {
-
-    expect_match(alpha('blue', 1), '#0000FFFF')
-
-})
-
-
-
-
-## rel2abs()
-
-
-## abs2rel()
-
-## adj2inc()
-
-
-
-## mmatch()
-
-
-## all.paths()
-
-
-
-## collapse.paths()
-
-
-## sparse_subset()
-test_that('testing sparse_subset() works', {
-
-    ## function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
-    Amat = matrix(c(20, 40, 30, 10), nrow=2, ncol=2, byrow = TRUE) 
-    Bmat = matrix(c(250, 450, 350, 150), nrow=2, ncol=2, byrow = TRUE)
-    expect_equal(dim(sparse_subset(Amat, Bmat, quiet=TRUE))[1], 2)
-    expect_equal(dim(sparse_subset(Amat, Bmat, quiet=TRUE))[2], 2)
-    expect_equal(dim(sparse_subset(Amat, Bmat, chunksize=5, strict=TRUE, quiet=TRUE))[1], 2)
-    expect_equal(dim(sparse_subset(Amat, Bmat, chunksize=5, strict=TRUE, quiet=TRUE))[2], 2)
-
-
-})
-
-
-
-
-## convex.basis()
-test_that('testing convex.basis() works', {
-
-    example_matrix = matrix(c(2, 4, 3, 1, 5, 7), nrow=2, ncol=3, byrow = TRUE)  
-    expect_equal(as.logical(convex.basis(example_matrix)), NA)
-
-})
-
-
-
-## read.junctions()
-
-## karyograph()
-
-
-
-## jabba2vcf()
-
-## chromoplexy()
-
-## read_vcf()
-
-## levapply()
-
-## test_that('testing levapply() works', {
-
-##     gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
-##     foo = levapply(width(gr), as.character(seqnames(gr)), function(x) if (length(x)>1) cumsum(c(0, x[1:(length(x)-1)])) else return(0))
-##     expect_equal(foo, c(0, 3, 6))
-
-## })
-
-
-## ## chr2num
-
-## test_that('testing chr2num() works', {
-
-##     expect_equal(chr2num('chr1'), 1)
-##     expect_equal(chr2num('chrX'), 23)
-##     expect_equal(chr2num('chrY'), 24)
-##     expect_match(chr2num('chr1', xy=TRUE), '1')
-##     expect_match(chr2num('chrX', xy=TRUE), 'X')
-##     expect_match(chr2num('chrY', xy=TRUE), 'Y')
-##     expect_equal(as.logical(chr2num('chrZ')), NA)
-##     ### hmmmmm
-##     expect_match(chr2num('chrZ', xy=TRUE), 'Z')
-
-## })

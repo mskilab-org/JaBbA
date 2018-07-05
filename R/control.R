@@ -203,7 +203,7 @@ check.Rcplex.control <- function(control, isQP)
             con$maxcalls <- 500L
         }
     }
-    
+
     if (!is.null(con$round)) {
         if (!con$round %in% c(0,1)) {
             warning("Improper value for round option: Using default")
@@ -218,7 +218,6 @@ check.Rcplex.control <- function(control, isQP)
 split.control.list <- function(control){
     R.names <- c("round", "maxcalls")
     C.names <- setdiff(names(control), R.names)
-    
     R.control <- control[R.names]
     C.control <- control[C.names]
 
