@@ -34,6 +34,7 @@
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table
 #' @importFrom methods as is
+#' @importFrom sequenza segment.breaks baf.model.fit get.ci
 #' @import gTrack
 #' @useDynLib JaBbA
 #' 
@@ -1055,7 +1056,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            ra = NULL,
                            junction.file = NULL,
                            out.file,
-                           use.ppurple = TRUE,
+                           use.ppurple = FALSE,
+                           use.sequenza = !use.ppurple,
                            ra.file = NULL,
                            verbose = FALSE,
                            force.seqlengths = NULL,
@@ -1264,44 +1266,120 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     if (!is.na(purity) & !is.na(ploidy)) ## purity and ploidy are completely set
     {
         pp = data.table(purity = purity, ploidy = ploidy)
-    }
-    else if (use.ppurple)
-    {
-
-        if (is.na(purity))
-        {
-            purity = seq(0, 1, 0.1)
+    } else {
+        ## temporary! TODO
+        ## only allow ppurple when hets.gr is absent
+        if (!exists("hets.gr")){
+            hets.gr = NULL
         }
 
-        if (is.na(ploidy))
-        {
-            ploidy = seq(1, 6, 0.2)
+        if (is.null(hets.gr)){
+            use.ppurple=TRUE
+        } else if (length(hets.gr)==0){
+            use.ppurple = TRUE
         }
 
-        this.cov$y = values(this.cov)[, field]
-
-        if (verbose)
+        browser()
+        if (use.ppurple)
         {
-            jmessage('Computing purity and ploidy with Ppurple')
-        }
+            if (is.na(purity))
+            {
+                purity = seq(0, 1, 0.1)
+            }
 
-        max.chunk = 1e3
-        numchunks = ceiling(length(ss.tmp)/max.chunk)
-        if (numchunks>length(purity)*length(ploidy)){
-            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
-                         purities = purity, ploidies = ploidy,
-                         verbose = verbose,
-                         mc.cores = mc.cores,
-                         ## numchunks = numchunks,
-                         ignore.sex = TRUE)
+            if (is.na(ploidy))
+            {
+                ploidy = seq(1, 6, 0.2)
+            }
+            this.cov$y = values(this.cov)[, field]
+
+            if (verbose)
+            {
+                jmessage('Computing purity and ploidy with Ppurple')
+            }
+
+            max.chunk = 1e3
+            numchunks = ceiling(length(ss.tmp)/max.chunk)
+            if (numchunks>length(purity)*length(ploidy)){
+                pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                             purities = purity, ploidies = ploidy,
+                             verbose = verbose,
+                             mc.cores = mc.cores,
+                             ## numchunks = numchunks,
+                             ignore.sex = TRUE)
+            } else {
+                pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                             purities = purity, ploidies = ploidy,
+                             verbose = verbose,
+                             mc.cores = mc.cores,
+                             numchunks = numchunks,
+                             ignore.sex = TRUE)
+            }
+        } else if (use.sequenza){
+            if (is.na(purity))
+            {
+                purity = seq(0, 1, 0.01)
+            }
+
+            if (is.na(ploidy))
+            {
+                ploidy = seq(1, 6, 0.1)
+            }
+            ## read in the segmentation and heterozygosity site read counts
+            sqz.seg = gr2dt(ss.tmp)[strand=="+"]
+            setnames(sqz.seg,
+                     old = c("seqnames", "start", "end"),
+                     new = c("chrom", "start.pos", "end.pos"))
+
+            sites = gr2dt(hets.gr)
+            ## prepare input file to run w/ segment.breaks
+            sites[, adjusted.ratio := ((ref.count.t + alt.count.t) / (ref.count.n + alt.count.n))]
+            sites[, depth.normal := (ref.count.n + alt.count.n)]
+            sites[, depth.tumor := (ref.count.t + alt.count.t)]
+            sites[, good.reads := 2]
+            sites[, zygosity.normal := "het"]
+            setnames(sites,
+                     old = c("seqnames", "start", "alt.frac.t"),
+                     new = c("chromosome", "position", "Bf"))
+            sites = sites[which(Bf <= 0.5)] # They only include BAF w/ values 0-0.5
+            if (exists("nseg")){
+                ## only running w/ diploid autosomes
+                ## to avoid situations like HCC1143BL
+                good.chr = union(seqnames(nseg %Q% (cn==2)), "X")
+                sites = sites[which(chromosome %in% good.chr)]
+            } else {
+                ## only running w/ chr1-22 and X
+                sites = sites[which(chromosome %in% unique(seg$chrom))] 
+            }
+
+            seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
+            ## twalradt Thursday, Apr 26, 2018 02:58:23 PM They wrote '10e6' in their documentation
+            seg.filtered  = seg.s1[(seg.s1$end.pos - seg.s1$start.pos) > 1e6, ]
+            ## get the genome wide mean of the normalized depth ratio:
+            weights.seg <- 150 + round((seg.filtered$end.pos -
+                                        seg.filtered$start.pos) / 1e6, 0)
+            avg.depth.ratio <- mean(sites$adjusted.ratio) # mean(gc.stats$adj[,2])
+
+            if (verbose){
+                jmessage("Starting BAF model fit")
+            }
+            
+            ## run the BAF model fit
+            CP = sequenza::baf.model.fit(Bf = seg.filtered$Bf,
+                                         depth.ratio = seg.filtered$depth.ratio,
+                                         weight.ratio = weights.seg,
+                                         weight.Bf = weights.seg,
+                                         avg.depth.ratio = avg.depth.ratio,
+                                         cellularity = purity,
+                                         ploidy = ploidy)
+
+            confint = sequenza::get.ci(CP)
+
+            pp = data.table(ploidy = confint$max.ploidy,
+                            purity = confint$max.cellularity)
         } else {
-            pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
-                         purities = purity, ploidies = ploidy,
-                         verbose = verbose,
-                         mc.cores = mc.cores,
-                         numchunks = numchunks,
-                         ignore.sex = TRUE)
-        }        
+            stop("Need purity ploidy estimates to start JaBbA.")
+        }
     }
     ## else
     ##   {
@@ -2778,25 +2856,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             n_hat = varmeta[type == 'interval', mipstart]
             ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
             Bs = Amat[consmeta[type == 'EdgeSource', id],]
-            six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-
-            ## sometimes it's too big!
-            ## tmp.Bs.interval = Bs[, varmeta[type == "interval", id]]
-            ## if (prod(dim(tmp.Bs.interval))>.Machine$integer.max){
-            ##     chunk.num = ceiling(ncol(tmp.Bs.interval)/floor(.Machine$integer.max/nrow(tmp.Bs.interval)))
-            ##     chunk.ix = cut(seq_len(ncol(tmp.Bs.interval)), chunk.num, labels=FALSE)
-            ##     six = lapply(seq_len(chunk.num),
-            ##                  function(chunk){
-            ##                      jmessage("Processing chunk ", chunk)
-            ##                      apply(tmp.Bs.interval[, which(chunk.ix==chunk), drop=FALSE],
-            ##                            1, function(x) which(x!=0))
-            ##                  })
-            ##     six = unlist(six)
-            ## } else {
-            ##     six = apply(tmp.Bs.interval, 1, function(x) which(x!=0))
-            ## }
-            ## rm("tmp.Bs.interval"); gc()
-
+            Bs.interval = Bs[, varmeta[type == "interval", id]]
+            Bs.interval.ij = data.table(Matrix::which(Bs.interval != 0, arr.ind=T))
+            six = Bs.interval.ij[, col, by=row][, col]
             s_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
                 s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
@@ -2805,31 +2867,15 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
             ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
             Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-            tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-            ## tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
-            ## sometimes it's too big!
-            ## tmp.Bt.interval = Bt[, varmeta[type == "interval", id]]
-            ## if (prod(dim(tmp.Bt.interval))>.Machine$integer.max){
-            ##     chunk.num = ceiling(ncol(tmp.Bt.interval)/floor(.Machine$integer.max/nrow(tmp.Bt.interval)))
-            ##     chunk.ix = cut(seq_len(ncol(tmp.Bt.interval)), chunk.num, labels=FALSE)
-            ##     tix = lapply(seq_len(chunk.num),
-            ##                  function(chunk){
-            ##                      jmessage("Processing chunk ", chunk)
-            ##                      apply(tmp.Bt.interval[, which(chunk.ix==chunk), drop=FALSE],
-            ##                            1, function(x) which(x!=0))
-            ##                  })
-            ##     tix = unlist(tix)
-            ## } else {
-            ##     tix = apply(tmp.Bt.interval, 1, function(x) which(x!=0))
-            ## }
-            ## rm("tmp.Bt.interval"); gc()
-            
+            Bt.interval = Bt[, varmeta[type == "interval", id]]
+            Bt.interval.ij = data.table(Matrix::which(Bt.interval != 0, arr.ind=T))
+            tix = Bt.interval.ij[, col, by=row][, col]
             t_slack_hat = rep(0, length(n_hat))
             if (length(varmeta[type == "edge", id])>0)
                 t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
             t_slack_hat[is.na(t_slack_hat)] = 0
-
             varmeta[type == 'target.slack', mipstart := t_slack_hat]
+
             varmeta[label == 'beta', mipstart := beta.guess]
             varmeta[label == 'gamma', mipstart := gamma.guess]
 

@@ -29,7 +29,8 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/gGnome,
-  github::mskilab/Ppurple
+  github::mskilab/Ppurple,
+  bitbucket:sequenza_tools/sequenza
 Suggests:  
   testthat (>= 2.0)
 License: GPL-2
