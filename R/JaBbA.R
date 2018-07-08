@@ -1621,8 +1621,10 @@ ramip_stub = function(kag.file,
             }
         }
         adj.ub = this.kag$adj*0
-        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -1
-        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
+        ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -1
+        ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
+        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0.1
+        adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0.1
         saveRDS(adj.ub, paste0(outdir, "/adj.ub.rds"))
     } else {
         adj.ub = NULL
@@ -2135,6 +2137,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   mc.cores = 1, ## only matters if partition = T
                   ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE,
                   slack.prior = 1,
+                  loose.penalty.mode = c("linear", "boolean"),
                   ... # passed to optimizer
                   )
 {
@@ -2177,8 +2180,13 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## fix = as.integer(which(residual.diff>(4/slack.prior)))
         ## 8 is a constant that is conservative, let's try 4
         ## let's not fix to zero
-        fix = as.integer(which(residual.diff>(4/slack.prior) &
-                               cnmle >= 0))
+        if (loose.penalty.mode == "linear"){
+            fix = as.integer(which(residual.diff>(4/slack.prior) &
+                                   cnmle >= 0))
+        } else if (loose.penalty.mode=="boolean") {
+            fix = as.integer(which(residual.diff>(1/slack.prior) &
+                                   cnmle >= 0))
+        }
 
         ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
         ## each bigger and harder to solve
@@ -2187,7 +2195,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
         }
 
-        ##
+        ## zeta-partition of the graph
         ## now we will create a graph of unfixed nodes and fixed node "halves"
         ## i.e. we split each fixed node to a node that is receiving edges
         ## and a node that is sending edges
@@ -2332,11 +2340,21 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
             args$ploidy.max = Inf
 
-            if (verbose)
-                jmessage('Junction balancing subgraph ', k, ' of ', length(cll), ' which has ', length(uix), ' nodes comprising ',
-                         round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ', length(unique(seqnames((segstats[uix])))),
-                         ' chromosomes, including chrs ', paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,
-                                                                                                                                  length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
+            if (verbose){
+                jmessage('Junction balancing subgraph ', k,
+                         ' of ', length(cll),
+                         ' which has ', length(uix), ' nodes comprising ',
+                         round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ',
+                         length(unique(seqnames((segstats[uix])))),
+                         ' chromosomes, including chrs ',
+                         paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4, length(unique(seqnames((segstats[uix])))))]),
+                               collapse = ', '))
+            }
+
+            ## new argument that decides which loose model we use
+            args$loose.penalty.mode = loose.penalty.mode
+
+            ## saving some sub models for debugging
             if (k==1){
                 saveRDS(args, paste0(outdir, "/first.args.rds"))
             }
@@ -2345,24 +2363,24 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                 saveRDS(args, paste0(outdir, "/", k,".viral.subgraph.rds"))
             }
 
+            ## RUNNING!!!
             out = do.call('jbaMIP', args)
-
-            ## ## timed out??!
-            ## if (out$status==107){
-            ##     jmessage("Subgraph ", k, " did not reach optima within time limit: ", args$tilim, "s")
-            ## }
-
             gc() ## garbage collect .. not sure why this needs to be done
 
             return(out)
         }, args, mc.cores = mc.cores)
 
         out = list()
-        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')) ## scalar fields --> length(cluster) vector
+        ## scalar fields --> length(cluster) vector
+        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')){
             out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
+        }
 
-        for (f in c('ploidy.constraints', 'beta.constraints')) ## length 2 fields --> length(cluster) x 2 matrix
-            out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
+        ## length 2 fields --> length(cluster) x 2 matrix
+        for (f in c('ploidy.constraints', 'beta.constraints')){
+            out[[paste('component', f, sep = '')]] =
+                do.call('rbind', lapply(sols, function(x) x[[f]]))
+        }
 
         ## adjacency matrix
         out$adj = 0 * adj
@@ -2374,7 +2392,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         ## segstats
         sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
-        out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
+        out$segstats =
+            do.call('grbind',
+                    lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
 
         ## annotate segstats keep to keep track and "fixed nodes"
         out$segstats$fixed = 1:length(out$segstats) %in% fix
@@ -2396,28 +2416,42 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         target.less = Matrix::rowSums(adj, na.rm = T)==0
         source.less = Matrix::colSums(adj, na.rm = T)==0
-        out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
-        out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
+        out$segstats$eslack.out[!target.less] =
+            out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
+        out$segstats$eslack.in[!source.less] =
+            out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
 
         out$segstats$ecn.out =  Matrix::rowSums(out$adj)
         out$segstats$ecn.in =  Matrix::colSums(out$adj)
 
-        out$segstats$edges.in = sapply(1:length(out$segstats),
-                                       function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-        out$segstats$edges.out = sapply(1:length(out$segstats),
-                                        function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+        out$segstats$edges.in =
+            sapply(1:length(out$segstats),
+                   function(x) {
+                       ix = Matrix::which(adj[,x]!=0)
+                       paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')
+                   })
+        out$segstats$edges.out =
+            sapply(1:length(out$segstats),
+                   function(x) {
+                       ix = Matrix::which(adj[x, ]!=0)
+                       paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')
+                   })
 
         ncn = rep(2, length(segstats))
-        if (!is.null(field.ncn))
-            if (field.ncn %in% names(values(segstats)))
+        if (!is.null(field.ncn)){
+            if (field.ncn %in% names(values(segstats))){
                 ncn = values(segstats)[, field.ncn]
+            }
+        }
 
-
+        ## index of valid nodes
         nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
 
         ## new obj allowing variable normal copy number
-        out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
-            1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only
+        ## Jan 4, because our original objective is 1/2 for pos strand intervals only
+        out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma -
+                            out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
+            1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T))
         out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
         out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
         out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
@@ -2425,6 +2459,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         return(out)
     }
+
 
     ## map intervals to their reverse complement to couple their copy number (and edge variables)
     pos.ix = which( as.logical( strand(segstats)=='+') )
@@ -2437,45 +2472,104 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     rev.ix = match(segstats, gr.flipstrand(segstats))
 
     ## "duplicates" of og.ix i.e. revcomp vertices
+    ## basically hb.map
     dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
 
-    if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
+    if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix])){
         stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
+    }
 
     edges = Matrix::which(adj!=0, arr.ind = T)
 
-    varmeta = data.frame() ## store meta data about variables to keep track
-    consmeta = data.frame() ## store meta data about constraints to keep track
-    n = 2*nrow(adj) + nrow(edges) + 2;  # number of vertices + slack variables, number of edges, and beta, gamma parameters.
+    varmeta = data.table() ## store meta data about variables to keep track
+    consmeta = data.table() ## store meta data about constraints to keep track
+    ## if (loose.penalty.mode=="linear"){
+    ## number of vertices + slack variables, number of edges, and beta, gamma parameters.
+    n = 2*nrow(adj) + nrow(edges) + 2
     v.ix = 1:nrow(adj)
     s.ix = length(v.ix) + v.ix
-
-    varmeta = data.frame(id = v.ix, subid = 1:length(v.ix), label = paste('interval', 1:length(v.ix), sep = ''), type = 'interval',
+    
+    varmeta = data.table(id = v.ix,
+                         subid = 1:length(v.ix),
+                         label = paste('interval', 1:length(v.ix), sep = ''),
+                         type = 'interval',
                          stringsAsFactors = F)
-    varmeta = rbind(varmeta, data.frame(id = s.ix, subid = 1:length(s.ix), label = paste('residual', 1:length(s.ix), sep = ''),
-                                        type = 'residual', stringsAsFactors = F))
-
-
+    varmeta = rbind(varmeta,
+                    data.table(id = s.ix,
+                               subid = 1:length(s.ix),
+                               label = paste('residual', 1:length(s.ix), sep = ''),
+                               type = 'residual',
+                               stringsAsFactors = F))
+    
+    ## } else if (loose.penalty.mode=="boolean"){
+    ##     ## number of vertices + slack variables + slack indicators,
+    ##     ## number of edges, and beta, gamma parameters.
+    ##     n = 3*nrow(adj) + nrow(edges) + 2
+    ##     v.ix = 1:nrow(adj)
+    ##     s.ix = length(v.ix) + v.ix
+    ##     s.nz.ix = length(v.ix) * 2 + v.ix
+    
+    ##     varmeta = data.table(id = v.ix,
+    ##                          subid = 1:length(v.ix),
+    ##                          label = paste('interval', 1:length(v.ix), sep = ''),
+    ##                          type = 'interval',
+    ##                          stringsAsFactors = F)
+    ##     varmeta = rbind(varmeta,
+    ##                     data.table(id = s.ix,
+    ##                                subid = 1:length(s.ix),
+    ##                                label = paste('residual', 1:length(s.ix), sep = ''),
+    ##                                type = 'residual',
+    ##                                stringsAsFactors = F),
+    ##                     data.table(id = s.nz.ix,
+    ##                                subid = 1:length(s.nz.ix),
+    ##                                label = paste('residual.boolean', 1:length(s.ix), sep = ''),
+    ##                                type = 'residual.boolean',
+    ##                                stringsAsFactors = F))
+    ## }
 
     if (nrow(edges)>0)
     {
+        ## if (loose.penalty.mode=="linear"){
         e.ix = max(s.ix) + (1:nrow(edges))
-        varmeta = rbind(varmeta, data.frame(id = e.ix, subid = 1:length(e.ix), label = paste('edge', 1:length(e.ix), sep = ''),
-                                            type = 'edge', stringsAsFactors = F))
+        ## } else if (loose.penalty.mode=="boolean"){
+        ##     e.ix = max(s.nz.ix) + (1:nrow(edges))
+        ## }
+        varmeta = rbind(varmeta,
+                        data.table(id = e.ix,
+                                   subid = 1:length(e.ix),
+                                   label = paste('edge', 1:length(e.ix), sep = ''),
+                                   type = 'edge',
+                                   stringsAsFactors = F))
+    } else {
+        e.ix = integer()
     }
-    else
-        e.ix = integer();
+
 
     gamma.ix = max(c(s.ix, e.ix))+1;
     beta.ix = max(c(s.ix, e.ix))+2;
-    varmeta = rbind(varmeta, data.frame(id = c(gamma.ix, beta.ix), subid = rep(1, 2), label = c('gamma', 'beta'), type = 'global', stringsAsFactors = F))
+    varmeta = rbind(varmeta,
+                    data.table(id = c(gamma.ix, beta.ix),
+                               subid = rep(1, 2),
+                               label = c('gamma', 'beta'),
+                               type = 'global',
+                               stringsAsFactors = F))
 
     if (edge.slack) # slack on edge consistency constraints
     {
         es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
-        varmeta = rbind(varmeta, data.frame(id = es.s.ix, subid = 1:length(es.s.ix), label = paste('source.slack', 1:length(es.s.ix), sep = ''), type = 'source.slack', stringsAsFactors = F))
+        varmeta = rbind(varmeta,
+                        data.table(id = es.s.ix,
+                                   subid = 1:length(es.s.ix),
+                                   label = paste('source.slack', 1:length(es.s.ix), sep = ''),
+                                   type = 'source.slack',
+                                   stringsAsFactors = F))
         es.t.ix = n+(length(v.ix) + 1:length(v.ix))
-        varmeta = rbind(varmeta, data.frame(id = es.t.ix, subid = 1:length(es.t.ix), label = paste('target.slack', 1:length(es.t.ix), sep = ''), type = 'target.slack', stringsAsFactors = F))
+        varmeta = rbind(varmeta,
+                        data.table(id = es.t.ix,
+                                   subid = 1:length(es.t.ix),
+                                   label = paste('target.slack', 1:length(es.t.ix), sep = ''),
+                                   type = 'target.slack',
+                                   stringsAsFactors = F))
         n = n+2*length(v.ix);
     }
 
@@ -2504,7 +2598,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     ## set upper bound for some edges
     if (!is.null(adj.ub)){
-        ub[e.ix] = ifelse(adj.ub[edges]<0, 0, Inf) ## upper bound on edges, some are forced out
+        ## upper bound on edges, some are forced out
+        ub[e.ix] = ifelse(adj.ub[edges]>0, 0, Inf)
         ## for debug only
         ## saveRDS(ub, "ub.rds")
     }
@@ -2559,15 +2654,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
 
                                         # weighted mean across vertices contributing to mean
-    if (length(v.ix.c))
-        mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) / sum(as.numeric(width(segstats)[v.ix.c]))
-    else
+    if (length(v.ix.c)){
+        mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) /
+            sum(as.numeric(width(segstats)[v.ix.c]))
+    } else {
         mu.all = NA
-
-    ## if (verbose)
-    ## {
-    ##                                     #      jmessage('cn constraints ..')
-    ## }
+    }
 
     if (length(v.ix.c)>0)
     {
@@ -2590,14 +2682,19 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         ## final "conservation" constraint
         Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
-                                        #  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
+        ##  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
         ##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
         Acn[length(v.ix.c)+1, gamma.ix] = ploidy.normal/2; ## taking into account (normal) variable cn
         Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
         bcn = rep(0, nrow(Acn)) ##
         sensecn = rep("E", length(bcn))
 
-        consmeta = rbind(consmeta, data.frame(type = 'Copy', label = paste('Copy', 1:nrow(Acn)), sense = 'E', b = bcn, stringsAsFactors = F))
+        consmeta = rbind(consmeta,
+                         data.table(type = 'Copy',
+                                    label = paste('Copy', 1:nrow(Acn)),
+                                    sense = 'E',
+                                    b = bcn,
+                                    stringsAsFactors = F))
 
         if (ignore.cons | T)
         {
@@ -2618,7 +2715,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     dcn = rep(0, nrow(Dcn))
     sensedcn = rep("E", nrow(Dcn))
 
-    consmeta = rbind(consmeta, data.frame(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
+    consmeta = rbind(consmeta, data.table(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
 
     if (edge.slack)
     {
@@ -2633,7 +2730,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         dcn = c(dcn, ecn);
         sensedcn = c(sensedcn, rep("E", nrow(Ecn)))
 
-        consmeta = rbind(consmeta, data.frame(type = 'EdgeSlack', label = paste('EdgeSlack', 1:nrow(Ecn)), sense = 'E', b = ecn, stringsAsFactors = F))
+        consmeta = rbind(consmeta,
+                         data.table(type = 'EdgeSlack',
+                                    label = paste('EdgeSlack', 1:nrow(Ecn)),
+                                    sense = 'E',
+                                    b = ecn,
+                                    stringsAsFactors = F))
     }
 
     Acn = rbind(Acn, Dcn)
@@ -2644,12 +2746,18 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     {
         ## ploidy constraints
         Aineq = Zero[rep(1, 2), , drop = F];
-        Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))), width(segstats)/sum(as.numeric(width(segstats))))
+        Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))),
+                                  width(segstats)/sum(as.numeric(width(segstats))))
         bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
         senseineq = c("G", "L")
 
         ## only constrain ploidy if beta / gamma not specified (ie via non NA guess)
-        consmeta = rbind(consmeta, data.frame(type = 'PloidyConstraint', label = paste('PloidyConstraint', 1:nrow(Aineq)), sense = senseineq, b = bineq, stringsAsFactors = F))
+        consmeta = rbind(consmeta,
+                         data.table(type = 'PloidyConstraint',
+                                    label = paste('PloidyConstraint', 1:nrow(Aineq)),
+                                    sense = senseineq,
+                                    b = bineq,
+                                    stringsAsFactors = F))
     }
     else
     {
@@ -2659,27 +2767,27 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     }
 
 
-                                        # override gamma
+    ## override gamma
     if (!is.na(gamma))
         lb[gamma.ix] = ub[gamma.ix] = gamma;
 
-                                        # override beta
+    ## override beta
     if (!is.na(beta))
         lb[beta.ix] = ub[beta.ix] = beta.guess;
 
-                                        # beta.max
+    ## beta.max
     if (!is.na(beta.max))
         ub[beta.ix] = beta.max
 
-                                        # beta.max
+    ## beta.max
     if (!is.na(beta.min))
         lb[beta.ix] = beta.min
 
-                                        # gamma.max
+    ## gamma.max
     if (!is.na(gamma.min))
         lb[gamma.ix] = gamma.min
 
-                                        # gamma.max
+    ## gamma.max
     if (!is.na(gamma.max))
         ub[gamma.ix] = gamma.max
 
@@ -2690,7 +2798,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## ensure that sum of weights on outgoing edges
         ## = node weight
         ## do the same for nodes that are targets of edges
-
         v.ix.s = unique(edges[,1])
         v.ix.t = unique(edges[,2])
         Bs = Zero[v.ix.s, , drop = F]
@@ -2703,7 +2810,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         if (edge.slack)
         {
-            Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1  # provide "fake" edges bringing flux into and out of vertex
+            ## provide "fake" edges bringing flux into and out of vertex
+            Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1
             Bt[cbind(1:nrow(Bt), es.t.ix[v.ix.t])] = -1
         }
 
@@ -2711,9 +2819,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         consmeta =
             rbind(consmeta,
-                  data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
+                  data.table(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
                              sense = 'E', b = 0, stringsAsFactors = F),
-                  data.frame(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)),
+                  data.table(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)),
                              sense = 'E', b = 0, stringsAsFactors = F))
 
         ## populate linear constraints
@@ -2738,7 +2846,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (length(v.ix.c>0))
         Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
 
-    ## # linear portion of objective function
+    ## linear portion of objective function
     cvec = Zero[,1]
 
     if (edge.slack)
@@ -2753,9 +2861,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         if (verbose>1)
         {
+            if (loose.penalty.mode=="linear"){
+                tot.slack = sum(cvec[cbind(es.s.ix, es.t.ix)])
+            } else {
+                tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
+            }
             jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s',
                              sum(Qobj[cbind(s.ix, s.ix)]),
-                             sum(cvec[cbind(es.s.ix, es.t.ix)])))
+                             tot.slack))
         }
         if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
             jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")
@@ -2767,7 +2880,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     {
         if (verbose)
         {
-                                        #        jmessage('Adding ', sum(adj.nudge[edges]), " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
+            jmessage('Adding ', sum(adj.nudge[edges]),
+                     " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
         }
 
         ## Future to do: weigh the edges in objective functions
@@ -2782,10 +2896,89 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         } else {
             e.penalty = 0.01
         }
-
-        cvec[e.ix] = e.penalty - adj.nudge[edges] ### reward each edge use in proportion to position in edge nudge
+        ## penalize each edge use in proportion to position in edge nudge
+        cvec[e.ix] = e.penalty - adj.nudge[edges] 
     }
 
+
+
+    if (loose.penalty.mode=="boolean" & edge.slack){
+        ## need to add extra indicator variable to each of the loose end
+        ## s.nz.ix = n + (1:s.ix)
+        es.s.nz.ix = n + seq_along(es.s.ix); n = n + length(es.s.nz.ix)
+        es.t.nz.ix = n + seq_along(es.t.ix); n = n + length(es.t.nz.ix)
+        varmeta = rbind(varmeta,
+                        data.table(id = es.s.nz.ix,
+                                   subid = seq_along(es.s.nz.ix),
+                                   label = paste("source.slack.boolean",
+                                                 seq_along(es.s.nz.ix),
+                                                 sep=""),
+                                   type = "source.slack.boolean",
+                                   vtype = "B",
+                                   lb = 0,
+                                   ub = 1),
+                        data.table(id = es.t.nz.ix,
+                                   subid = seq_along(es.t.nz.ix),
+                                   label = paste("target.slack.boolean",
+                                                 seq_along(es.t.nz.ix),
+                                                 sep=""),
+                                   type = "target.slack.boolean",
+                                   vtype = "B",
+                                   lb = 0,
+                                   ub = 1))
+
+        nz.len = length(es.s.nz.ix) + length(es.t.nz.ix)
+        vtype = varmeta[, vtype]
+        ub = varmeta[, ub]
+        lb = varmeta[, lb]
+        Qobj = rbind(cbind(Qobj, matrix(0, nrow = nrow(Qobj), ncol = nz.len)),
+                     matrix(0, nrow = nz.len, ncol = n))
+                
+        Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
+
+        ## reshape Amat
+        Amat = cbind(Amat, matrix(0,
+                                  nrow=nrow(Amat),
+                                  ncol = length(es.s.nz.ix) + length(es.t.nz.ix)))
+
+        ## add constraints to make them indicators of loose ends
+        ## constraint 1: loose - 0.1 * loose.bool > 0
+        ## constraint 2: loose - cn.ub * loose.bool < 0
+        new.i = rep(seq_len(nz.len), 4)
+        new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
+                  rep(c(es.s.ix, es.t.ix), 2))
+        new.x = c(rep(-0.1, nz.len),
+                  rep(-(max(cn.ub, na.rm=T)+1), nz.len),
+                  rep(1, (length(es.s.ix) + length(es.t.ix)) * 2))
+        Amat.boolean = sparseMatrix(i = new.i,
+                                    j = new.j,
+                                    x = new.x,
+                                    dims = c(nz.len * 2, n))
+        b.boolean = rep(0, nz.len * 2)
+        sense.boolean = rep(c("G", "L"), each = nz.len)
+        consmeta = rbind(consmeta,
+                         data.table(type = "SlackBoolean",
+                                    label = paste0('SlackBoolean', nz.len * 2),
+                                    sense = sense.boolean,
+                                    b = b.boolean))
+        
+        ## extend cvec and cancel the linear penalties
+        cvec = c(cvec, rep(1/slack.prior, nz.len))
+        cvec[c(es.s.ix, es.t.ix)] = 0
+        
+        if (verbose){
+            jmessage("Slack penalty mode adjusted to 'boolean'")
+            jmessage("We will penalize the number of loose ends regardless of their copy number.")
+        }
+    }
+    
+    if (verbose){
+        jmessage("Finished setting up variables and constrainsts.")
+    }
+    
+
+
+    
     if (!is.null(mipstart))
     {
         if (is.na(gamma.guess) | is.na(beta.guess))
@@ -2799,8 +2992,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             setkeyv(mips.dt, c("row", "col"))
 
             ## convert everything to data.tables
-            varmeta = as.data.table(varmeta)
-            consmeta = as.data.table(consmeta)
+            ## varmeta = as.data.table(varmeta)
+            ## consmeta = as.data.table(consmeta)
             consmeta[, id := 1:.N]
             varmeta[, id := 1:.N]
             varmeta[, mipstart := as.numeric(0)]
@@ -2970,7 +3163,17 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         if (verbose)
           jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
 
-        sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = b, sense = sense, Qmat = Qobj, lb = lb, ub = ub, n = nsolutions, objsense = "min", vtype = vtype, control = control)
+        sol = Rcplex2(cvec = cvec,
+                      Amat = Amat,
+                      bvec = b,
+                      sense = sense,
+                      Qmat = Qobj,
+                      lb = lb,
+                      ub = ub,
+                      n = nsolutions,
+                      objsense = "min",
+                      vtype = vtype,
+                      control = control)
     }
     if (is.null(sol$xopt))
         sol.l = sol
@@ -3217,7 +3420,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     }
 
     ## convert to "simplified form"
-    out$edges = data.frame(from = edge.ix[,1], to = edge.ix[,2], cn = out$adj[edge.ix])
+    out$edges = data.table(from = edge.ix[,1], to = edge.ix[,2], cn = out$adj[edge.ix])
 
     estr = paste(edge.ix[,1], edge.ix[,2])
     abestr = paste(out$ab.edges[,1,1:2], out$ab.edges[,2,1:2])
