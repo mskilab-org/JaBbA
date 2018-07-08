@@ -24,7 +24,8 @@ Imports:
   graphics,
   grDevices,
   stats,
-  utils
+  utils,
+  sequenza
 Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
