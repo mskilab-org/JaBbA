@@ -26,7 +26,7 @@
 #' @importFrom graphics plot
 #' @import GenomicRanges
 #' @import parallel
-#' @import data.table
+#' @importFrom data.table data.table as.data.table
 #' @import DNAcopy
 #' @import gUtils
 #' @importFrom graphics abline hist title
@@ -125,6 +125,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                  use.gurobi = FALSE, ## use gurobi instead of CPLEX
                  slack.penalty = 1e2, ## nll penalty for each loose end copy
+                 loose.penalty.mode = c("linear", "boolean"),
                  overwrite = FALSE, ## whether to overwrite existing output in outdir
                  mc.cores = 1,
                  strict = FALSE,
@@ -289,10 +290,11 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 strict = strict,
                 name = name,
                 use.gurobi = as.logical(use.gurobi),
-              field = field,
-              epgap = epgap,
+                field = field,
+                epgap = epgap,
                 subsample = subsample,
                 slack.penalty = as.numeric(slack.penalty),
+                loose.penalty.mode = loose.penalty.mode,
                 mipstart = init,
                 ploidy = as.numeric(ploidy),
                 purity = as.numeric(purity),
@@ -414,8 +416,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             max.mem = as.numeric(max.mem),
             edgenudge = as.numeric(edgenudge),
             tilim = as.numeric(tilim),
-          strict = strict,
-          epgap = epgap,
+            strict = strict,
+            epgap = epgap,
             name = name,
             use.gurobi = as.logical(use.gurobi),
             field = field,
@@ -425,6 +427,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             ploidy = as.numeric(ploidy),
             purity = as.numeric(purity),
             indel = as.logical(indel),
+            loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
             verbose = as.numeric(verbose)
         )
@@ -512,6 +515,7 @@ jabba_stub = function(
                       edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
+                      loose.penalty.mode = c("linear", "boolean"),
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE
@@ -850,7 +854,6 @@ jabba_stub = function(
                    jabba.raw.rds.file,
                    mc.cores = mc.cores,
                    max.threads = max.threads,
-                   ## mem = mem,
                    mem = max.mem,
                    tilim = tilim,
                    edge.nudge = edgenudge,
@@ -865,7 +868,8 @@ jabba_stub = function(
                    purity.max = purity,
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
-                   slack.prior = 1/slack.penalty)
+                   slack.prior = 1/slack.penalty,
+                   loose.penalty.mode = loose.penalty.mode)
     }
 
     kag = readRDS(kag.file)
@@ -1538,9 +1542,10 @@ ramip_stub = function(kag.file,
                       use.gurobi = FALSE,
                       epgap = 1e-4,
                       verbose = FALSE,
-                      edge.nudge = 0,  ## can be scalar (equal nudge to all ab junctions) or vector of length readRDS(kag.file)$junctions
-                      ab.force = NULL, ## indices of aberrant junctions to force include into the solution
-                      ab.exclude = NULL ## indices of aberrant junctions to force exclude from the solution
+                      edge.nudge = 0,  
+                      ab.force = NULL, 
+                      ab.exclude = NULL, 
+                      loose.penalty.mode = c("linear", "boolean")
                       )
 {
     outdir = normalizePath(dirname(kag.file))
@@ -1745,8 +1750,7 @@ ramip_stub = function(kag.file,
                     adj.nudge = adj.nudge,
                     outdir = outdir,
                     cn.ub = rep(500, length(this.kag$segstats)),
-                    ## cn.ub = ifelse(as.character(seqnames(this.kag$segstats)) %in% nothing.contig,
-                    ##                0, 500),
+                    loose.penalty.mode = loose.penalty.mode,
                     verbose = verbose)
     saveRDS(ra.sol, out.file)
 
@@ -2141,6 +2145,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   ... # passed to optimizer
                   )
 {
+    if (!any(grepl(loose.penalty.mode,c("linear", "boolean")))){
+        loose.penalty = "linear"
+    } else {
+        loose.penalty = grep(loose.penalty.mode,c("linear", "boolean"), value=TRUE)[1]
+    }
+    
     if (length(segstats) != nrow(adj))
         stop('length(segstats) !=  nrow(adj)')
 
@@ -2849,33 +2859,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     ## linear portion of objective function
     cvec = Zero[,1]
 
-    if (edge.slack)
-    {
-        cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
-
-        ## let any specified "loose ends" have unpenalized slack
-        if (length(loose.ends)>0)
-        {
-            cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
-        }
-
-        if (verbose>1)
-        {
-            if (loose.penalty.mode=="linear"){
-                tot.slack = sum(cvec[cbind(es.s.ix, es.t.ix)])
-            } else {
-                tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
-            }
-            jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s',
-                             sum(Qobj[cbind(s.ix, s.ix)]),
-                             tot.slack))
-        }
-        if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
-            jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")
-        }
-
-    }
-
     if (nrow(edges)>0)
     {
         if (verbose)
@@ -2900,75 +2883,96 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         cvec[e.ix] = e.penalty - adj.nudge[edges] 
     }
 
+    if (edge.slack)
+    {
+        if (loose.penalty.mode=="linear"){
+            cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
+            ## let any specified "loose ends" have unpenalized slack
+            if (length(loose.ends)>0)
+            {
+                cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
+            }
+            tot.slack = sum(cvec[cbind(es.s.ix, es.t.ix)])
+        } else if (loose.penalty.mode=="boolean"){
+            ## need to add extra indicator variable to each of the loose end
+            ## s.nz.ix = n + (1:s.ix)
+            es.s.nz.ix = n + seq_along(es.s.ix); n = n + length(es.s.nz.ix)
+            es.t.nz.ix = n + seq_along(es.t.ix); n = n + length(es.t.nz.ix)
+            varmeta = rbind(varmeta,
+                            data.table(id = es.s.nz.ix,
+                                       subid = seq_along(es.s.nz.ix),
+                                       label = paste("source.slack.boolean",
+                                                     seq_along(es.s.nz.ix),
+                                                     sep=""),
+                                       type = "source.slack.boolean",
+                                       vtype = "B",
+                                       lb = 0,
+                                       ub = 1),
+                            data.table(id = es.t.nz.ix,
+                                       subid = seq_along(es.t.nz.ix),
+                                       label = paste("target.slack.boolean",
+                                                     seq_along(es.t.nz.ix),
+                                                     sep=""),
+                                       type = "target.slack.boolean",
+                                       vtype = "B",
+                                       lb = 0,
+                                       ub = 1))
 
+            nz.len = length(es.s.nz.ix) + length(es.t.nz.ix)
+            vtype = varmeta[, vtype]
+            ub = varmeta[, ub]
+            lb = varmeta[, lb]
+            Qobj = rbind(cbind(Qobj, matrix(0, nrow = nrow(Qobj), ncol = nz.len)),
+                         matrix(0, nrow = nz.len, ncol = n))
+            
+            Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
 
-    if (loose.penalty.mode=="boolean" & edge.slack){
-        ## need to add extra indicator variable to each of the loose end
-        ## s.nz.ix = n + (1:s.ix)
-        es.s.nz.ix = n + seq_along(es.s.ix); n = n + length(es.s.nz.ix)
-        es.t.nz.ix = n + seq_along(es.t.ix); n = n + length(es.t.nz.ix)
-        varmeta = rbind(varmeta,
-                        data.table(id = es.s.nz.ix,
-                                   subid = seq_along(es.s.nz.ix),
-                                   label = paste("source.slack.boolean",
-                                                 seq_along(es.s.nz.ix),
-                                                 sep=""),
-                                   type = "source.slack.boolean",
-                                   vtype = "B",
-                                   lb = 0,
-                                   ub = 1),
-                        data.table(id = es.t.nz.ix,
-                                   subid = seq_along(es.t.nz.ix),
-                                   label = paste("target.slack.boolean",
-                                                 seq_along(es.t.nz.ix),
-                                                 sep=""),
-                                   type = "target.slack.boolean",
-                                   vtype = "B",
-                                   lb = 0,
-                                   ub = 1))
+            ## reshape Amat
+            Amat = cbind(Amat, matrix(0,
+                                      nrow=nrow(Amat),
+                                      ncol = length(es.s.nz.ix) + length(es.t.nz.ix)))
 
-        nz.len = length(es.s.nz.ix) + length(es.t.nz.ix)
-        vtype = varmeta[, vtype]
-        ub = varmeta[, ub]
-        lb = varmeta[, lb]
-        Qobj = rbind(cbind(Qobj, matrix(0, nrow = nrow(Qobj), ncol = nz.len)),
-                     matrix(0, nrow = nz.len, ncol = n))
-                
-        Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
+            ## add constraints to make them indicators of loose ends
+            ## constraint 1: loose - 0.1 * loose.bool > 0
+            ## constraint 2: loose - cn.ub * loose.bool < 0
+            new.i = rep(seq_len(nz.len), 4)
+            new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
+                      rep(c(es.s.ix, es.t.ix), 2))
+            new.x = c(rep(-0.1, nz.len),
+                      rep(-(max(cn.ub, na.rm=T)+1), nz.len),
+                      rep(1, (length(es.s.ix) + length(es.t.ix)) * 2))
+            Amat.boolean = sparseMatrix(i = new.i,
+                                        j = new.j,
+                                        x = new.x,
+                                        dims = c(nz.len * 2, n))
+            b.boolean = rep(0, nz.len * 2)
+            sense.boolean = rep(c("G", "L"), each = nz.len)
+            consmeta = rbind(consmeta,
+                             data.table(type = "SlackBoolean",
+                                        label = paste0('SlackBoolean', nz.len * 2),
+                                        sense = sense.boolean,
+                                        b = b.boolean))
+            
+            ## extend cvec and cancel the linear penalties
+            cvec = c(cvec, rep(1/slack.prior, nz.len))
+            cvec[c(es.s.ix, es.t.ix)] = 0
+            
+            if (verbose){
+                jmessage("Slack penalty mode adjusted to 'boolean'")
+                jmessage("Penalize the number of loose ends regardless of their copy number.")
+            }
+            
+            tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
+        }
 
-        ## reshape Amat
-        Amat = cbind(Amat, matrix(0,
-                                  nrow=nrow(Amat),
-                                  ncol = length(es.s.nz.ix) + length(es.t.nz.ix)))
-
-        ## add constraints to make them indicators of loose ends
-        ## constraint 1: loose - 0.1 * loose.bool > 0
-        ## constraint 2: loose - cn.ub * loose.bool < 0
-        new.i = rep(seq_len(nz.len), 4)
-        new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
-                  rep(c(es.s.ix, es.t.ix), 2))
-        new.x = c(rep(-0.1, nz.len),
-                  rep(-(max(cn.ub, na.rm=T)+1), nz.len),
-                  rep(1, (length(es.s.ix) + length(es.t.ix)) * 2))
-        Amat.boolean = sparseMatrix(i = new.i,
-                                    j = new.j,
-                                    x = new.x,
-                                    dims = c(nz.len * 2, n))
-        b.boolean = rep(0, nz.len * 2)
-        sense.boolean = rep(c("G", "L"), each = nz.len)
-        consmeta = rbind(consmeta,
-                         data.table(type = "SlackBoolean",
-                                    label = paste0('SlackBoolean', nz.len * 2),
-                                    sense = sense.boolean,
-                                    b = b.boolean))
-        
-        ## extend cvec and cancel the linear penalties
-        cvec = c(cvec, rep(1/slack.prior, nz.len))
-        cvec[c(es.s.ix, es.t.ix)] = 0
-        
-        if (verbose){
-            jmessage("Slack penalty mode adjusted to 'boolean'")
-            jmessage("We will penalize the number of loose ends regardless of their copy number.")
+        if (verbose>1)
+        {
+            jmessage(sprintf('Total mass on cn portion of objective function: %s. ',
+                             sum(Qobj[cbind(s.ix, s.ix)])))
+            jmessage(sprintf("Total mass on edge slack: %s", tot.slack))
+        }
+        if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
+            jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")
         }
     }
     
@@ -2976,14 +2980,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         jmessage("Finished setting up variables and constrainsts.")
     }
     
-
-
-    
     if (!is.null(mipstart))
     {
         if (is.na(gamma.guess) | is.na(beta.guess))
         {
-            warning("Can't do JaBbA mipstart without setting purity and ploidy ... ignoring mipstart")
+            warning("Can't do mipstart without setting purity and ploidy ... ignoring mipstart")
         } else
         {
             mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
