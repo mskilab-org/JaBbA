@@ -275,7 +275,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             jab = jabba_stub(
                 junctions = this.ra.file,
                 seg = seg,
-                coverage = coverage,
+                coverages = coverage,
                 hets = hets,
                 nseg = nseg,
                 cfield = cfield,
@@ -404,7 +404,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         jab = jabba_stub(
             junctions = ra,
             seg = seg,
-            coverage = coverage,
+            coverages = coverage,
             hets = hets,
             nseg = nseg,
             cfield = cfield,
@@ -487,9 +487,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @import DNAcopy
-jabba_stub = function(
-                      junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
-                      coverage, # path to cov file, rds of GRanges
+jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
+                      coverages, # path to cov file, rds of GRanges
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
                       tfield = NULL, # character, tier confidence meta data field in ra
@@ -542,45 +541,45 @@ jabba_stub = function(
     seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
     nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
-    if (is.character(coverage))
+    if (is.character(coverages))
     {
-        if (!file.exists(coverage))
+        if (!file.exists(coverages))
         {
-            stop(paste('Coveraeg path ', coverage, 'does not exist'))
+            stop(paste('Coveraeg path ', coverages, 'does not exist'))
         }
 
-        if (grepl('\\.rds$', coverage))
+        if (grepl('\\.rds$', coverages))
         {
-            coverage = readRDS(coverage)
+            coverages = readRDS(coverages)
         }
-        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
+        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverages))
         {
-            tmp = fread(coverage)
-            coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
+            tmp = fread(coverages)
+            coverages = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
         }
         else
         {
             jmessage('Importing seg from UCSC format')
-            coverage = rtracklayer::import(coverage)
+            coverages = rtracklayer::import(coverages)
             field = 'score';
-            coverage = gr.fix(coverage)
+            coverages = gr.fix(coverages)
         }
     }
     else
-        coverage = coverage
+        coverages = coverages
 
-    if (!inherits(coverage, 'GRanges'))
-        coverage = dt2gr(coverage)
+    if (!inherits(coverages, 'GRanges'))
+        coverages = dt2gr(coverages)
 
 
     if (verbose)
     {
-        jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
+        jmessage("Read in coverage data across ", prettyNum(length(coverages), big.mark = ','), " bins and ", length(unique(seqnames(coverages))), ' chromosomes')
     }
 
-    if (!(field %in% names(values(coverage))))
+    if (!(field %in% names(values(coverages))))
     {
-        new.field = names(values(coverage))[1]
+        new.field = names(values(coverages))[1]
         warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
         field = new.field
     }
@@ -601,10 +600,10 @@ jabba_stub = function(
                 jmessage('No segmentation provided, so performing segmentation using CBS')
             }
             set.seed(42)
-            vals = values(coverage)[, field]
-            new.sl = GenomeInfoDb::seqlengths(coverage)
+            vals = values(coverages)[, field]
+            new.sl = GenomeInfoDb::seqlengths(coverages)
             ix = which(!is.na(vals))
-            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
+            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverages))[ix], start(coverages)[ix], data.type = 'logratio')
             seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
 
             if (verbose)
@@ -612,7 +611,7 @@ jabba_stub = function(
                 jmessage('Segmentation finished')
             }
             seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
-            seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverage), drop = T)
+            seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverages), drop = T)
 
             if (verbose)
             {
@@ -646,7 +645,7 @@ jabba_stub = function(
     saveRDS(seg, seg.fn)
 
     if (!inherits(seg, 'GRanges'))
-        seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
+        seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverages))
 
     if (!is.null(hets))
     {
@@ -676,7 +675,7 @@ jabba_stub = function(
     if (!is.character(ra))
     {
         if (overwrite | !file.exists(kag.file))
-            karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
+            karyograph_stub(seg, coverages, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
         else
             warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -688,12 +687,12 @@ jabba_stub = function(
             grepl('bedpe$', ra))
         {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
+                karyograph_stub(seg, coverages, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         } else  {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverage, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
+                karyograph_stub(seg, coverages, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         }
@@ -785,8 +784,8 @@ jabba_stub = function(
     } else { ## nudge everything ..
         if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
         if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
-            bps.cov = gr.val(bpss, coverage, val = 'ratio')
-                                        #        bps.cov = bpss %$% coverage
+            bps.cov = gr.val(bpss, coverages, val = 'ratio')
+                                        #        bps.cov = bpss %$% coverages
             na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
             if (length(na.jix)>0){
                 ## if (verbose)
@@ -988,7 +987,7 @@ jabba_stub = function(
 
     saveRDS(kag$junctions, junctions.rds.file)
 
-    tmp.cov = sample(coverage, pmin(length(coverage), 5e5))
+    tmp.cov = sample(coverages, pmin(length(coverages), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
@@ -1217,9 +1216,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         }
 
         if (inherits(hets, "data.frame")){
-            if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n))
+            if (!is.null(hets$alt.count.n) & !is.null(hets$ref.count.n)){
                 ## old format, apply het filter ourselves
-            {
                 hets$ref.frac.n = hets$alt.count.n / (hets$alt.count.n + hets$ref.count.n)
                 hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
                 hets.gr$alt = hets.gr$alt.count.t
@@ -1270,9 +1268,16 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
                                      verbose = verbose)
+    } else {
+        this.kag$segstats = segstats(this.kag$tile,
+                                     this.cov,
+                                     field = field,
+                                     prior_weight = 1,
+                                     max.chunk = max.chunk,
+                                     subsample = subsample,
+                                     mc.cores = mc.cores,
+                                     verbose = verbose)
     }
-    else
-        this.kag$segstats = segstats(this.kag$tile, this.cov, field = field, prior_weight = 1, max.chunk = max.chunk, subsample = subsample, mc.cores = mc.cores, verbose = verbose)
 
     this.kag$segstats$ncn = 2
 
@@ -1331,6 +1336,12 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             use.ppgrid = TRUE
         } else if (length(hets.gr)==0){
             use.ppgrid = TRUE
+        } else if (!all(c("ref.count.t",
+                          "alt.count.t",
+                          "ref.count.n",
+                          "alt.count.n") %in% colnames(values(hets.gr)))){
+            use.sequenza = FALSE
+            use.ppgrid = !use.ppurple
         }
 
         if (use.ppurple)
@@ -2167,7 +2178,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ##      m = segstats$mean*beta.guess - gamma.guess
 
         ## transform means from data space into copy number space
-        m = rel2abs(segstats, gamma = gamma.guess, beta = beta.guess, field = 'mean', field.ncn = field.ncn)
+        m = rel2abs(segstats,
+                    gamma = gamma.guess,
+                    beta = beta.guess,
+                    field = 'mean',
+                    field.ncn = field.ncn)
 
         ## transform sds from data space into copy number space (only need to multiply by beta)
         segstats$sd = segstats$sd * beta.guess
@@ -2194,7 +2209,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             fix = as.integer(which(residual.diff>(4/slack.prior) &
                                    cnmle >= 0))
         } else if (loose.penalty.mode=="boolean") {
-            fix = as.integer(which(residual.diff>(1/slack.prior) &
+            ## supposed to be 1, but too many subgraphs could also hurt
+            ## so, change back to four
+            ## fix = as.integer(which(residual.diff>(1/slack.prior) &
+            ##                        cnmle >= 0))
+            fix = as.integer(which(residual.diff>(4/slack.prior) &
                                    cnmle >= 0))
         }
 
@@ -2205,13 +2224,15 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
         }
 
+
         ## zeta-partition of the graph
         ## now we will create a graph of unfixed nodes and fixed node "halves"
         ## i.e. we split each fixed node to a node that is receiving edges
         ## and a node that is sending edges
         ##
         unfix = as.numeric(setdiff(1:length(segstats), fix))
-        G = graph(as.numeric(t(Matrix::which(adj!=0, arr.ind = T))), n = length(segstats), directed = T)
+        G = graph(as.numeric(t(Matrix::which(adj!=0, arr.ind = T))),
+                  n = length(segstats), directed = T)
         V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
 
         if (length(fix)>0)
@@ -2219,13 +2240,17 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         else
             G.unfix = induced.subgraph(G, unfix)
 
-        if (length(fix)>0 & length(unfix)>0)
-            node.map = structure(c(unfix, fix, fix), names = c(as.character(unfix), paste('from', fix), paste('to', fix)))
-        else if (length(fix)>0)
+        if (length(fix)>0 & length(unfix)>0){
+            node.map = structure(c(unfix, fix, fix),
+                                 names = c(as.character(unfix),
+                                           paste('from', fix),
+                                           paste('to', fix)))
+        } else if (length(fix)>0){
             node.map = structure(c(fix, fix), names = c(paste('from', fix), paste('to', fix)))
-        else
+        } else {
             node.map = structure(c(unfix), names = c(as.character(unfix)))
-
+        }
+        
         ## add nodes representing the "receiving" and "sending" side of fixed nodes
         if (length(fix)>0 & length(unfix)>0)
         {
@@ -3431,7 +3456,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         out$edges$type = 'reference'
         if (any(ix <- estr %in% abestr))
             out$edges$type[ix] = 'aberrant'
-        if (any(ix <- out$segstats$loose[out$edges[,'from']] | out$segstats$loose[out$edges[,'to']]))
+        if (any(ix <- out$segstats$loose[out$edges[, from]] | out$segstats$loose[out$edges[, to]]))
             out$edges$type[ix] = 'loose'
 
         out$edges$col = ifelse(out$edges$type == 'aberrant', ifelse(out$edges$cn>0, alpha('red', 0.4), alpha('purple', 0.3)), alpha('gray', 0.2))
@@ -3443,14 +3468,18 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     if (length(loose.ix)>0)
     {
         seg.map = match(out$segstats, gr.flipstrand(out$segstats)) ## maps segs to rev comp
-        ed.map = match(paste(out$edges[, 'from'], out$edges[, 'to']), paste(seg.map[out$edges[, 'to']], seg.map[out$edges[, 'from']])) ## maps edges to rev comp
+        ## maps edges to rev comp
+        ed.map = match(paste(out$edges[, from], out$edges[, to]),
+                       paste(seg.map[out$edges[, to]], seg.map[out$edges[, from]]))
         temp.ix = which(ed.map>(1:length(ed.map)));
         ed.id = ed.map
-        ed.id[temp.ix] = temp.ix  ## edges whose rev comp has higher id we name with their index, and we name their rev comp with their index
+        ed.id[temp.ix] = temp.ix
+        ## edges whose rev comp has higher id we name with their index,
+        ## and we name their rev comp with their index
         out$edges$col[loose.ix] = alpha('blue', 0.6)
         rh = 0.5 + runif(length(loose.ix)/2)
         out$edges$h[loose.ix] = rh[match(ed.id[loose.ix], unique(ed.id[loose.ix]))]
-                                        # out$edges$h = ifelse(out$edges$type == 'loose', rand(nrow(out$edges)), 1)
+        ## out$edges$h = ifelse(out$edges$type == 'loose', rand(nrow(out$edges)), 1)
     }
 
     if (nrow(out$edges)>0)
