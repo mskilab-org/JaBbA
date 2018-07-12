@@ -131,10 +131,11 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
-                 epgap = 1e-4,
+                 epgap = 1e-2,
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
-                 verbose = TRUE ## whether to provide verbose output
+                 verbose = TRUE, ## whether to provide verbose output
+                 breaksymmetry = NA
                  )
 {
     system(paste('mkdir -p', outdir))
@@ -300,7 +301,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 purity = as.numeric(purity),
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
-                verbose = as.numeric(verbose)
+                verbose = as.numeric(verbose),
+                breaksymmetry = breaksymmetry
             )
             gc()
 
@@ -429,7 +431,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             indel = as.logical(indel),
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
-            verbose = as.numeric(verbose)
+            verbose = as.numeric(verbose),
+            breaksymmetry = breaksymmetry
         )
     }
 
@@ -517,8 +520,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       loose.penalty.mode = c("linear", "boolean"),
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
-                      verbose = TRUE
-                      )
+                      verbose = TRUE,
+                      breaksymmetry = NA)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -868,7 +871,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty,
-                   loose.penalty.mode = loose.penalty.mode)
+                   loose.penalty.mode = loose.penalty.mode,
+                   customparams = T,
+                   breaksymmetry = breaksymmetry)
     }
 
     kag = readRDS(kag.file)
@@ -1546,6 +1551,7 @@ ramip_stub = function(kag.file,
                       gamma = NA,
                       beta = NA,
                       customparams = T,
+                      breaksymmetry = NA,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -1599,7 +1605,10 @@ ramip_stub = function(kag.file,
             max.threads = 0
 
         param.file = paste(out.file, '.prm', sep = '')
-        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
+        .cplex_customparams(param.file,
+                            max.threads,
+                            treememlim = mem * 1e3,
+                            breaksymmetry=breaksymmetry)
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
         if (verbose)
@@ -1659,7 +1668,7 @@ ramip_stub = function(kag.file,
             mipstart = gGnome::gread(kag.file)
             segs = mipstart$segstats
             segs$cn = pmax(round(segs$cn), 0) ## negative given 0
-            segs$cn[is.na(segs$cn)] = 0 ## NA given 0
+            segs$cn[is.na(segs$cn)] = round(this.kag$ploidy) ## NA given ploidy
 
             es = mipstart$edges
             es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
@@ -1694,7 +1703,6 @@ ramip_stub = function(kag.file,
             es[type=="reference", cn := pmin(from.remain, to.remain)]
 
             mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()
-            mipstart = gGnome::gGraph$new(segs = segs, es = es)$fillin()
             saveRDS(mipstart, paste0(outdir, "/mipstart.gg.rds"))
         }
     }
@@ -1762,7 +1770,8 @@ ramip_stub = function(kag.file,
                     outdir = outdir,
                     cn.ub = rep(500, length(this.kag$segstats)),
                     loose.penalty.mode = loose.penalty.mode,
-                    verbose = verbose)
+                    verbose = verbose,
+                    breaksymmetry = breaksymmetry) ## can this be passed?
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -1922,7 +1931,7 @@ segstats = function(target,
                                 !is.infinite(values(signal)[, field]))]
         target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-        if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
+        if (length(bad.nodes <- which(target$good.prop < 0.9 & target$nafrac > 0.1))>0)
         {
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
@@ -2153,6 +2162,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE,
                   slack.prior = 1,
                   loose.penalty.mode = c("linear", "boolean"),
+                  breaksymmetry = NA, 
                   ... # passed to optimizer
                   )
 {
@@ -2389,19 +2399,29 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ## new argument that decides which loose model we use
             args$loose.penalty.mode = loose.penalty.mode
 
-            ## saving some sub models for debugging
-            if (k==1){
-                saveRDS(args, paste0(outdir, "/first.args.rds"))
+            sol.file = paste0(outdir, "/sol.", k, ".rds")
+            arg.file = paste0(outdir, "/args.", k, ".rds")
+            
+            if (file.exists(sol.file)){
+                if (verbose){
+                    jmessage("Subgraph number ", k, " is already solved.")
+                }
+                out = readRDS(sol.file)
+                ## saving some sub models for debugging
+                if (k<6){
+                    saveRDS(args, arg.file)
+                    saveRDS(out, sol.file)
+                }
+
+                if (any(grepl("gi", seqnames(args$segstats)))){
+                    saveRDS(args, paste0(outdir, "/", k,".viral.subgraph.rds"))
+                    saveRDS(out, paste0(outdir, "/", k,".viral.sol.rds"))
+                }
+            } else {
+                ## RUNNING!!!
+                out = do.call('jbaMIP', args)
+                gc() ## garbage collect .. not sure why this needs to be done
             }
-
-            if (any(grepl("gi", seqnames(args$segstats)))){
-                saveRDS(args, paste0(outdir, "/", k,".viral.subgraph.rds"))
-            }
-
-            ## RUNNING!!!
-            out = do.call('jbaMIP', args)
-            gc() ## garbage collect .. not sure why this needs to be done
-
             return(out)
         }, args, mc.cores = mc.cores)
 
@@ -2888,8 +2908,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     {
         if (verbose)
         {
-            jmessage('Adding ', sum(adj.nudge[edges]),
-                     " of edge nudge across", sum(adj.nudge[edges]!=0), "edges")
+            jmessage('Adding ',
+                     ## sum(adj.nudge[edges]),
+                     " edge nudge across ", sum(adj.nudge[edges]!=0), " edges")
         }
 
         ## Future to do: weigh the edges in objective functions
@@ -2947,20 +2968,28 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             vtype = varmeta[, vtype]
             ub = varmeta[, ub]
             lb = varmeta[, lb]
-            Qobj = rbind(cbind(Qobj, matrix(0, nrow = nrow(Qobj), ncol = nz.len)),
-                         matrix(0, nrow = nz.len, ncol = n))
+            Qobj = rbind(cbind(Qobj,
+                               Matrix(0,
+                                      nrow = nrow(Qobj),
+                                      ncol = nz.len,
+                                      sparse=TRUE)),
+                         Matrix(0,
+                                nrow = nz.len,
+                                ncol = n,
+                                sparse=TRUE))
             
             Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
 
             ## reshape Amat
-            Amat = cbind(Amat, matrix(0,
+            Amat = cbind(Amat, Matrix(0,
                                       nrow=nrow(Amat),
-                                      ncol = length(es.s.nz.ix) + length(es.t.nz.ix)))
+                                      ncol = length(es.s.nz.ix) + length(es.t.nz.ix),
+                                      sparse=TRUE))
 
             ## add constraints to make them indicators of loose ends
             ## constraint 1: loose - 0.1 * loose.bool > 0
             ## constraint 2: loose - cn.ub * loose.bool < 0
-            new.i = rep(seq_len(nz.len), 4)
+            new.i = rep(seq_len(nz.len * 2), 2)
             new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
                       rep(c(es.s.ix, es.t.ix), 2))
             new.x = c(rep(-0.1, nz.len),
@@ -2970,8 +2999,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                                         j = new.j,
                                         x = new.x,
                                         dims = c(nz.len * 2, n))
+            Amat = rbind(Amat, Amat.boolean)
             b.boolean = rep(0, nz.len * 2)
+            b = c(b, b.boolean)
             sense.boolean = rep(c("G", "L"), each = nz.len)
+            sense = c(sense, sense.boolean)
             consmeta = rbind(consmeta,
                              data.table(type = "SlackBoolean",
                                         label = paste0('SlackBoolean', nz.len * 2),
@@ -2981,13 +3013,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ## extend cvec and cancel the linear penalties
             cvec = c(cvec, rep(1/slack.prior, nz.len))
             cvec[c(es.s.ix, es.t.ix)] = 0
-            
+
             if (verbose){
                 jmessage("Slack penalty mode adjusted to 'boolean'")
                 jmessage("Penalize the number of loose ends regardless of their copy number.")
             }
-            
             tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
+            ## save varmeta, consmeta
+            varmeta[, ":="(cvec = cvec, Qobj = Qobj[cbind(id, id)])]
         }
 
         if (verbose>1)
@@ -3134,6 +3167,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ## ## path endpoints are either fix or branch
             ## endpoints = union(fix, branch)
 
+            ## TODO: sometimes this is not feasible! WHY?
             ## compute residual as difference between rounded and "mean" value
             n_hat = varmeta[type == 'interval', mipstart]
             mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
@@ -3182,12 +3216,17 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     }
     else
     {
-        control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, mipemphasis = mipemphasis))
+        control = c(list(...), ## this doesn't work!
+                    list(trace = ifelse(verbose>=2, 1, 0),
+                         tilim = tilim,
+                         epgap = epgap,
+                         mipemphasis = mipemphasis,
+                         breaksymmetry = breaksymmetry))
         if (!is.null(mipstart)) ## apply mipstart if provided
             control$mipstart = varmeta$mipstart
 
         if (verbose)
-          jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
+            jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
 
         sol = Rcplex2(cvec = cvec,
                       Amat = Amat,
@@ -3201,6 +3240,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                       vtype = vtype,
                       control = control)
     }
+    
     if (is.null(sol$xopt))
         sol.l = sol
     else
@@ -3266,6 +3306,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (length(sol.l)==1)
         sol.l = sol.l[[1]]
 
+    sol.l$varmeta = varmeta
+    sol.l$consmeta = consmeta
     return(sol.l)
 }
 
@@ -3649,7 +3691,7 @@ jabba.alleles = function(
 
         ## now test deviation from each absolute copy combo using poisson model
         ## i.e. counts ~ poisson(expected mean)
-        ##
+        ## TODO: is this slow?
         re.seg$low = sapply(1:length(re.seg), function(i)
         {
             ##        if (verbose)
@@ -3824,17 +3866,35 @@ jabba.alleles = function(
     asegstats.final = asegstats.final[ix]
     aadj.final = aadj.final[ix, ix]
 
-    if (verbose)
+    if (verbose){
         jmessage('Annotating allelic vertices')
+    }
 
     tmp.string = gr.string(asegstats, mb = F, other.cols = 'type'); tmp.string2 = gr.string(gr.flipstrand(asegstats), mb = F, other.cols = 'type')
     asegstats$flip.ix = match(tmp.string, tmp.string2)
     asegstats$phased = !unphased
 
-    asegstats.final$edges.in = sapply(1:length(asegstats.final),
-                                      function(x) {ix = Matrix::which(aadj.final[,x]!=0); paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')})
-    asegstats.final$edges.out = sapply(1:length(asegstats.final),
-                                       function(x) {ix = Matrix::which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
+    ij = Matrix::which(aadj.final!=0, arr.ind=T)
+    if (nrow(ij)>0){
+        ij = data.table(ij)
+        e.in = ij[, paste(row, '(', aadj.final[row,col], ')', '->', sep = '', collapse = ','), keyby="col"]
+        e.out = ij[, paste(col, '(', aadj.final[row,col], ')', '->', sep = '', collapse = ','), keyby="row"]
+        asegstats.final$edges.in = e.in
+        asegstats.final$edges.out = e.out
+    } else {
+        asegstats.final$edges.in = "()->"
+        asegstats.final$edges.out = "->()"
+    }
+    ## asegstats.final$edges.in = sapply(1:length(asegstats.final),
+    ##                                   function(x) {
+    ##                                       ix = Matrix::which(aadj.final[,x]!=0);
+    ##                                       paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')
+    ##                                   })
+    ## asegstats.final$edges.out = sapply(1:length(asegstats.final),
+    ##                                    function(x) {
+    ##                                        ix = Matrix::which(aadj.final[x, ]!=0);
+    ##                                        paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')
+    ##                                    })
 
     asegstats.final$slack.in = asegstats.final$cn - Matrix::colSums(aadj.final)
     asegstats.final$slack.out = asegstats.final$cn - Matrix::rowSums(aadj.final)
@@ -3973,24 +4033,73 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 ## cplex set max threads (warning can only do once globally per machine, so be wary of multiple hosts running on same machine)
 ##
-.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
+.cplex_customparams = function(out.file,
+                               numthreads = 0,
+                               nodefileind = NA,
+                               treememlim = NA,
+                               breaksymmetry = NA)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
     param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t'))
 
-    if (!is.na(nodefileind))
+    if (!is.na(nodefileind)){
         param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
+    }
 
     if (!is.na(treememlim))
     {
-                                        #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+        ## param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
         param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+    }
+
+    if (!is.na(breaksymmetry)){
+        breaksymmetry = round(as.numeric(breaksymmetry))
+        if (breaksymmetry<=5 & breaksymmetry >= (-1)){
+            param_lines = c(param_lines,
+                            paste("CPX_PARAM_SYMMETRY", breaksymmetry, sep = "\t"))
+        }
     }
 
     writeLines(param_lines, out.file)
     Sys.setenv(ILOG_CPLEX_PARAMETER_FILE=out.file)
 }
+
+## .cplex_customparams = function(out.file,
+##                                numthreads = 0,
+##                                nodefileind = NA,
+##                                treememlim = NA,
+##                                breaksymmetry = NA)
+## {
+##     param_lines = "CPLEX Parameter File Version 12.6.2.0"
+
+##     param_lines = c(param_lines, paste("CPXPARAM_Threads",
+##                                        numthreads, sep = '\t'))
+
+##     if (!is.na(nodefileind)){
+##         param_lines = c(param_lines, paste("CPXPARAM_MIP_Strategy_File",
+##                                            nodefileind, sep = '\t'))
+##     }
+
+##     if (!is.na(treememlim))
+##     {
+##         ## param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+##         param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory",
+##                                            treememlim, sep = '\t'))
+##     }
+
+##     if (!is.na(breaksymmetry)){
+##         breaksymmetry = round(as.numeric(breaksymmetry))
+##         if (breaksymmetry<=5 & breaksymmetry >= (-1)){
+##             param_lines = c(param_lines,
+##                             paste("CPXPARAM_Preprocessing_Symmetry",
+##                                   breaksymmetry, sep = "\t"))
+##         }
+##     }
+
+##     writeLines(param_lines, out.file)
+##     Sys.setenv(ILOG_CPLEX_PARAMETER_FILE=out.file)
+## }
 
 
 
