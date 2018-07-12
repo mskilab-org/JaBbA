@@ -3011,7 +3011,13 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                                         b = b.boolean))
             
             ## extend cvec and cancel the linear penalties
-            cvec = c(cvec, rep(1/slack.prior, nz.len))
+            ## add a tiny bit of white noise N~(0, 1) to each loose end penalty
+            ## in order to break the symmetry
+            cvec.boolean = rep(1/slack.prior, nz.len)
+            perturb.symm = sample(c(0, 1), length(es.s.nz.ix), replace=TRUE)
+            perturb.symm = c(perturb.symm, 1-perturb.symm)
+            cvec.boolean = cvec.boolean + perturb.symm
+            cvec = c(cvec, cvec.boolean)
             cvec[c(es.s.ix, es.t.ix)] = 0
 
             if (verbose){
@@ -3046,7 +3052,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         } else
         {
             mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
-            setnames(mips.dt, c("row", "col"))
+            colnames(mips.dt) = c("row", "col")
             mips.dt[, cn := mipstart[cbind(row, col)]]
             setkeyv(mips.dt, c("row", "col"))
 
@@ -3065,6 +3071,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             cnc = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
             varmeta[type == 'interval', mipstart := cnc[list(subid), cn]]
             varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(subid), cn], na.rm = TRUE)]
+            ## they may start from hom-del state, so no edges attached
             varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
 
             varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[subid, ])), cn]]
@@ -3170,12 +3177,22 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ## TODO: sometimes this is not feasible! WHY?
             ## compute residual as difference between rounded and "mean" value
             n_hat = varmeta[type == 'interval', mipstart]
-            mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
+            ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
+            mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, round(gamma.guess))
             eps_hat = mu_hat - n_hat
             varmeta[type == 'residual', mipstart := eps_hat]
+
+            ## the newly added boolean variables
+            varmeta[type=="source.slack.boolean",
+                    mipstart := ifelse(varmeta[type=="source.slack", mipstart]>0,
+                                       1, 0)]
+            varmeta[type=="target.slack.boolean",
+                    mipstart := ifelse(varmeta[type=="target.slack", mipstart]>0,
+                                       1, 0)]
         }
     }
 
+    browser()
     ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
     ## astronomical = value that is 1e8 higher than lowest value
     qr = range(setdiff(diag(Qobj), 0))
@@ -3221,7 +3238,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          tilim = tilim,
                          epgap = epgap,
                          mipemphasis = mipemphasis,
-                         breaksymmetry = breaksymmetry))
+                         breaksymmetry = as.integer(breaksymmetry)))
         if (!is.null(mipstart)) ## apply mipstart if provided
             control$mipstart = varmeta$mipstart
 
