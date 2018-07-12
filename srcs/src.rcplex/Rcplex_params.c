@@ -182,6 +182,12 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
     			      *INTEGER(VECTOR_ELT(control, i)));
       #endif
     }
+    else if (strcmp(cur_parm, "breaksymmetry") == 0){ /*ADDED BY XT*/
+      #if CPX_VERSION >= 1100
+      status = CPXsetintparam(env, CPX_PARAM_SYMMETRY,
+    			      *INTEGER(VECTOR_ELT(control, i)));
+      #endif
+    }
     else {
       /* If parameter not known print a warning */
       warning("Unknown CPLEX parameter %s. Ignoring it.\n", cur_parm);
