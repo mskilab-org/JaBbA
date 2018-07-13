@@ -1931,7 +1931,8 @@ segstats = function(target,
                                 !is.infinite(values(signal)[, field]))]
         target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-        if (length(bad.nodes <- which(target$good.prop < 0.9 & target$nafrac > 0.1))>0)
+        ## if (length(bad.nodes <- which(target$good.prop < 0.9 & target$nafrac > 0.1))>0)
+        if (length(bad.nodes <- which(target$good.prop < 0.9)))
         {
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
@@ -2407,6 +2408,10 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                     jmessage("Subgraph number ", k, " is already solved.")
                 }
                 out = readRDS(sol.file)
+            } else {
+                ## RUNNING!!!
+                out = do.call('jbaMIP', args)
+                gc() ## garbage collect .. not sure why this needs to be done
                 ## saving some sub models for debugging
                 if (k<6){
                     saveRDS(args, arg.file)
@@ -2417,10 +2422,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                     saveRDS(args, paste0(outdir, "/", k,".viral.subgraph.rds"))
                     saveRDS(out, paste0(outdir, "/", k,".viral.sol.rds"))
                 }
-            } else {
-                ## RUNNING!!!
-                out = do.call('jbaMIP', args)
-                gc() ## garbage collect .. not sure why this needs to be done
             }
             return(out)
         }, args, mc.cores = mc.cores)
@@ -2655,8 +2656,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (!is.null(adj.ub)){
         ## upper bound on edges, some are forced out
         ub[e.ix] = ifelse(adj.ub[edges]>0, 0, Inf)
-        ## for debug only
-        ## saveRDS(ub, "ub.rds")
     }
 
     varmeta$vtype = vtype
@@ -2926,7 +2925,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             e.penalty = 0.01
         }
         ## penalize each edge use in proportion to position in edge nudge
-        cvec[e.ix] = e.penalty - adj.nudge[edges] 
+        cvec[e.ix] = e.penalty - adj.nudge[edges]
     }
 
     if (edge.slack)
@@ -3025,10 +3024,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                 jmessage("Penalize the number of loose ends regardless of their copy number.")
             }
             tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
-            ## save varmeta, consmeta
-            varmeta[, ":="(cvec = cvec, Qobj = Qobj[cbind(id, id)])]
         }
-
+        
+        ## save varmeta, consmeta        
+        varmeta[, ":="(cvec = cvec, Qobj = Qobj[cbind(id, id)])]
+        
         if (verbose>1)
         {
             jmessage(sprintf('Total mass on cn portion of objective function: %s. ',
