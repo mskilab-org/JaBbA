@@ -2348,7 +2348,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         for (f in c('ploidy.constraints', 'beta.constraints')){
             out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
         }
-        
+
         ## adjacency matrix
         out$adj = 0 * adj
         for (i in 1:length(sols))
@@ -2455,7 +2455,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                                ploidy.normal = ploidy.normal,
                                use.L0 = use.L0)
 
-    if (is.null(constraints)) 
+    if (is.null(constraints))
     {
         ## if constraints are NULL, then
         ## there are no segments with non NA mean, so we return NA solution
@@ -2551,7 +2551,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         varmeta$mipstart = .mipstart(mipstart, segstats, edges, varmeta, consmeta, Amat, beta, gamma)
     }
 
-    browser()
     ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
     ## astronomical = value that is 1e8 higher than lowest value
     qr = range(setdiff(diag(Qobj), 0))
@@ -2603,8 +2602,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
 
         sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = consmeta$b, sense = consmeta$sense, Qmat = Qobj, lb = varmeta$lb, ub = varmeta$ub, n = nsolutions, objsense = "min", vtype = varmeta$vtype, control = control)
-        ## sol.xt = Rcplex2(cvec = cvec, Amat = xt$Amat, bvec = xt$consmeta$b,sense = consmeta$sense,Qmat = xt$Qobj,lb = xt$varmeta$lb,ub = xt$varmeta$ub, n = nsolutions, objsense = "min", vtype = xt$varmeta$vtype, control = control)
-
     }
     if (is.null(sol$xopt))
         sol.l = sol
@@ -2750,7 +2747,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 #'
 .constraints = function(varmeta, segstats, edges, ploidy.normal, use.L0)
 {
-    browser()
     consmeta = data.table() ## store meta data about constraints to keep track
     Zero = sparseMatrix(1, 1, x = 0, dims = c(nrow(varmeta), nrow(varmeta)))
     pid.nna = which(!is.na(segstats$mean) & !is.na(segstats$sd))
@@ -2765,7 +2761,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     gamma.ix = varmeta[label == 'gamma', id]
     beta.ix = varmeta[label == 'beta', id]
     v.ix.c = varmeta[type == 'interval',][pid.nna, ][psid>0, id]
-    s.ix = varmeta[type == "residual", ][, varmeta[v.ix.c, ]$pid]
+    s.ix = varmeta[type == "residual", ][varmeta[v.ix.c, ]$pid, id]
 
     if (is.null(ploidy.normal)){
         ploidy.normal =
@@ -2777,7 +2773,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) /
         sum(as.numeric(width(segstats)[v.ix.c]))
 
-    ## BIGBUG
     ## set copy number constraints
     Acn = Zero[rep(1, length(v.ix.c)+1), ]
     Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
@@ -2791,7 +2786,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     ## ##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
     ## Acn[length(v.ix.c)+1, gamma.ix] = ploidy.normal/2; ## taking into account (normal) variable cn
     ## Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
-    
+
     bcn = rep(0, nrow(Acn)) ##
 
     consmeta = rbind(consmeta,
