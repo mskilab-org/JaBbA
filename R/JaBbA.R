@@ -131,11 +131,10 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
-                 epgap = 1e-2,
+                 epgap = 1e-4,
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
-                 verbose = TRUE, ## whether to provide verbose output
-                 breaksymmetry = NA
+                 verbose = TRUE ## whether to provide verbose output
                  )
 {
     system(paste('mkdir -p', outdir))
@@ -276,7 +275,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             jab = jabba_stub(
                 junctions = this.ra.file,
                 seg = seg,
-                coverages = coverage,
+                coverage = coverage,
                 hets = hets,
                 nseg = nseg,
                 cfield = cfield,
@@ -301,8 +300,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 purity = as.numeric(purity),
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
-                verbose = as.numeric(verbose),
-                breaksymmetry = breaksymmetry
+                verbose = as.numeric(verbose)
             )
             gc()
 
@@ -406,7 +404,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         jab = jabba_stub(
             junctions = ra,
             seg = seg,
-            coverages = coverage,
+            coverage = coverage,
             hets = hets,
             nseg = nseg,
             cfield = cfield,
@@ -431,8 +429,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             indel = as.logical(indel),
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
-            verbose = as.numeric(verbose),
-            breaksymmetry = breaksymmetry
+            verbose = as.numeric(verbose)
         )
     }
 
@@ -491,7 +488,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @import DNAcopy
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
-                      coverages, # path to cov file, rds of GRanges
+                      coverage, # path to cov file, rds of GRanges
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
                       tfield = NULL, # character, tier confidence meta data field in ra
@@ -520,8 +517,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       loose.penalty.mode = c("linear", "boolean"),
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
-                      verbose = TRUE,
-                      breaksymmetry = NA)
+                      verbose = TRUE
+                      )
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -544,45 +541,45 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
     nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
-    if (is.character(coverages))
+    if (is.character(coverage))
     {
-        if (!file.exists(coverages))
+        if (!file.exists(coverage))
         {
-            stop(paste('Coveraeg path ', coverages, 'does not exist'))
+            stop(paste('Coveraeg path ', coverage, 'does not exist'))
         }
 
-        if (grepl('\\.rds$', coverages))
+        if (grepl('\\.rds$', coverage))
         {
-            coverages = readRDS(coverages)
+            coverage = readRDS(coverage)
         }
-        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverages))
+        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
         {
-            tmp = fread(coverages)
-            coverages = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
+            tmp = fread(coverage)
+            coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
         }
         else
         {
             jmessage('Importing seg from UCSC format')
-            coverages = rtracklayer::import(coverages)
+            coverage = rtracklayer::import(coverage)
             field = 'score';
-            coverages = gr.fix(coverages)
+            coverage = gr.fix(coverage)
         }
     }
     else
-        coverages = coverages
+        coverage = coverage
 
-    if (!inherits(coverages, 'GRanges'))
-        coverages = dt2gr(coverages)
+    if (!inherits(coverage, 'GRanges'))
+        coverage = dt2gr(coverage)
 
 
     if (verbose)
     {
-        jmessage("Read in coverage data across ", prettyNum(length(coverages), big.mark = ','), " bins and ", length(unique(seqnames(coverages))), ' chromosomes')
+        jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
     }
 
-    if (!(field %in% names(values(coverages))))
+    if (!(field %in% names(values(coverage))))
     {
-        new.field = names(values(coverages))[1]
+        new.field = names(values(coverage))[1]
         warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
         field = new.field
     }
@@ -603,10 +600,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 jmessage('No segmentation provided, so performing segmentation using CBS')
             }
             set.seed(42)
-            vals = values(coverages)[, field]
-            new.sl = GenomeInfoDb::seqlengths(coverages)
+            vals = values(coverage)[, field]
+            new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
-            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverages))[ix], start(coverages)[ix], data.type = 'logratio')
+            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
             seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
 
             if (verbose)
@@ -614,7 +611,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 jmessage('Segmentation finished')
             }
             seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
-            seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverages), drop = T)
+            seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverage), drop = T)
 
             if (verbose)
             {
@@ -648,7 +645,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     saveRDS(seg, seg.fn)
 
     if (!inherits(seg, 'GRanges'))
-        seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverages))
+        seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
 
     if (!is.null(hets))
     {
@@ -678,7 +675,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!is.character(ra))
     {
         if (overwrite | !file.exists(kag.file))
-            karyograph_stub(seg, coverages, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
+            karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose)
         else
             warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -690,12 +687,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             grepl('bedpe$', ra))
         {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverages, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
+                karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         } else  {
             if (overwrite | !file.exists(kag.file))
-                karyograph_stub(seg, coverages, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
+                karyograph_stub(seg, coverage, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose)
             else
                 warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
         }
@@ -787,8 +784,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     } else { ## nudge everything ..
         if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
         if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
-            bps.cov = gr.val(bpss, coverages, val = 'ratio')
-                                        #        bps.cov = bpss %$% coverages
+            bps.cov = gr.val(bpss, coverage, val = 'ratio')
+                                        #        bps.cov = bpss %$% coverage
             na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
             if (length(na.jix)>0){
                 ## if (verbose)
@@ -871,9 +868,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty,
-                   loose.penalty.mode = loose.penalty.mode,
-                   customparams = T,
-                   breaksymmetry = breaksymmetry)
+                   loose.penalty.mode = loose.penalty.mode)
     }
 
     kag = readRDS(kag.file)
@@ -992,7 +987,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     saveRDS(kag$junctions, junctions.rds.file)
 
-    tmp.cov = sample(coverages, pmin(length(coverages), 5e5))
+    tmp.cov = sample(coverage, pmin(length(coverage), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
@@ -1418,7 +1413,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 sites = sites[which(chromosome %in% good.chr)]
             } else {
                 ## only running w/ chr1-22 and X
-                sites = sites[which(chromosome %in% unique(seg$chrom))] 
+                sites = sites[which(chromosome %in% unique(seg$chrom))]
             }
 
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
@@ -1433,7 +1428,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             if (verbose){
                 jmessage("Starting BAF model fit")
             }
-            
+
             ## run the BAF model fit
             CP = sequenza::baf.model.fit(Bf = seg.filtered$Bf,
                                          depth.ratio = seg.filtered$depth.ratio,
@@ -1551,7 +1546,6 @@ ramip_stub = function(kag.file,
                       gamma = NA,
                       beta = NA,
                       customparams = T,
-                      breaksymmetry = NA,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -1559,9 +1553,9 @@ ramip_stub = function(kag.file,
                       use.gurobi = FALSE,
                       epgap = 1e-4,
                       verbose = FALSE,
-                      edge.nudge = 0,  
-                      ab.force = NULL, 
-                      ab.exclude = NULL, 
+                      edge.nudge = 0,
+                      ab.force = NULL,
+                      ab.exclude = NULL,
                       loose.penalty.mode = c("linear", "boolean")
                       )
 {
@@ -1605,10 +1599,7 @@ ramip_stub = function(kag.file,
             max.threads = 0
 
         param.file = paste(out.file, '.prm', sep = '')
-        .cplex_customparams(param.file,
-                            max.threads,
-                            treememlim = mem * 1e3,
-                            breaksymmetry=breaksymmetry)
+        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
         if (verbose)
@@ -1668,7 +1659,7 @@ ramip_stub = function(kag.file,
             mipstart = gGnome::gread(kag.file)
             segs = mipstart$segstats
             segs$cn = pmax(round(segs$cn), 0) ## negative given 0
-            segs$cn[is.na(segs$cn)] = round(this.kag$ploidy) ## NA given ploidy
+            segs$cn[is.na(segs$cn)] = 0 ## NA given 0
 
             es = mipstart$edges
             es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
@@ -1703,6 +1694,7 @@ ramip_stub = function(kag.file,
             es[type=="reference", cn := pmin(from.remain, to.remain)]
 
             mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()
+            mipstart = gGnome::gGraph$new(segs = segs, es = es)$fillin()
             saveRDS(mipstart, paste0(outdir, "/mipstart.gg.rds"))
         }
     }
@@ -1742,24 +1734,13 @@ ramip_stub = function(kag.file,
                                 dims = dim(this.kag$adj))
     }
 
-    ## too hardcoded!!
-    ## nothing.contig = gr2dt(this.kag$segstats)[
-    ##   , .(nothing = all(is.na(mean))), by=seqnames][
-    ##     nothing==TRUE, seqnames]
-    ## if (verbose){
-    ##     jmessage("Finally ignoring ",
-    ##              length(nothing.contig),
-    ##              " contigs in the reference genome completely not covered.")
-    ## }
-
     ra.sol = jbaMIP(this.kag$adj,
                     this.kag$segstats,
-                    beta.guess = this.kag$beta,
-                    gamma.guess = this.kag$gamma,
+                    beta= this.kag$beta,
+                    gamma = this.kag$gamma,
                     tilim = tilim,
                     slack.prior = slack.prior,
                     mipemphasis = 0,
-                    ignore.cons = T,
                     mipstart = mipstart, ## make mipstart if not provided
                     adj.lb = adj.lb,
                     epgap = epgap,
@@ -1769,9 +1750,8 @@ ramip_stub = function(kag.file,
                     adj.nudge = adj.nudge,
                     outdir = outdir,
                     cn.ub = rep(500, length(this.kag$segstats)),
-                    loose.penalty.mode = loose.penalty.mode,
-                    verbose = verbose,
-                    breaksymmetry = breaksymmetry) ## can this be passed?
+                    use.L0 = loose.penalty.mode == 'boolean',
+                    verbose = verbose)
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -1881,7 +1861,7 @@ segstats = function(target,
                        by=ix]
             asignal.dt = asignal.dt[!duplicated(ix), ]
             setkey(asignal.dt, ix)
-            
+
             target$mean_high = asignal.dt[.(seq_along(target)), alpha_high / beta_high]
             target$sd_high = asignal.dt[.(seq_along(target)), sqrt(alpha_high / (beta_high)^2)]
             target$mean_low = asignal.dt[.(seq_along(target)), alpha_low / beta_low]
@@ -1908,7 +1888,7 @@ segstats = function(target,
         sample.mean = sapply(vall, mean, na.rm = TRUE)
         sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
         ix = !is.na(sample.mean) & !is.na(sample.var)
-        
+
         target$mean = NA;
         if (any(ix)){
             target$mean[ix] = sample.mean[ix]
@@ -1931,8 +1911,7 @@ segstats = function(target,
                                 !is.infinite(values(signal)[, field]))]
         target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-        ## if (length(bad.nodes <- which(target$good.prop < 0.9 & target$nafrac > 0.1))>0)
-        if (length(bad.nodes <- which(target$good.prop < 0.9)))
+        if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
         {
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
@@ -1971,7 +1950,7 @@ segstats = function(target,
         ## tmp[, log.nbins := log10(nbins)]
         ## tmp[, sd2mean := sample.sd/mean]
         ## tmp[, high.mean := mean>5]
-        
+
         ## lr = tmp[sd2mean<1, lm(sd2mean ~ log.nbins)]
 
         ## ppng(print(
@@ -1999,7 +1978,7 @@ segstats = function(target,
         ## tmp[, predict.sem := predict(loe.sem.2.mean)]
 
 
-        
+
         loe = tmp[, loess(var ~ mean, weights = nbins)]
         ## loe.robust = tmp[mean<mean(mean)+3*sd(mean) & mean>mean(mean)-3*sd(mean),
         ##                  loess(var ~ mean, weights = nbins,
@@ -2009,7 +1988,7 @@ segstats = function(target,
         ##                    var<median(var)+ 3 * sd(var) & var>median(var)- 3 * sd(var),
         ##                    loess(var ~ mean, weights = nbins,
         ##                          control=loess.control(surface="direct"))]
-        
+
         ## diagnostic plot of variance correction
         tmp[, predict.var := predict(loe, newdata = mean)]
         ## tmp[, predict.var.rm.high.mean := predict(loe.robust, newdata = mean)]
@@ -2130,22 +2109,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   segstats, # n x 1 GRanges object with "mean" and "sd" value fields
                   mipstart = NULL, ## sparse adjacency matrix of mipstarts (0 = NA, 0+eps + 0, k>=1 = k)
 ########### optional args
-                  beta = NA, # beta guess (optional)
-                  gamma = NA, # gamma guess (optional)
+                  beta, # beta guess
+                  gamma, # gamma guess
                   field.ncn = 'ncn', # will use this field to take into account normal copy number in transformation of relative to integer copy number
                   tilim = 20, mipemphasis = 0, epgap = 1e-4, # MIP params
-                  ploidy.min = 0.1, # ploidy bounds (can be generous)
-                  ploidy.max = 20,
                   ploidy.normal = NULL, ## usually inferred from ncn field but can be entered for subgraph analysis
-                  ## #  purity.guess = NA,
-                  ## #  ploidy.guess = NA,
-                  beta.guess = beta,
-                  beta.min = beta.guess,
-                  beta.max = beta.guess,
-                  gamma.guess = NA,
-                  gamma.min = gamma.guess,
-                  gamma.max = gamma.guess,
-                  partition = T, ## whether to partition the problem into MIP subproblems depending on the relationships of the segment standard deviation and the value of the slack.prior (only works if gamma.guess, beta.guess are specified)
+                  partition = T, ## whether to partition the problem into MIP subproblems depending on the relationships of the segment standard deviation and the value of the slack.prior
                   cn.fix = rep(NA, length(segstats)), ## vector of NA's and (integer) values to which to "fix" copy states, only non NA's are incorporated
                   cn.lb = cn.fix,
                   cn.ub = cn.fix,
@@ -2154,25 +2123,17 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   adj.ub = NULL,
                   adj.nudge = 0*adj, # linear objective function coefficients for edges (only which(adj!=0) components considered)
                   na.node.nudge = TRUE,
+                  use.L0 = FALSE,
                   use.gurobi = FALSE, # otherwise will use cplex
                   nsolutions = 1,
                   verbose = F,
                   debug = F,
                   outdir = NULL,
                   mc.cores = 1, ## only matters if partition = T
-                  ignore.edge = FALSE, ignore.cons = TRUE, edge.slack = TRUE,
                   slack.prior = 1,
-                  loose.penalty.mode = c("linear", "boolean"),
-                  breaksymmetry = NA, 
                   ... # passed to optimizer
                   )
 {
-    if (!any(grepl(loose.penalty.mode,c("linear", "boolean")))){
-        loose.penalty = "linear"
-    } else {
-        loose.penalty = grep(loose.penalty.mode,c("linear", "boolean"), value=TRUE)[1]
-    }
-    
     if (length(segstats) != nrow(adj))
         stop('length(segstats) !=  nrow(adj)')
 
@@ -2183,1081 +2144,444 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     segstats$kag.cn = segstats$cn
 
     ## wrapper that calls jbaMIP recursively on subgraphs after "fixing"
-    if (partition & !is.na(gamma.guess) & !is.na(beta.guess))
+    if (partition)
     {
-
-        ##      m = segstats$mean*beta.guess - gamma.guess
-
         ## transform means from data space into copy number space
-        m = rel2abs(segstats,
-                    gamma = gamma.guess,
-                    beta = beta.guess,
-                    field = 'mean',
-                    field.ncn = field.ncn)
+        m = rel2abs(segstats, gamma = gamma, beta = beta, field = 'mean', field.ncn = field.ncn)
 
         ## transform sds from data space into copy number space (only need to multiply by beta)
-        segstats$sd = segstats$sd * beta.guess
+        segstats$sd = segstats$sd * beta
 
         cnmle = round(m) ## MLE estimate for CN
         residual.min = ((m-cnmle)/(segstats$sd))^2
         residual.other =
-            apply(cbind(
-            (m-cnmle-1)/segstats$sd,
-            (m-cnmle+1)/segstats$sd
-            )^2,
-            1, min)
-        residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
+          apply(cbind(
+          (m-cnmle-1)/segstats$sd,
+          (m-cnmle+1)/segstats$sd
+          )^2,
+          1, min)
+      residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
 
-        ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
-        ## is greater than k / slack.prior penalty (where k is some copy difference
-        ## that we would never imagine a "reasonable" slack to have to over-rule
-        ## fix = as.integer(which(residual.diff>(8/slack.prior)))
-        ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-        ## fix = as.integer(which(residual.diff>(4/slack.prior)))
-        ## 8 is a constant that is conservative, let's try 4
-        ## let's not fix to zero
-        if (loose.penalty.mode == "linear"){
-            fix = as.integer(which(residual.diff>(4/slack.prior) &
-                                   cnmle >= 0))
-        } else if (loose.penalty.mode=="boolean") {
-            ## supposed to be 1, but too many subgraphs could also hurt
-            ## so, change back to four
-            ## fix = as.integer(which(residual.diff>(1/slack.prior) &
-            ##                        cnmle >= 0))
-            fix = as.integer(which(residual.diff>(4/slack.prior) &
-                                   cnmle >= 0))
-        }
+      ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
+      ## is greater than k / slack.prior penalty (where k is some copy difference
+      ## since each node has 4 loose ends
 
-        ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
-        ## each bigger and harder to solve
-        if (verbose)
-        {
-            jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
-        }
+      fix = as.integer(which(residual.diff>(4/slack.prior) &
+                             cnmle >= 0))
 
+      ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
+      ## each bigger and harder to solve
+      if (verbose)
+      {
+        jmessage('Fixing ', length(fix), ' nodes that are unmovable by slack ')
+      }
 
-        ## zeta-partition of the graph
-        ## now we will create a graph of unfixed nodes and fixed node "halves"
-        ## i.e. we split each fixed node to a node that is receiving edges
-        ## and a node that is sending edges
-        ##
-        unfix = as.numeric(setdiff(1:length(segstats), fix))
-        G = graph(as.numeric(t(Matrix::which(adj!=0, arr.ind = T))),
-                  n = length(segstats), directed = T)
-        V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
+      ##
+      ## now we will create a graph of unfixed nodes and fixed node "halves"
+      ## i.e. we split each fixed node to a node that is receiving edges
+      ## and a node that is sending edges
+      ##
+      unfix = as.numeric(setdiff(1:length(segstats), fix))
+      G = graph(as.numeric(t(Matrix::which(adj!=0, arr.ind = T))), n = length(segstats), directed = T)
+      V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
 
-        if (length(fix)>0)
-            G.unfix = induced.subgraph(G, unfix) + vertices(c(paste('from', fix), paste('to', fix)))
-        else
-            G.unfix = induced.subgraph(G, unfix)
+      if (length(fix)>0)
+        G.unfix = induced.subgraph(G, unfix) + vertices(c(paste('from', fix), paste('to', fix)))
+      else
+        G.unfix = induced.subgraph(G, unfix)
 
-        if (length(fix)>0 & length(unfix)>0){
-            node.map = structure(c(unfix, fix, fix),
-                                 names = c(as.character(unfix),
-                                           paste('from', fix),
-                                           paste('to', fix)))
-        } else if (length(fix)>0){
-            node.map = structure(c(fix, fix), names = c(paste('from', fix), paste('to', fix)))
-        } else {
-            node.map = structure(c(unfix), names = c(as.character(unfix)))
-        }
-        
-        ## add nodes representing the "receiving" and "sending" side of fixed nodes
-        if (length(fix)>0 & length(unfix)>0)
-        {
-            tofix = Matrix::which(adj[unfix, fix]!=0, arr.ind = T)
-            fromfix = Matrix::which(adj[fix, unfix]!=0, arr.ind = T)
-        }
-        else
-        {
-            tofix = c()
-            fromfix = c()
-        }
+      if (length(fix)>0 & length(unfix)>0)
+        node.map = structure(c(unfix, fix, fix),
+                             names = c(as.character(unfix),
+                                       paste('from', fix),
+                                       paste('to', fix)))
+      else if (length(fix)>0)
+        node.map = structure(c(fix, fix), names = c(paste('from', fix), paste('to', fix)))
+      else
+        node.map = structure(c(unfix), names = c(as.character(unfix)))
 
-        if (length(fix)>0)
-            fixtofix = Matrix::which(adj[fix, fix]!=0, arr.ind = T)
-        else
-            fixtofix = c()
+      ## add nodes representing the "receiving" and "sending" side of fixed nodes
+      if (length(fix)>0 & length(unfix)>0)
+      {
+        tofix = Matrix::which(adj[unfix, fix]!=0, arr.ind = T)
+        fromfix = Matrix::which(adj[fix, unfix]!=0, arr.ind = T)
+      }
+      else
+      {
+        tofix = c()
+        fromfix = c()
+      }
 
-        if (length(tofix)>0)
-            e.tofix = edges(as.vector(rbind(unfix[tofix[,1]], paste('to', fix[tofix[,2]]))))
-        else
-            e.tofix = edges()
+      if (length(fix)>0)
+        fixtofix = Matrix::which(adj[fix, fix]!=0, arr.ind = T)
+      else
+        fixtofix = c()
 
-        if (length(fromfix)>0)
-            e.fromfix = edges(rbind(paste('from', fix[fromfix[,1]]), unfix[fromfix[,2]]))
-        else
-            e.fromfix = edges()
+      if (length(tofix)>0)
+        e.tofix = edges(as.vector(rbind(unfix[tofix[,1]], paste('to', fix[tofix[,2]]))))
+      else
+        e.tofix = edges()
 
-        if (length(fixtofix)>0)
-            e.fixtofix = edges(rbind(paste('from', fix[fixtofix[,1]]), paste('to', fix[fixtofix[,2]])))
-        else
-            e.fixtofix = edges()
+      if (length(fromfix)>0)
+        e.fromfix = edges(rbind(paste('from', fix[fromfix[,1]]), unfix[fromfix[,2]]))
+      else
+        e.fromfix = edges()
 
-        ## add edges to graph from fixed to unfixed, unfixed to fix, and fixed to fixed node sides
-        G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
+      if (length(fixtofix)>0)
+        e.fixtofix = edges(rbind(paste('from', fix[fixtofix[,1]]), paste('to', fix[fixtofix[,2]])))
+      else
+        e.fixtofix = edges()
 
-        ## find connected components in these graphs
-        cl = igraph::clusters(G.unfix, 'weak')
-        cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
+      ## add edges to graph from fixed to unfixed, unfixed to fix, and fixed to fixed node sides
+      G.unfix = G.unfix + e.tofix + e.fromfix + e.fixtofix
 
-        ## combine components with their reverse complement components
-        ## (only intervals that have a (fixed node free) path from their positive to their negative strand
-        ## will be part of the same component .. all other intervals will be separated from their
-        ## reverse complement.  However, in the MIP we always optimize
-        ## over both strands, and thus must merge components with their reverse complement
-        pos.ix = which( as.logical( strand(segstats)=='+') )
-        neg.ix = which( as.logical( strand(segstats)=='-') )
+      ## find connected components in these graphs
+      cl = igraph::clusters(G.unfix, 'weak')
+      cll = split(V(G.unfix)$name, cl$membership) ## keep augmented graph names, use node.map later
 
-        ## maps segments and reverse complements
-        seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
+      ## combine components with their reverse complement components
+      ## (only intervals that have a (fixed node free) path from their positive to their negative strand
+      ## will be part of the same component .. all other intervals will be separated from their
+      ## reverse complement.  However, in the MIP we always optimize
+      ## over both strands, and thus must merge components with their reverse complement
+      pos.ix = which( as.logical( strand(segstats)=='+') )
+      neg.ix = which( as.logical( strand(segstats)=='-') )
 
-        cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
-        dup.ix = match(cll.m, unique(cll.m))
+      ## maps segments and reverse complements
+      seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
+
+      cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
+      dup.ix = match(cll.m, unique(cll.m))
                                         #      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) sort(unique(do.call('c', cll[x]))))
-        cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
+      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
 
-        ord.ix = order(-sapply(cll, length))
-        cll = cll[ord.ix]
+      ord.ix = order(-sapply(cll, length))
+      cll = cll[ord.ix]
+
+      if (verbose)
+      {
+        jmessage('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
+                 paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
+      }
+
+      cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
+
+      ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
+      args = as.list(match.call())[-1]
+      args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
+
+      if (is.null(ploidy.normal))
+      {
+        if (field.ncn %in% names(values(segstats)))
+        {
+          args$ploidy.normal = as.data.table(segstats)[, sum(ncn*as.numeric(width), na.rm = TRUE)/sum(ncn*0+1*as.numeric(width), na.rm = TRUE)]
+
+        }
+      }
+
+      browser()
+
+      sols = mclapply(1:length(cll), function(k, args)
+      {
+        ix = node.map[cll[[k]]] ## indices in the original graph
+        uix = unique(ix)
+        fr.ix = grepl('from', cll[[k]])
+        to.ix = grepl('to', cll[[k]])
+
+        ## we want to make sure that fixed nodes that straddle
+        ## two clusters will only have the "correct"
+        ## half included in this run
+        fronly.ix = setdiff(ix[fr.ix], ix[to.ix])
+        toonly.ix = setdiff(ix[to.ix], ix[fr.ix])
+
+        ## now we want to make sure that fronly.ix don't have incoming edges
+        tmp.adj = adj[uix, uix, drop = F]
+
+        if (length(fronly.ix)>0)
+          tmp.adj[, as.character(as.integer(fronly.ix))] = 0
+
+        ## and toonly.ix don't have outgoing edges
+        if (length(toonly.ix)>0)
+          tmp.adj[as.character(as.integer(toonly.ix)), ] = 0
+
+        args$adj = tmp.adj
+
+        if (!is.null(mipstart))
+          args$mipstart = mipstart[uix, uix]
+
+        args$adj.nudge = adj.nudge[uix, uix, drop = F]
+        args$na.node.nudge = na.node.nudge
+        args$adj.lb = adj.lb[uix, uix, drop = F]
+        if (!is.null(adj.ub)){
+          args$adj.ub = adj.ub[uix, uix, drop = F] ## xt added 5/4
+        }
+        args$segstats = segstats[uix]
+        args$cn.fix = cn.fix[uix]
+        args$cn.lb = cn.lb[uix]
+        args$cn.ub = cn.ub[uix]
+        args$partition = F
+        args$nsolutions = 1
 
         if (verbose)
-        {
-            jmessage('Partitioned graph into ', length(cll), ' connected components with the size of the highest 10 components being:\n',
-                     paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
+          jmessage('Junction balancing subgraph ', k, ' of ',
+                   length(cll), ' which has ', length(uix), ' nodes comprising ',
+                   round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ',
+                   length(unique(seqnames((segstats[uix])))),
+                   ' chromosomes, including chrs ',
+                   paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
+        if (k==1){
+          saveRDS(args, paste0(outdir, "/first.args.rds"))
         }
 
-        cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
+        out = do.call('jbaMIP', args)
 
-        ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
-        args = as.list(match.call())[-1]
-        args = structure(lapply(names(args), function(x) eval(parse(text = x))), names = names(args))
-
-
-        if (is.null(ploidy.normal))
-        {
-            if (field.ncn %in% names(values(segstats)))
-            {
-                args$ploidy.normal = as.data.table(segstats)[, sum(ncn*as.numeric(width), na.rm = TRUE)/sum(ncn*0+1*as.numeric(width), na.rm = TRUE)]
-
-            }
-        }
-
-        sols = mclapply(1:length(cll), function(k, args)
-        {
-            ix = node.map[cll[[k]]] ## indices in the original graph
-            uix = unique(ix)
-            fr.ix = grepl('from', cll[[k]])
-            to.ix = grepl('to', cll[[k]])
-
-            ## we want to make sure that fixed nodes that straddle
-            ## two clusters will only have the "correct"
-            ## half included in this run
-            fronly.ix = setdiff(ix[fr.ix], ix[to.ix])
-            toonly.ix = setdiff(ix[to.ix], ix[fr.ix])
-
-            ## now we want to make sure that fronly.ix don't have incoming edges
-            tmp.adj = adj[uix, uix, drop = F]
-
-            if (length(fronly.ix)>0)
-                tmp.adj[, as.character(as.integer(fronly.ix))] = 0
-
-            ## and toonly.ix don't have outgoing edges
-            if (length(toonly.ix)>0)
-                tmp.adj[as.character(as.integer(toonly.ix)), ] = 0
-
-            args$adj = tmp.adj
-
-            if (!is.null(mipstart))
-                args$mipstart = mipstart[uix, uix]
-
-            args$adj.nudge = adj.nudge[uix, uix, drop = F]
-            args$na.node.nudge = na.node.nudge
-            args$adj.lb = adj.lb[uix, uix, drop = F]
-            if (!is.null(adj.ub)){
-                args$adj.ub = adj.ub[uix, uix, drop = F] ## xt added 5/4
-            }
-            args$segstats = segstats[uix]
-            args$cn.fix = cn.fix[uix]
-            args$cn.lb = cn.lb[uix]
-            args$cn.ub = cn.ub[uix]
-            args$partition = F
-            args$nsolutions = 1
-            args$ploidy.min = 0 ## no ploidy constraints
-            ##          args$ploidy.max = max(c(100, cnmle[ix]), na.rm = T)*1.5
-            args$ploidy.max = Inf
-
-            if (verbose){
-                jmessage('Junction balancing subgraph ', k,
-                         ' of ', length(cll),
-                         ' which has ', length(uix), ' nodes comprising ',
-                         round(sum(as.numeric(width(segstats[uix])))/2/1e6, 2), ' MB and ',
-                         length(unique(seqnames((segstats[uix])))),
-                         ' chromosomes, including chrs ',
-                         paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4, length(unique(seqnames((segstats[uix])))))]),
-                               collapse = ', '))
-            }
-
-            ## new argument that decides which loose model we use
-            args$loose.penalty.mode = loose.penalty.mode
-
-            sol.file = paste0(outdir, "/sol.", k, ".rds")
-            arg.file = paste0(outdir, "/args.", k, ".rds")
-            
-            if (file.exists(sol.file)){
-                if (verbose){
-                    jmessage("Subgraph number ", k, " is already solved.")
-                }
-                out = readRDS(sol.file)
-            } else {
-                ## RUNNING!!!
-                out = do.call('jbaMIP', args)
-                gc() ## garbage collect .. not sure why this needs to be done
-                ## saving some sub models for debugging
-                if (k<6){
-                    saveRDS(args, arg.file)
-                    saveRDS(out, sol.file)
-                }
-
-                if (any(grepl("gi", seqnames(args$segstats)))){
-                    saveRDS(args, paste0(outdir, "/", k,".viral.subgraph.rds"))
-                    saveRDS(out, paste0(outdir, "/", k,".viral.sol.rds"))
-                }
-            }
-            return(out)
-        }, args, mc.cores = mc.cores)
-
-        out = list()
-        ## scalar fields --> length(cluster) vector
-        for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')){
-            out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
-        }
-
-        ## length 2 fields --> length(cluster) x 2 matrix
-        for (f in c('ploidy.constraints', 'beta.constraints')){
-            out[[paste('component', f, sep = '')]] =
-                do.call('rbind', lapply(sols, function(x) x[[f]]))
-        }
-
-        ## adjacency matrix
-        out$adj = 0 * adj
-        for (i in 1:length(sols))
-        {
-            ix1 = as.numeric(rownames(sols[[i]]$adj))
-            out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
-        }
-
-        ## segstats
-        sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
-        out$segstats =
-            do.call('grbind',
-                    lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
-
-        ## annotate segstats keep to keep track and "fixed nodes"
-        out$segstats$fixed = 1:length(out$segstats) %in% fix
-        out$segstats$cn.fix = cn.fix
-        out$segstats$cl  = NA
-        out$segstats$id = 1:length(out$segstats)
-
-        ## keep track of which clusters segments originated
-        sol.ixul = munlist(sol.ix)
-        tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
-        out$segstats$cl = NA
-        out$segstats$cl[as.numeric(names(tmp))] = tmp
-
-        out$purity = 2/(2+gamma.guess)
-        v = out$segstats$cn; w = as.numeric(width(out$segstats))
-        out$ploidy = sum((v*w)[!is.na(v)]) / sum(w[!is.na(v)])
-        out$beta = beta.guess;
-        out$gamma = gamma.guess;
-
-        target.less = Matrix::rowSums(adj, na.rm = T)==0
-        source.less = Matrix::colSums(adj, na.rm = T)==0
-        out$segstats$eslack.out[!target.less] =
-            out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
-        out$segstats$eslack.in[!source.less] =
-            out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
-
-        out$segstats$ecn.out =  Matrix::rowSums(out$adj)
-        out$segstats$ecn.in =  Matrix::colSums(out$adj)
-
-        out$segstats$edges.in =
-            sapply(1:length(out$segstats),
-                   function(x) {
-                       ix = Matrix::which(adj[,x]!=0)
-                       paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')
-                   })
-        out$segstats$edges.out =
-            sapply(1:length(out$segstats),
-                   function(x) {
-                       ix = Matrix::which(adj[x, ]!=0)
-                       paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')
-                   })
-
-        ncn = rep(2, length(segstats))
-        if (!is.null(field.ncn)){
-            if (field.ncn %in% names(values(segstats))){
-                ncn = values(segstats)[, field.ncn]
-            }
-        }
-
-        ## index of valid nodes
-        nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
-
-        ## new obj allowing variable normal copy number
-        ## Jan 4, because our original objective is 1/2 for pos strand intervals only
-        out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma -
-                            out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
-            1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T))
-        out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-        out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
-        out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
-        out$sols = sols
+        gc() ## garbage collect .. not sure why this needs to be done
 
         return(out)
+      }, args, mc.cores = mc.cores)
+
+      out = list()
+      for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')) ## scalar fields --> length(cluster) vector
+        out[[paste('component', f, sep = '')]] = sapply(sols, function(x) x[[f]])
+
+      for (f in c('ploidy.constraints', 'beta.constraints')) ## length 2 fields --> length(cluster) x 2 matrix
+        out[[paste('component', f, sep = '')]] = do.call('rbind', lapply(sols, function(x) x[[f]]))
+
+      ## adjacency matrix
+      out$adj = 0 * adj
+      for (i in 1:length(sols))
+      {
+        ix1 = as.numeric(rownames(sols[[i]]$adj))
+        out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
+      }
+
+      ## segstats
+      sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
+      out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
+
+      ## annotate segstats keep to keep track and "fixed nodes"
+      out$segstats$fixed = 1:length(out$segstats) %in% fix
+      out$segstats$cn.fix = cn.fix
+      out$segstats$cl  = NA
+      out$segstats$id = 1:length(out$segstats)
+
+      ## keep track of which clusters segments originated
+      sol.ixul = munlist(sol.ix)
+      tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
+      out$segstats$cl = NA
+      out$segstats$cl[as.numeric(names(tmp))] = tmp
+
+      out$purity = 2/(2+gamma)
+      v = out$segstats$cn; w = as.numeric(width(out$segstats))
+      out$ploidy = sum((v*w)[!is.na(v)]) / sum(w[!is.na(v)])
+      out$beta = beta;
+      out$gamma = gamma;
+
+      target.less = Matrix::rowSums(adj, na.rm = T)==0
+      source.less = Matrix::colSums(adj, na.rm = T)==0
+      out$segstats$eslack.out[!target.less] = out$segstats$cn[!target.less] - Matrix::rowSums(out$adj)[!target.less]
+      out$segstats$eslack.in[!source.less] =  out$segstats$cn[!source.less] - Matrix::colSums(out$adj)[!source.less]
+
+      out$segstats$ecn.out =  Matrix::rowSums(out$adj)
+      out$segstats$ecn.in =  Matrix::colSums(out$adj)
+
+      out$segstats$edges.in = sapply(1:length(out$segstats),
+                                     function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+      out$segstats$edges.out = sapply(1:length(out$segstats),
+                                      function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
+
+      ncn = rep(2, length(segstats))
+      if (!is.null(field.ncn))
+        if (field.ncn %in% names(values(segstats)))
+          ncn = values(segstats)[, field.ncn]
+
+
+      nnix = !is.na(out$segstats$mean) & !is.na(out$segstats$sd) & !is.na(out$segstats$cn)
+
+      ## new obj allowing variable normal copy number
+      out$obj = 1/4*sum(((out$segstats$cn[nnix] + ncn[nnix]/2*out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2) +
+        1/slack.prior * (sum(out$segstats$eslack.in + out$segstats$eslack.out, na.rm = T)) ## 1/4 because our original objective is 1/2 for pos strand intervals only
+      out$nll.cn = (1/2*sum(((out$segstats$cn[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
+      out$nll.opt = (1/2*sum(((cnmle[nnix] + out$gamma - out$beta*out$segstats$mean[nnix])/out$segstats$sd[nnix])^2))
+      out$gap.cn = as.numeric(1 - out$nll.opt / out$nll.cn)
+      out$sols = sols
+
+      return(out)
     }
 
-
-    ## map intervals to their reverse complement to couple their copy number (and edge variables)
-    pos.ix = which( as.logical( strand(segstats)=='+') )
-    neg.ix = which( as.logical( strand(segstats)=='-') )
-
-    ## "original vertices"
-    og.ix = pos.ix
-
-    ## map flipping positive to negative vertices
-    rev.ix = match(segstats, gr.flipstrand(segstats))
-
-    ## "duplicates" of og.ix i.e. revcomp vertices
-    ## basically hb.map
-    dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
-
-    if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix])){
-        stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
-    }
+    ## take into account (variable) normal cn
+    segstats$ncn = rep(2, length(segstats))
+    if (!is.null(field.ncn))
+      if (field.ncn %in% names(values(segstats)))
+        segstats$ncn = values(segstats)[, field.ncn]
 
     edges = Matrix::which(adj!=0, arr.ind = T)
+    sid = .sid(segstats)
+    esid = .esid(edges, sid)
+    names(segstats) = sid
+    rownames(edges) = esid
 
-    varmeta = data.table() ## store meta data about variables to keep track
-    consmeta = data.table() ## store meta data about constraints to keep track
-    ## if (loose.penalty.mode=="linear"){
-    ## number of vertices + slack variables, number of edges, and beta, gamma parameters.
-    n = 2*nrow(adj) + nrow(edges) + 2
-    v.ix = 1:nrow(adj)
-    s.ix = length(v.ix) + v.ix
-    
-    varmeta = data.table(id = v.ix,
-                         subid = 1:length(v.ix),
-                         label = paste('interval', 1:length(v.ix), sep = ''),
-                         type = 'interval',
-                         stringsAsFactors = F)
-    varmeta = rbind(varmeta,
-                    data.table(id = s.ix,
-                               subid = 1:length(s.ix),
-                               label = paste('residual', 1:length(s.ix), sep = ''),
-                               type = 'residual',
-                               stringsAsFactors = F))
-    
-    ## } else if (loose.penalty.mode=="boolean"){
-    ##     ## number of vertices + slack variables + slack indicators,
-    ##     ## number of edges, and beta, gamma parameters.
-    ##     n = 3*nrow(adj) + nrow(edges) + 2
-    ##     v.ix = 1:nrow(adj)
-    ##     s.ix = length(v.ix) + v.ix
-    ##     s.nz.ix = length(v.ix) * 2 + v.ix
-    
-    ##     varmeta = data.table(id = v.ix,
-    ##                          subid = 1:length(v.ix),
-    ##                          label = paste('interval', 1:length(v.ix), sep = ''),
-    ##                          type = 'interval',
-    ##                          stringsAsFactors = F)
-    ##     varmeta = rbind(varmeta,
-    ##                     data.table(id = s.ix,
-    ##                                subid = 1:length(s.ix),
-    ##                                label = paste('residual', 1:length(s.ix), sep = ''),
-    ##                                type = 'residual',
-    ##                                stringsAsFactors = F),
-    ##                     data.table(id = s.nz.ix,
-    ##                                subid = 1:length(s.nz.ix),
-    ##                                label = paste('residual.boolean', 1:length(s.ix), sep = ''),
-    ##                                type = 'residual.boolean',
-    ##                                stringsAsFactors = F))
-    ## }
+    ##
+    ## Setting up MIP variables (tracked in varmeta data.table)
+    ##
 
-    if (nrow(edges)>0)
+    ## varmeta will keep track of all variables
+    ## (i.e. interval, edge, source.slack, target.slack, residual, source.slack.indicator, target.slack.indicator)
+    ## id = actual column index in the final matrix
+    ## pid = integer specifying parent of variable, which is either row of edges matrix (for edges) and the index of the parent interval in segstats (for everything else)
+    ## (all the code below assumes that pid in varmeta are in order from 1 to .N and non missing
+    ## for each variable of a given type e.g. varmeta[type == 'residual', identical(pid, 1:.N)])
+    ## psid = parent signed id, so that both strands of the same edges / segstats parent,
+    ## have the same abs(psid), as.character(psid) also indexes names of the respective edges / segstats object
+
+    varmeta = .varmeta(segstats, edges, adj.lb = adj.lb,
+                       adj.ub = adj.ub,
+                       cn.lb = cn.lb,
+                       cn.ub = cn.ub,
+                       gamma = gamma,
+                       beta = beta,
+                       use.L0 = use.L0)
+
+    ##
+    ## Set up MIP constraints (tracked in consmeta)
+    ## each constraint has a unique label and we track it's sense
+    ## and right hand side, and store its formula
+    constraints = .constraints(varmeta, segstats, edges, ploidy.normal = ploidy.normal, use.L0 = use.L0)
+
+    if (is.null(constraints)) ## if constraints are NULL, then there are no segments with non NA mean, so we return NA solution
     {
-        ## if (loose.penalty.mode=="linear"){
-        e.ix = max(s.ix) + (1:nrow(edges))
-        ## } else if (loose.penalty.mode=="boolean"){
-        ##     e.ix = max(s.nz.ix) + (1:nrow(edges))
-        ## }
-        varmeta = rbind(varmeta,
-                        data.table(id = e.ix,
-                                   subid = 1:length(e.ix),
-                                   label = paste('edge', 1:length(e.ix), sep = ''),
-                                   type = 'edge',
-                                   stringsAsFactors = F))
-    } else {
-        e.ix = integer()
+      sol = list(); sol$residual = NA; sol$beta = beta; sol$gamma = gamma; sol$purity = NA; sol$ploidy = NA; sol$adj = adj*NA; sol$nll.cn = NA; sol$nll.opt = NA; sol$gap.cn = NA; sol$segstats = segstats[, c('mean', 'sd')]; sol$segstats$cn = NA; sol$segstats$ecn.in = NA; sol$segstats$ecn.out = NA; segstats$ncn = NA;  sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats)); sol$segstats$eslack.in = NA; sol$segstats$eslack.out = NA; sol$slack.prior = slack.prior; return(sol)
     }
 
+    ## pull constraints data.table and Amat constraints matrix
+    consmeta = constraints$consmeta
+    Amat = constraints$Amat
 
-    gamma.ix = max(c(s.ix, e.ix))+1;
-    beta.ix = max(c(s.ix, e.ix))+2;
-    varmeta = rbind(varmeta,
-                    data.table(id = c(gamma.ix, beta.ix),
-                               subid = rep(1, 2),
-                               label = c('gamma', 'beta'),
-                               type = 'global',
-                               stringsAsFactors = F))
-
-    if (edge.slack) # slack on edge consistency constraints
-    {
-        es.s.ix = n+(1:length(v.ix)) ## "source slack" variable
-        varmeta = rbind(varmeta,
-                        data.table(id = es.s.ix,
-                                   subid = 1:length(es.s.ix),
-                                   label = paste('source.slack', 1:length(es.s.ix), sep = ''),
-                                   type = 'source.slack',
-                                   stringsAsFactors = F))
-        es.t.ix = n+(length(v.ix) + 1:length(v.ix))
-        varmeta = rbind(varmeta,
-                        data.table(id = es.t.ix,
-                                   subid = 1:length(es.t.ix),
-                                   label = paste('target.slack', 1:length(es.t.ix), sep = ''),
-                                   type = 'target.slack',
-                                   stringsAsFactors = F))
-        n = n+2*length(v.ix);
-    }
-
-    vtype = rep('C', n); vtype[c(v.ix, e.ix)] = 'I' ## edge and vertex copy numbers are integers
-    lb = rep(0, n); lb[s.ix] = -Inf;
-
-    if (nrow(edges)>0){
-        lb[e.ix] = adj.lb[edges] ## lower bound on edges, some are forced in
-    }
-
-    if (any(ix <<- !is.na(cn.fix)))
-        if (verbose>1)
-        {
-            jmessage('Fixing copy states on ', sum(ix), ' vertices')
-        }
-
-    ## implement lower bounds and fixes
-    if (any(!is.na(cn.lb))){
-        lb[v.ix[!is.na(cn.lb)]] = cn.lb[!is.na(cn.lb)]
-    }
-
-    ub = rep(Inf, n);
-
-    if (any(!is.na(cn.ub)))
-        ub[v.ix[!is.na(cn.ub)]] = cn.ub[!is.na(cn.ub)]
-
-    ## set upper bound for some edges
-    if (!is.null(adj.ub)){
-        ## upper bound on edges, some are forced out
-        ub[e.ix] = ifelse(adj.ub[edges]>0, 0, Inf)
-    }
-
-    varmeta$vtype = vtype
-    varmeta$lb = lb
-    varmeta$ub = ub
-
-    ##   if (!is.na(purity.guess))
-    ##     {
-    ##       cat('applying purity guess .. ', purity.guess, ' \n')
-    ##       gamma.guess = 2 * (1-purity.guess) / purity.guess
-    ##       ub[gamma.ix] = lb[gamma.ix] = gamma.guess
-    ##     }
-
-    ##   if (!is.na(ploidy.guess))
-    ##     {
-    ##       cat('applying ploidy guess .. ', ploidy.guess, ' \n')
-
-    ##       ## if we have ploidy and purity, then let's solve the problem, i.e. compute beta
-    ##       ## (unless we have already, i.e. doing local analysis)
-    ##       if (!is.na(purity.guess) & is.na(beta.guess))
-    ##         {
-    ##           mu = segstats$mean
-    ##           w = as.numeric(width(segstats))
-    ##           nna = !is.na(mu)
-    ##           beta.guess = (2*(1-purity.guess) + purity.guess * ploidy.guess)/((purity.guess * sum(w[nna] * mu[nna]))/sum(w[nna]))
-    ##         }
-    ##       else ## otherwise we can only explicitly constrain ploidy, and implicitly constrain beta (beware on subgraphs)
-    ##         ploidy.min = ploidy.max = ploidy.guess
-
-    ##       ploidy.min = ploidy.max = ploidy.guess
-
-    ##       ## override ignore.cons
-    ## #      ignore.cons = T
-
-    ## #      print(ignore.cons)
-    ##     }
-
-    if (edge.slack)
-        vtype[c(es.s.ix, es.t.ix)] = 'I'
-
-    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
-
-    ## vertices that will actually have constraints (i.e. those that have non NA segstats )
-    ## XT: if some node's sd is 0, evaluate it to NA
-    if (length(zero.sd.ix <- which(segstats$sd==0))>0){
-        segstats$sd[zero.sd.ix] <- NA
-    }
-    v.ix.c = setdiff(v.ix[!is.na(segstats$mean) & !is.na(segstats$sd)], dup.ix)
-
-    v.ix.na = which(is.na(segstats$mean) | is.na(segstats$sd))
-
-                                        # weighted mean across vertices contributing to mean
-    if (length(v.ix.c)){
-        mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) /
-            sum(as.numeric(width(segstats)[v.ix.c]))
-    } else {
-        mu.all = NA
-    }
-
-    if (length(v.ix.c)>0)
-    {
-        ## take into account (variable) normal cn
-        ncn = rep(2, length(segstats))
-        if (!is.null(field.ncn))
-            if (field.ncn %in% names(values(segstats)))
-                ncn = values(segstats)[, field.ncn]
-
-        if (is.null(ploidy.normal))
-            ploidy.normal = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
-
-        ## copy number constraints
-        Acn = Zero[rep(1, length(v.ix.c)+1), ]
-        Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
-        Acn[cbind(1:length(v.ix.c), s.ix[v.ix.c])] = 1
-        ##      Acn[cbind(1:length(v.ix.c), gamma.ix)] = 1  ## replacing with below
-        Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
-        Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
-
-        ## final "conservation" constraint
-        Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
-        ##  Acn[length(v.ix.c)+1, s.ix[length(s.ix)]] = 1
-        ##      Acn[length(v.ix.c)+1, gamma.ix] = 1; ## replacing with below
-        Acn[length(v.ix.c)+1, gamma.ix] = ploidy.normal/2; ## taking into account (normal) variable cn
-        Acn[length(v.ix.c)+1, beta.ix] = -mu.all;
-        bcn = rep(0, nrow(Acn)) ##
-        sensecn = rep("E", length(bcn))
-
-        consmeta = rbind(consmeta,
-                         data.table(type = 'Copy',
-                                    label = paste('Copy', 1:nrow(Acn)),
-                                    sense = 'E',
-                                    b = bcn,
-                                    stringsAsFactors = F))
-
-        if (ignore.cons | T)
-        {
-            Acn[nrow(Acn), ] = 0
-            bcn[length(bcn)] = 0
-        }
-    }
-    else
-    { ## abort abort!
-        sol = list(); sol$residual = NA; sol$beta = beta.guess; sol$gamma = gamma.guess; sol$purity = NA; sol$ploidy = NA; sol$adj = adj*NA; sol$nll.cn = NA; sol$nll.opt = NA; sol$gap.cn = NA; sol$segstats = segstats[, c('mean', 'sd')]; sol$segstats$cn = NA; sol$segstats$ecn.in = NA; sol$segstats$ecn.out = NA; segstats$ncn = NA;  sol$segstats$edges.out = sol$segstats$edges.in = rep('', length(segstats)); sol$segstats$eslack.in = NA; sol$segstats$eslack.out = NA; sol$ploidy.constraints = c(ploidy.min, ploidy.max); sol$beta.constraints = c(beta.min, beta.max); sol$slack.prior = slack.prior; return(sol)
-    }
-
-    ## dup constraints on vertices
-    ## constrain every vertex to get the same copy number as its reverse complement
-    Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
-    Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
-    Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
-    dcn = rep(0, nrow(Dcn))
-    sensedcn = rep("E", nrow(Dcn))
-
-    consmeta = rbind(consmeta, data.table(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
-
-    if (edge.slack)
-    {
-        ## dup constraints on (reverse complement) edge.slack
-        ## (these make sure that reverse complement edge.slacks are
-        ## given the same solution as their reverse complement)
-        Ecn = Zero[rep(1, length(dup.ix)*2),, drop = F];
-        Ecn[cbind(1:nrow(Ecn), c(es.s.ix[dup.ix], es.t.ix[dup.ix]))] = 1
-        Ecn[cbind(1:nrow(Ecn), c(es.t.ix[og.ix], es.s.ix[og.ix]))] = -1
-        ecn = rep(0, nrow(Ecn))
-        Dcn = rbind(Dcn, Ecn)
-        dcn = c(dcn, ecn);
-        sensedcn = c(sensedcn, rep("E", nrow(Ecn)))
-
-        consmeta = rbind(consmeta,
-                         data.table(type = 'EdgeSlack',
-                                    label = paste('EdgeSlack', 1:nrow(Ecn)),
-                                    sense = 'E',
-                                    b = ecn,
-                                    stringsAsFactors = F))
-    }
-
-    Acn = rbind(Acn, Dcn)
-    bcn = c(bcn, dcn)
-    sensecn = c(sensecn, sensedcn)
-
-    if (is.na(beta.guess) | is.na(gamma.guess))
-    {
-        ## ploidy constraints
-        Aineq = Zero[rep(1, 2), , drop = F];
-        Aineq[1:2 , v.ix] = rbind(width(segstats)/sum(as.numeric(width(segstats))),
-                                  width(segstats)/sum(as.numeric(width(segstats))))
-        bineq = c(pmax(0, ploidy.min), pmin(Inf, ploidy.max))
-        senseineq = c("G", "L")
-
-        ## only constrain ploidy if beta / gamma not specified (ie via non NA guess)
-        consmeta = rbind(consmeta,
-                         data.table(type = 'PloidyConstraint',
-                                    label = paste('PloidyConstraint', 1:nrow(Aineq)),
-                                    sense = senseineq,
-                                    b = bineq,
-                                    stringsAsFactors = F))
-    }
-    else
-    {
-        Aineq = NULL
-        bineq = NULL
-        senseineq = NULL
-    }
-
-
-    ## override gamma
-    if (!is.na(gamma))
-        lb[gamma.ix] = ub[gamma.ix] = gamma;
-
-    ## override beta
-    if (!is.na(beta))
-        lb[beta.ix] = ub[beta.ix] = beta.guess;
-
-    ## beta.max
-    if (!is.na(beta.max))
-        ub[beta.ix] = beta.max
-
-    ## beta.max
-    if (!is.na(beta.min))
-        lb[beta.ix] = beta.min
-
-    ## gamma.max
-    if (!is.na(gamma.min))
-        lb[gamma.ix] = gamma.min
-
-    ## gamma.max
-    if (!is.na(gamma.max))
-        ub[gamma.ix] = gamma.max
-
-    if (!ignore.edge & nrow(edges)>0)
-    {
-        ## add edge consistency criteria
-        ## for every node that is source of an edge
-        ## ensure that sum of weights on outgoing edges
-        ## = node weight
-        ## do the same for nodes that are targets of edges
-        v.ix.s = unique(edges[,1])
-        v.ix.t = unique(edges[,2])
-        Bs = Zero[v.ix.s, , drop = F]
-        Bt = Zero[v.ix.t, , drop = F]
-
-        Bs[cbind(1:nrow(Bs), v.ix.s)] = 1
-        Bt[cbind(1:nrow(Bt), v.ix.t)] = 1
-        Bs[cbind(match(edges[,1], v.ix.s), e.ix)] = -1
-        Bt[cbind(match(edges[,2], v.ix.t), e.ix)] = -1
-
-        if (edge.slack)
-        {
-            ## provide "fake" edges bringing flux into and out of vertex
-            Bs[cbind(1:nrow(Bs), es.s.ix[v.ix.s])] = -1
-            Bt[cbind(1:nrow(Bt), es.t.ix[v.ix.t])] = -1
-        }
-
-        B = rbind(Bs, Bt)
-
-        consmeta =
-            rbind(consmeta,
-                  data.table(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
-                             sense = 'E', b = 0, stringsAsFactors = F),
-                  data.table(type = 'EdgeTarget', label = paste('EdgeSource', 1:nrow(Bt)),
-                             sense = 'E', b = 0, stringsAsFactors = F))
-
-        ## populate linear constraints
-        Aed = B;
-        bed = rep(0, nrow(B))
-        senseed = rep("E", length(bed))
-
-        Amat = rbind(Acn, Aed, Aineq);
-        b = c(bcn, bed, bineq);
-        sense = c(sensecn, senseed, senseineq);
-    }
-    else
-    {
-        Amat = rbind(Acn, Aineq);
-        b = c(bcn, bineq);
-        sense = c(sensecn, senseineq);
-    }
+    ##
+    ##
+    ## set up objective function
+    ##
+    ##
+    ##
 
     ## quadratic portion of objective function
-    Qobj = Zero;
-
-    if (length(v.ix.c>0))
-        Qobj[cbind(s.ix[v.ix.c], s.ix[v.ix.c])] = 1/segstats$sd[v.ix.c]^2;
+    ## a.k.a. "noise penalty"
+    Qobj = Zero = sparseMatrix(1, 1, x = 0, dims = c(nrow(varmeta), nrow(varmeta)))
+    s.ix = varmeta[type == 'residual' & dup == FALSE, id]
+    noisep = (1/segstats[varmeta[s.ix, pid]]$sd)^2
+    noisep = ifelse(is.infinite(noisep), NA, noisep) ## remove any infinite noise penalty, eg if sd = 0
+    noisep = ifelse(is.na(noisep), 0, noisep) ## set all NA noise penalty segments to 0
+    Qobj[cbind(s.ix, s.ix)] = noisep
 
     ## linear portion of objective function
+    ## a.k.a.  "slack penalty"
     cvec = Zero[,1]
+
+    if (use.L0)
+    {
+      slack.ix = varmeta[type %in% c('source.slack.indicator', 'target.slack.indicator') & !dup, id]
+      cvec[slack.ix] = 1/slack.prior
+    }
+    else   {
+      slack.ix = varmeta[type %in% c('source.slack', 'target.slack') & !dup, id]
+      cvec[slack.ix] = 1/slack.prior
+    }
+
+    ## let any specified "loose ends" have unpenalized slack
+    if (length(loose.ends)>0)
+    {
+      cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
+    }
+
+    if (verbose>1)
+    {
+      jmessage(sprintf('Total mass on cn portion of objective function: %s. Total mass on edge slack: %s',
+                       sum(Qobj[cbind(s.ix, s.ix)]),
+                       sum(cvec[slack.ix])))
+    }
+
 
     if (nrow(edges)>0)
     {
-        if (verbose)
-        {
-            jmessage('Adding ',
-                     ## sum(adj.nudge[edges]),
-                     " edge nudge across ", sum(adj.nudge[edges]!=0), " edges")
-        }
-
-        ## Future to do: weigh the edges in objective functions
-        ## what is the conversion from supporting reads to copy number space?
-        en = max(abs(adj.nudge), na.rm=T)
-        if (!is.na(en)){
-            if (abs(en)>0){
-                e.penalty = abs(en * 1.1)
-            } else {
-                e.penalty = 0.01
-            }
+      ## Future to do: weigh the edges in objective functions
+      ## what is the conversion from supporting reads to copy number space?
+      en = max(abs(adj.nudge), na.rm=T)
+      if (!is.na(en)){
+        if (abs(en)>0){
+          e.penalty = abs(en * 1.1)
         } else {
-            e.penalty = 0.01
+          e.penalty = 0.01
         }
-        ## penalize each edge use in proportion to position in edge nudge
-        cvec[e.ix] = e.penalty - adj.nudge[edges]
+      } else {
+        e.penalty = 0.01
+      }
+
+      e.ix = varmeta[type == 'edge', id]
+      e.pix = varmeta[type == 'edge', pid]
+      cvec[e.ix] = e.penalty-adj.nudge[edges[e.pix, , drop = FALSE]] ### reward each edge use in proportion to position in edge nudge
     }
 
-    if (edge.slack)
-    {
-        if (loose.penalty.mode=="linear"){
-            cvec[c(es.s.ix, es.t.ix)] = 1/slack.prior
-            ## let any specified "loose ends" have unpenalized slack
-            if (length(loose.ends)>0)
-            {
-                cvec[c(es.s.ix[loose.ends], es.t.ix[loose.ends])] = 0
-            }
-            tot.slack = sum(cvec[cbind(es.s.ix, es.t.ix)])
-        } else if (loose.penalty.mode=="boolean"){
-            ## need to add extra indicator variable to each of the loose end
-            ## s.nz.ix = n + (1:s.ix)
-            es.s.nz.ix = n + seq_along(es.s.ix); n = n + length(es.s.nz.ix)
-            es.t.nz.ix = n + seq_along(es.t.ix); n = n + length(es.t.nz.ix)
-            varmeta = rbind(varmeta,
-                            data.table(id = es.s.nz.ix,
-                                       subid = seq_along(es.s.nz.ix),
-                                       label = paste("source.slack.boolean",
-                                                     seq_along(es.s.nz.ix),
-                                                     sep=""),
-                                       type = "source.slack.boolean",
-                                       vtype = "B",
-                                       lb = 0,
-                                       ub = 1),
-                            data.table(id = es.t.nz.ix,
-                                       subid = seq_along(es.t.nz.ix),
-                                       label = paste("target.slack.boolean",
-                                                     seq_along(es.t.nz.ix),
-                                                     sep=""),
-                                       type = "target.slack.boolean",
-                                       vtype = "B",
-                                       lb = 0,
-                                       ub = 1))
-
-            nz.len = length(es.s.nz.ix) + length(es.t.nz.ix)
-            vtype = varmeta[, vtype]
-            ub = varmeta[, ub]
-            lb = varmeta[, lb]
-            Qobj = rbind(cbind(Qobj,
-                               Matrix(0,
-                                      nrow = nrow(Qobj),
-                                      ncol = nz.len,
-                                      sparse=TRUE)),
-                         Matrix(0,
-                                nrow = nz.len,
-                                ncol = n,
-                                sparse=TRUE))
-            
-            Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
-
-            ## reshape Amat
-            Amat = cbind(Amat, Matrix(0,
-                                      nrow=nrow(Amat),
-                                      ncol = length(es.s.nz.ix) + length(es.t.nz.ix),
-                                      sparse=TRUE))
-
-            ## add constraints to make them indicators of loose ends
-            ## constraint 1: loose - 0.1 * loose.bool > 0
-            ## constraint 2: loose - cn.ub * loose.bool < 0
-            new.i = rep(seq_len(nz.len * 2), 2)
-            new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
-                      rep(c(es.s.ix, es.t.ix), 2))
-            new.x = c(rep(-0.1, nz.len),
-                      rep(-(max(cn.ub, na.rm=T)+1), nz.len),
-                      rep(1, (length(es.s.ix) + length(es.t.ix)) * 2))
-            Amat.boolean = sparseMatrix(i = new.i,
-                                        j = new.j,
-                                        x = new.x,
-                                        dims = c(nz.len * 2, n))
-            Amat = rbind(Amat, Amat.boolean)
-            b.boolean = rep(0, nz.len * 2)
-            b = c(b, b.boolean)
-            sense.boolean = rep(c("G", "L"), each = nz.len)
-            sense = c(sense, sense.boolean)
-            consmeta = rbind(consmeta,
-                             data.table(type = "SlackBoolean",
-                                        label = paste0('SlackBoolean', nz.len * 2),
-                                        sense = sense.boolean,
-                                        b = b.boolean))
-            
-            ## extend cvec and cancel the linear penalties
-            ## add a tiny bit of white noise N~(0, 1) to each loose end penalty
-            ## in order to break the symmetry
-            cvec.boolean = rep(1/slack.prior, nz.len)
-            perturb.symm = sample(c(0, 1), length(es.s.nz.ix), replace=TRUE)
-            perturb.symm = c(perturb.symm, 1-perturb.symm)
-            cvec.boolean = cvec.boolean + perturb.symm
-            cvec = c(cvec, cvec.boolean)
-            cvec[c(es.s.ix, es.t.ix)] = 0
-
-            if (verbose){
-                jmessage("Slack penalty mode adjusted to 'boolean'")
-                jmessage("Penalize the number of loose ends regardless of their copy number.")
-            }
-            tot.slack = sum(cvec[cbind(es.s.nz.ix, es.t.nz.ix)])
-        }
-        
-        ## save varmeta, consmeta        
-        varmeta[, ":="(cvec = cvec, Qobj = Qobj[cbind(id, id)])]
-        
-        if (verbose>1)
-        {
-            jmessage(sprintf('Total mass on cn portion of objective function: %s. ',
-                             sum(Qobj[cbind(s.ix, s.ix)])))
-            jmessage(sprintf("Total mass on edge slack: %s", tot.slack))
-        }
-        if (is.infinite(sum(Qobj[cbind(s.ix, s.ix)]))){
-            jmessage("Things are gonna fall apart. Brace yourself. There is some node with zero sd.")
-        }
-    }
-    
-    if (verbose){
-        jmessage("Finished setting up variables and constrainsts.")
-    }
-    
     if (!is.null(mipstart))
     {
-        if (is.na(gamma.guess) | is.na(beta.guess))
-        {
-            warning("Can't do mipstart without setting purity and ploidy ... ignoring mipstart")
-        } else
-        {
-            mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
-            colnames(mips.dt) = c("row", "col")
-            mips.dt[, cn := mipstart[cbind(row, col)]]
-            setkeyv(mips.dt, c("row", "col"))
-
-            ## convert everything to data.tables
-            ## varmeta = as.data.table(varmeta)
-            ## consmeta = as.data.table(consmeta)
-            consmeta[, id := 1:.N]
-            varmeta[, id := 1:.N]
-            varmeta[, mipstart := as.numeric(0)]
-
-            ## first mipstart the node copy number n_hat by rounding
-            ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.mipstart-ncn/2*gamma.mipstart, 0)
-            ix = varmeta[type == 'interval', id]
-            ## n_hat = pmin(pmax(round(mu_hat), lb[ix]), ub[ix])
-            cnr = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
-            cnc = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
-            varmeta[type == 'interval', mipstart := cnc[list(subid), cn]]
-            varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(subid), cn], na.rm = TRUE)]
-            ## they may start from hom-del state, so no edges attached
-            varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
-
-            varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[subid, ])), cn]]
-            varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
-            varmeta[, mipstart := pmax(pmin(mipstart, ub), lb)]
-            ## ## mipstart each edge copy number by iterating through edges and peeling off the min copy number of source
-            ## ## and sink
-            ##
-            ## e_done = rep(FALSE, length(e_hat))
-            ## rev.eix = mmatch(edges, cbind(rev.ix[edges[,2]], rev.ix[edges[,1]])) ## match edges to their reverse complements
-            ## jmessage('Computing initial mipstart on edge weight')
-            ## for (i in 1:nrow(edges))
-            ## {
-            ##   if (!e_done[i]) ## specify both edge and its reverse complement (so if e_hat[i] is non NA, it has already been filled)
-            ##   {
-            ##     if (edges[i, 1] == edges[i, 2]) ## be careful overdrawing fold back edges, otherwise can generate strand imbalance
-            ##       e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], floor(min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE)/2))
-            ##     else
-            ##       e_hat[rev.eix[i]] = e_hat[i] = max(e_hat[i], min(n_hat[edges[i, 1]], n_hat[edges[i, 2]], na.rm = TRUE))
-            ##     ## make sure to also change reverse complement
-            ##     n_hat[rev.ix[edges[i,1]]] = n_hat[edges[i,1]] = n_hat[edges[i,1]] - e_hat[i]
-            ##     n_hat[rev.ix[edges[i,2]]] = n_hat[edges[i,2]] = n_hat[edges[i,2]] - e_hat[i]
-            ##     e_done[i] = e_done[rev.eix[i]] = TRUE
-            ##   }
-            ## }
-
-            ## now mipstart each target and source slack
-            ## which is just the difference between the copy number at
-            ## c_i and the incoming / outgoing edges
-
-            e_hat = varmeta[type == 'edge', mipstart]
-            n_hat = varmeta[type == 'interval', mipstart]
-            ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
-            Bs = Amat[consmeta[type == 'EdgeSource', id],]
-            Bs.interval = Bs[, varmeta[type == "interval", id]]
-            ## if (prod(dim(Bs.interval)) < .Machine$integer.max){
-            ##     six = apply(Bs.interval, 1, function(x) which(x!=0))
-            ## } else {
-            Bs.interval.ij = data.table(Matrix::which(Bs.interval != 0, arr.ind=T))
-            six = Bs.interval.ij[, col, by=row][order(row), col]
-            ## }
-
-            s_slack_hat = rep(0, length(n_hat))
-            if (length(varmeta[type == "edge", id])>0)
-                s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
-            s_slack_hat[is.na(s_slack_hat)] = 0
-            varmeta[type == 'source.slack', mipstart := s_slack_hat]
-
-            ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
-            Bt = Amat[consmeta[type == 'EdgeTarget', id],]
-            Bt.interval = Bt[, varmeta[type == "interval", id]]
-            ## if (prod(dim(Bt.interval)) < .Machine$integer.max){
-            ##     tix = apply(Bt.interval, 1, function(x) which(x!=0))
-            ## } else {
-            Bt.interval.ij = data.table(Matrix::which(Bt.interval != 0, arr.ind=T))
-            tix = Bt.interval.ij[, col, by=row][order(row), col]
-            ## }
-            
-            t_slack_hat = rep(0, length(n_hat))
-            if (length(varmeta[type == "edge", id])>0)
-                t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
-            t_slack_hat[is.na(t_slack_hat)] = 0
-            varmeta[type == 'target.slack', mipstart := t_slack_hat]
-
-            varmeta[label == 'beta', mipstart := beta.guess]
-            varmeta[label == 'gamma', mipstart := gamma.guess]
-
-            ## ## fix negative loose ends, by adding copy number to the node and then slack at the other end
-            ## ## (these occur from nonzero lower bounds on junctions)
-            ## ## i.e. for negative source slack add copy number to node, and positive target slack
-            ## if (any(neg.source <- varmeta[type == 'source.slack', which(mipstart<0)]))
-            ## {
-            ##   tmp = varmeta[type == 'source.slack', mipstart[neg.source]]
-            ##   varmeta[type == 'source.slack' & subid %in% neg.source, mipstart := 0]
-            ##   varmeta[type == 'interval' & subid %in% neg.source, mipstart := mipstart - tmp]
-            ##   varmeta[type == 'target.slack' & subid %in% neg.source , mipstart := mipstart - tmp]
-            ## }
-
-            ## if (any(neg.target <- varmeta[type == 'target.slack', which(mipstart<0)]))
-            ## {
-            ##   tmp = varmeta[type == 'target.slack', mipstart[neg.target]]
-            ##   varmeta[type == 'target.slack' & subid %in% neg.target, mipstart := 0]
-            ##   varmeta[type == 'interval' & subid %in% neg.target, mipstart := mipstart - tmp]
-            ##   varmeta[type == 'source.slack' & subid %in% neg.target , mipstart := mipstart - tmp]
-            ## }
-
-            ## now we have a lot of slacks
-            ## so we need to "straighten" out all high variance nodes
-            ## with respect to their nearest low variance node
-            ## we draw an arbitrary distinction between low and high variance using
-
-            ## m = rel2abs(segstats, gamma = gamma.mipstart, beta = beta.mipstart, field = 'mean', field.ncn = field.ncn)
-            ## cnmle = round(m) ## MLE estimate for CN
-            ## residual.min = ((m-cnmle)/(segstats$sd))^2
-            ## residual.other = apply(cbind((m-cnmle-1)/segstats$sd, (m-cnmle+1)/segstats$sd)^2, 1, min)
-            ## residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
-            ## fix = as.integer(which(residual.diff>(1/(10*slack.prior)))) ## 8 is a constant that is conservative, but basically assumes that no node will have more than 4 neighbors (todo: make adjustable per node)
-            ## branch = Matrix::rowSums(adj!=0)>1 | Matrix::colSums(adj!=0)>1
-
-            ## ## path endpoints are either fix or branch
-            ## endpoints = union(fix, branch)
-
-            ## TODO: sometimes this is not feasible! WHY?
-            ## compute residual as difference between rounded and "mean" value
-            n_hat = varmeta[type == 'interval', mipstart]
-            ## mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, 0)
-            mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta.guess-ncn/2*gamma.guess, round(gamma.guess))
-            eps_hat = mu_hat - n_hat
-            varmeta[type == 'residual', mipstart := eps_hat]
-
-            ## the newly added boolean variables
-            varmeta[type=="source.slack.boolean",
-                    mipstart := ifelse(varmeta[type=="source.slack", mipstart]>0,
-                                       1, 0)]
-            varmeta[type=="target.slack.boolean",
-                    mipstart := ifelse(varmeta[type=="target.slack", mipstart]>0,
-                                       1, 0)]
-        }
+      varmeta$mipstart = .mipstart(mipstart, segstats, edges, varmeta, consmeta, Amat, beta, gamma)
     }
 
-    browser()
     ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
     ## astronomical = value that is 1e8 higher than lowest value
     qr = range(setdiff(diag(Qobj), 0))
     CPLEX.INFIN = 1e9
     Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))] = pmin(CPLEX.INFIN*qr[1], Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))])
 
-    ## setup MIP
+    ## run MIP
     if (use.gurobi) # translate into gurobi
     {
-        if (verbose)
-        {
-            jmessage('Running gurobi!')
-        }
+      if (verbose)
+      {
+        jmessage('Running gurobi!')
+      }
 
-        model = list()
-        model$A = Amat
-        model$rhs = b;
-        model$sense = c('E'='=', 'G'='>=', 'L'='<=')[sense]
-        model$Q = Qobj;
-        model$obj = cvec;
-        model$lb = lb;
-        model$ub = ub;
-        model$vtype = vtype;
-        model$modelsense = 'min';
+      model = list()
+      model$A = Amat
+      model$rhs = varmeta$b;
+      model$sense = c('E'='=', 'G'='>=', 'L'='<=')[varmeta$sense]
+      model$Q = Qobj;
+      model$obj = cvec;
+      model$lb = varmeta$lb;
+      model$ub = varmeta$ub;
+      model$vtype = varmeta$vtype;
+      model$modelsense = 'min';
 
-        if (!is.na(gamma))
-        {
-            mu_hat = as.vector(round(((segstats$mean-gamma)/beta)));
-            model$start = rep(NA, n);
-            model$start[v.ix] = mu_hat;
-            model$start[s.ix] = segstats$mean-(mu_hat*beta+gamma);
-            model$start[gamma.ix] = gamma;
-            model$start[is.infinite(model$start)] = NA;
-        }
-
-        sol = gurobi::gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
+      if (!is.null(varmeta$mipstart))
+        model$start = varmeta$mipstart
+      else
+      {
+        model$start = rep(NA, nrow(varmeta));
+        mu_hat = as.vector(round(((segstats$mean-gamma)/beta)));
+        model$start[varmeta[type == 'interval', id]] = mu_hat;
+        model$start[varmeta[type == 'residual', id]] = segstats$mean-(mu_hat*beta+gamma);
+        model$start[varmeta[label = 'gamma', id]] = varmeta[label = 'gamma', lb]
+        model$start[varmeta[label = 'beta', id]] = varmeta[label = 'beta', lb]
+        model$start[is.infinite(model$start)] = NA;
+      }
+      sol = gurobi::gurobi(model, params = c(list(TimeLimit=tilim), list(...)));
         sol$xopt = sol$x;
     }
     else
     {
-        control = c(list(...), ## this doesn't work!
-                    list(trace = ifelse(verbose>=2, 1, 0),
-                         tilim = tilim,
-                         epgap = epgap,
-                         mipemphasis = mipemphasis,
-                         breaksymmetry = as.integer(breaksymmetry)))
+        control = c(list(...), list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, mipemphasis = mipemphasis))
         if (!is.null(mipstart)) ## apply mipstart if provided
             control$mipstart = varmeta$mipstart
 
         if (verbose)
-            jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
+          jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
 
-        sol = Rcplex2(cvec = cvec,
-                      Amat = Amat,
-                      bvec = b,
-                      sense = sense,
-                      Qmat = Qobj,
-                      lb = lb,
-                      ub = ub,
-                      n = nsolutions,
-                      objsense = "min",
-                      vtype = vtype,
-                      control = control)
+        browser()
+        sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = consmeta$b, sense = consmeta$sense, Qmat = Qobj, lb = varmeta$lb, ub = varmeta$ub, n = nsolutions, objsense = "min", vtype = varmeta$vtype, control = control)
+
+
+        sol.xt = Rcplex2(cvec = cvec, Amat = xt$Amat, bvec = xt$consmeta$b,sense = consmeta$sense,Qmat = xt$Qobj,lb = xt$varmeta$lb,ub = xt$varmeta$ub, n = nsolutions, objsense = "min", vtype = xt$varmeta$vtype, control = control)
+
     }
-    
     if (is.null(sol$xopt))
         sol.l = sol
     else
@@ -3269,53 +2593,51 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     segstats = segstats[, c()]
     segstats$mean = mu
     segstats$sd = sd
-    segstats$ncn = ncn
 
     sol.l = lapply(sol.l, function(sol)
     {
-        vcn = round(sol$xopt[v.ix])
-        ecn = round(sol$xopt[e.ix])
-        sol$residual = round(sol$xopt[s.ix])
-        sol$beta = sol$xopt[beta.ix]
-        sol$gamma = sol$xopt[gamma.ix]
-        sol$purity = 2/(2+sol$gamma)
-        sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
-        sol$adj = adj*0;
-        if (length(v.ix.c)>0)
-            sol$nll.cn = ((sol$xopt[s.ix[v.ix.c]]%*%Qobj[s.ix[v.ix.c], s.ix[v.ix.c]])%*%sol$xopt[s.ix[v.ix.c]])[1,1]
-        else
-            sol$nll.cn = NA
+      v.ix = varmeta[type == 'interval', id]
+      e.ix = varmeta[type == 'edge', id]
+      s.ix = varmeta[type == 'residual', id]
+      es.t.ix = varmeta[type == 'target.slack', id]
+      es.s.ix = varmeta[type == 'source.slack', id]
+      beta.ix = varmeta[label == 'beta', id]
+      gamma.ix = varmeta[label == 'gamma', id]
+      vcn = round(sol$xopt[v.ix])
+      ecn = round(sol$xopt[e.ix])
+      sol$residual = round(sol$xopt[s.ix])
+      sol$beta = sol$xopt[beta.ix]
+      sol$gamma = sol$xopt[gamma.ix]
+      sol$purity = 2/(2+sol$gamma)
+      sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
+      sol$adj = adj*0;
 
-        if (length(v.ix.c)>0)
-            sol$nll.opt = pp.nll(segstats[v.ix.c], gamma = sol$gamma, beta = sol$beta, field = 'mean', field.ncn = field.ncn)$NLL
-        else
-            sol$nll.opt = NA
+      sol$nll.cn = ((sol$xopt[s.ix]%*%Qobj[s.ix, s.ix])%*%sol$xopt[s.ix])[1,1]
 
-        ## supposed to be how far away from naive MLE is the optima
-        sol$gap.cn = as.numeric(1 - sol$nll.opt / sol$nll.cn)
-        sol$adj[edges] = ecn;
-        sol$segstats = segstats
-        sol$segstats$cn = round(vcn)
-        sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
-        sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
-        sol$segstats$edges.in = sapply(1:length(sol$segstats),
-                                       function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-        sol$segstats$edges.out = sapply(1:length(sol$segstats),
-                                        function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
+      if (sum(!is.na(segstats$mean))>0)
+        sol$nll.opt = pp.nll(segstats[!is.na(segstats$mean)], gamma = sol$gamma, beta = sol$beta, field = 'mean', field.ncn = field.ncn)$NLL
+      else
+        sol$nll.opt = NA
 
-        if (edge.slack)
-        {
-            sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
-            sol$segstats$eslack.out = round(sol$xopt[es.s.ix])
-            sol$eslack.in = round(sol$xopt[es.t.ix])
-            sol$eslack.out = round(sol$xopt[es.s.ix])
-        }
+      ## supposed to be how far away from naive MLE is the optima
+      sol$gap.cn = as.numeric(1 - sol$nll.opt / sol$nll.cn)
+      sol$adj[edges] = ecn;
+      sol$segstats = segstats
+      sol$segstats$cn = round(vcn)
+      sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
+      sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
+      sol$segstats$edges.in = sapply(1:length(sol$segstats),
+                                     function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
+      sol$segstats$edges.out = sapply(1:length(sol$segstats),
+                                      function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
 
-        sol$ploidy.constraints = c(ploidy.min, ploidy.max)
-        sol$beta.constraints = c(beta.min, beta.max)
-        sol$slack.prior = slack.prior
+      sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
+      sol$segstats$eslack.out = round(sol$xopt[es.s.ix])
+      sol$eslack.in = round(sol$xopt[es.t.ix])
+      sol$eslack.out = round(sol$xopt[es.s.ix])
+      sol$slack.prior = slack.prior
 
-        return(sol)
+      return(sol)
     });
 
     sol.l = sol.l[order(sapply(sol.l, function(x) x$obj))]
@@ -3323,11 +2645,501 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (length(sol.l)==1)
         sol.l = sol.l[[1]]
 
-    sol.l$varmeta = varmeta
-    sol.l$consmeta = consmeta
     return(sol.l)
 }
 
+#' @name .sid
+#' @title labels segstats with sid in jbaMIP
+#' @description
+#'
+#' Assigns stranded id "sid"
+#'
+#' @rdname internal
+#' @noRd
+#'
+.sid = function(segstats)
+{
+  ## Book-keep vertices and their reverse complements
+  ##
+
+  ## map intervals to their reverse complement to couple their copy number (and edge variables)
+  pos.ix = which( as.logical( strand(segstats)=='+') )
+  neg.ix = which( as.logical( strand(segstats)=='-') )
+
+  ## "original vertices"
+  og.ix = pos.ix
+
+  ## map flipping positive to negative vertices
+  rev.ix = match(segstats, gr.flipstrand(segstats))
+
+  ## use rev.ix to label all reverse complement pairs
+  rcpairs = igraph::clusters(graph.edgelist(cbind(1:length(rev.ix), rev.ix)), 'weak')$membership
+  sid = ifelse(duplicated(rcpairs), -1, 1)*rcpairs
+
+  if (any(is.na(rev.ix)))
+    stop('Input genome graph malformed, some nodes missing their exact reverse complement')
+
+  ## "duplicates" of og.ix i.e. revcomp vertices
+  dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
+
+  if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
+    stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
+  return(sid)
+}
+
+
+#' @name .esid
+#' @title labels segstats with sid in jbaMIP
+#' @description
+#'
+#' Assigns stranded id "sid"
+#'
+#' @rdname internal
+#' @noRd
+#'
+.esid = function(edges, sid)
+{
+  edges.dt = as.data.table(edges)
+  edges.dt[, es := paste(sid[row], sid[col])]
+  edges.dt[, res := paste(-sid[col], -sid[row])]
+  erev.ix = match(edges.dt$es, edges.dt$res)
+  if (any(is.na(erev.ix)))
+    stop('Input genome graph malformed, some edges missing their exact reverse complement')
+
+  rcepairs = igraph::clusters(graph.edgelist(cbind(1:length(erev.ix), erev.ix)), 'weak')$membership
+  edges.dt[, esid := ifelse(duplicated(rcepairs), -1, 1)*rcepairs]
+  return(edges.dt$esid)
+}
+
+#' @name constraints
+#' @title generates constraints matrix Amat and constraints tracker data.table consmeta
+#' @description
+#'
+#' @rdname internal
+#'
+#' @param varmeta data.table output of .varmeta tracking all variables
+#' @param segstats GRanges named with "sid" (ie output of sid
+#' @param edges m x 2 matrix of edges
+#' @param ploidy.normal numeric normal (non-tumor) ploidy estimate (default 2)
+#' @param use.L0 logical flag whether to set up L0 constraints
+#' @noRd
+#'
+.constraints = function(varmeta, segstats, edges, ploidy.normal, use.L0)
+{
+  consmeta = data.table() ## store meta data about constraints to keep track
+  Zero = sparseMatrix(1, 1, x = 0, dims = c(nrow(varmeta), nrow(varmeta)))
+  pid.nna = which(!is.na(segstats$mean) & !is.na(segstats$sd))
+  mu.all = NA
+  ncn = segstats$ncn
+
+  if (length(pid.nna)==0)
+    return(NULL)
+
+  ## query varmeta for relevant indices
+  v.ix = varmeta[type == 'interval', id]
+  gamma.ix = varmeta[label == 'gamma', id]
+  beta.ix = varmeta[label == 'beta', id]
+  v.ix.c = varmeta[type == 'interval',][pid.nna, ][psid>0, id]
+  s.ix = varmeta[type == "residual", ][, varmeta[v.ix.c, ]$pid]
+
+  if (is.null(ploidy.normal))
+    ploidy.normal = sum(width(segstats)[v.ix.c]*ncn[v.ix.c]) / sum(as.numeric(width(segstats))[v.ix.c])
+
+  ## weighted mean across vertices contributing to mean
+  mu.all = (width(segstats)[v.ix.c] %*% segstats$mean[v.ix.c]) / sum(as.numeric(width(segstats)[v.ix.c]))
+
+  ## set copy number constraints
+  Acn = Zero[rep(1, length(v.ix.c)+1), ]
+  Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
+  Acn[cbind(1:length(v.ix.c), s.ix)] = 1
+  Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
+  Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
+
+  bcn = rep(0, nrow(Acn)) ##
+
+  consmeta = rbind(consmeta, data.table(type = 'Copy', label = paste('Copy', 1:nrow(Acn)), sense = 'E', b = bcn, stringsAsFactors = F))
+
+
+  ## dup constraints on vertices
+  ## constrain every vertex to get the same copy number as its reverse complement
+  og.ix = varmeta[type == 'interval' & dup == FALSE, id]
+  dup.ix = varmeta[type == 'interval', ][match(-varmeta$psid[og.ix], psid), id]
+  Dcn = Zero[rep(1, length(dup.ix)),, drop = F];
+  Dcn[cbind(1:nrow(Dcn), dup.ix)] = 1
+  Dcn[cbind(1:nrow(Dcn), og.ix)] = -1
+  dcn = rep(0, nrow(Dcn))
+  sensedcn = rep("E", nrow(Dcn))
+
+  consmeta = rbind(consmeta, data.table(type = 'Dup', label = paste('Dup', 1:nrow(Dcn)), sense = 'E', b = dcn, stringsAsFactors = F))
+
+  ## dup constraints on (reverse complement) edge.slack
+  ## (these make sure that reverse complement edge.slacks are
+  ## given the same solution as their reverse complement)
+  sslack.ix = varmeta[type %in% c('source.slack') & psid>0, id]
+  sslack.dup.ix = varmeta[type %in% c('target.slack') & psid<0, ][match(-varmeta$psid[sslack.ix], psid), id]
+  tslack.ix = varmeta[type %in% c('target.slack') & psid>0, id]
+  tslack.dup.ix = varmeta[type %in% c('source.slack') & psid<0, ][match(-varmeta$psid[tslack.ix], psid), id]
+  slack.ix = c(sslack.ix, tslack.ix)
+  dup.slack.ix = c(sslack.dup.ix, tslack.dup.ix)
+  Ecn = Zero[rep(1, length(slack.ix)),, drop = F];
+  Ecn[cbind(1:nrow(Ecn), slack.ix)] = -1
+  Ecn[cbind(1:nrow(Ecn), dup.slack.ix)] = 1
+  ecn = rep(0, nrow(Ecn))
+  Dcn = rbind(Dcn, Ecn)
+  dcn = c(dcn, ecn);
+
+  consmeta = rbind(consmeta, data.table(type = 'EdgeSlack', label = paste('EdgeSlack', 1:nrow(Ecn)), sense = 'E', b = ecn, stringsAsFactors = F))
+
+  Acn = rbind(Acn, Dcn)
+
+  Aineq = NULL
+  bineq = NULL
+
+  if (nrow(edges)>0)
+  {
+    ## add edge consistency criteria
+    ## for every node that is source of an edge
+    ## ensure that sum of weights on outgoing edges
+    ## = node weight
+    ## do the same for nodes that are targets of edges
+
+    ## gather up ids of edges sources and sinks
+    e.ix = varmeta[type == "edge", id]
+    e.pix = varmeta[type == "edge", pid]
+    so.ix = varmeta[type == 'interval', ][edges[e.pix,1], id]
+    ta.ix = varmeta[type == 'interval', ][edges[e.pix,2], id]
+
+    ## unique sources and sink ids of edges
+    uso.ix = unique(so.ix)
+    uta.ix = unique(ta.ix)
+
+    ## encode these in Bs and Bt where every row
+    ## is a junction balance constraint
+    Bs = Zero[rep(1, length(uso.ix)), , drop = F]
+    Bt = Zero[rep(1, length(uta.ix)), , drop = F]
+    Bs[cbind(1:nrow(Bs), uso.ix)] = 1
+    Bt[cbind(1:nrow(Bt), uta.ix)] = 1
+    Bs[cbind(match(so.ix, uso.ix), e.ix)] = -1
+    Bt[cbind(match(ta.ix, uta.ix), e.ix)] = -1
+
+    ## add slack edges for loose ends
+    uso.pid = varmeta[uso.ix, pid]
+    uta.pid = varmeta[uta.ix, pid]
+    uso.lix = varmeta[type == 'source.slack', ][uso.pid, id]
+    uta.lix = varmeta[type == 'target.slack', ][uta.pid, id]
+
+    Bs[cbind(1:nrow(Bs), uso.lix)] = -1
+    Bt[cbind(1:nrow(Bt), uta.lix)] = -1
+
+    B = rbind(Bs, Bt)
+
+    consmeta =
+      rbind(consmeta,
+            data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
+                       sense = 'E', b = 0, stringsAsFactors = F),
+            data.frame(type = 'EdgeTarget', label = paste('EdgeTarget', 1:nrow(Bt)),
+                       sense = 'E', b = 0, stringsAsFactors = F))
+
+    ## populate linear constraints
+    Aed = B;
+    Amat = rbind(Acn, Aed, Aineq);
+  }
+  else
+  {
+    Amat = rbind(Acn, Aineq);
+  }
+
+  if (use.L0)
+  {
+    ## set up indicator constraints
+
+    M = min(c(max(varmeta[type == 'interval', ub], na.rm = TRUE)+1, 1e10))
+    if (M>1e10)
+      warning('Using extremely high copy number upper bounds (above 10000) is not recommended for this model')
+
+    ## only make indicator constraints for non dup source and target
+    ## slack variables
+    es.s.nz.ix = varmeta[type == 'source.slack.indicator', id]
+    es.t.nz.ix = varmeta[type == 'target.slack.indicator', id]
+    es.s.nz.pid = varmeta[type == 'source.slack.indicator', pid]
+    es.t.nz.pid = varmeta[type == 'target.slack.indicator', pid]
+    es.s.ix = varmeta[type == 'source.slack', ][es.s.nz.pid, id]
+    es.t.ix = varmeta[type == 'target.slack', ][es.t.nz.pid, id]
+
+    nz.len = length(es.s.nz.ix) + length(es.t.nz.ix)
+    vtype = varmeta[, vtype]
+    ub = varmeta[, ub]
+    lb = varmeta[, lb]
+
+    ## add constraints to make them indicators of loose ends
+    ## constraint 1: loose - 0.1 * loose.bool > 0
+    ## constraint 2: loose - cn.ub * loose.bool < 0
+    new.i = rep(seq_len(nz.len), 4)
+    new.j = c(rep(c(es.s.nz.ix, es.t.nz.ix), 2),
+              rep(c(es.s.ix, es.t.ix), 2))
+    new.x = c(rep(-0.1, nz.len),
+              rep(-M, nz.len),
+              rep(1, (length(es.s.ix) + length(es.t.ix)) * 2))
+    Amat.boolean = sparseMatrix(i = new.i,
+                                j = new.j,
+                                x = new.x,
+                                dims = c(nz.len * 2, nrow(varmeta)))
+    b.boolean = rep(0, nz.len * 2)
+    sense.boolean = rep(c("G", "L"), each = nz.len)
+    consmeta = rbind(consmeta,
+                     data.table(type = "SlackBoolean",
+                                label = paste0('SlackBoolean', nz.len * 2),
+                                sense = sense.boolean,
+                                b = b.boolean))
+    Amat = rbind(Amat, Amat.boolean)
+  }
+
+  colnames(Amat) = varmeta$label
+  consmeta$formula = paste(arrstring(Amat), '=', consmeta$b)
+
+  return(list(consmeta = consmeta, Amat = Amat))
+}
+
+
+#' @name mipstart
+#' @title generates mipstart solution from initial interval by interval mipstart matrix
+#' @description
+#'
+#' @rdname internal
+#' @param mipstart n x n matrix of edge solutions
+#' @param segstats GRanges named with "sid" (ie output of sid
+#' @param edges m x 2 matrix of edges
+#' @param varmeta data.table output of .varmeta tracking all variables
+#' @param consmeta data.table $consmeta output of .constraints tracking all constraints
+#' @param Amat constraint matrix
+#' @param beta scalar beta setting
+#' @param gamma scalar gamma setting
+#' @param use.L0 logical flag whether to set up L0 constraints
+#' @noRd
+#'
+.mipstart = function(mipstart, segstats, edges, varmeta, consmeta, Amat, beta, gamma, use.L0)
+{
+  mips.dt = as.data.table(Matrix::which(mipstart>0, arr.ind = TRUE))
+  setnames(mips.dt, c("row", "col"))
+  mips.dt[, cn := mipstart[cbind(row, col)]]
+  setkeyv(mips.dt, c("row", "col"))
+
+  ## convert everything to data.tables
+  consmeta[, id := 1:.N]
+  varmeta[, id := 1:.N]
+  varmeta[, mipstart := as.numeric(0)]
+
+  ## first mipstart the node copy number n_hat by rounding
+  ix = varmeta[type == 'interval', id]
+  cnr = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
+  cnc = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
+  varmeta[type == 'interval', mipstart := cnc[list(pid), cn]]
+  varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(pid), cn], na.rm = TRUE)]
+  varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
+
+  varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[pid, ])), cn]]
+  varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
+  varmeta[, mipstart := pmax(pmin(mipstart, ub), lb)]
+
+  ## now mipstart each target and source slack
+  ## which is just the difference between the copy number at
+  ## c_i and the incoming / outgoing edges
+  e_hat = varmeta[type == 'edge', mipstart]
+  n_hat = varmeta[type == 'interval', mipstart]
+  ## Bs stores the constraints c_i - - slack_s_i - sum_j \in Es(i) e_j for all i in six
+  Bs = Amat[consmeta[type == 'EdgeSource', id],]
+  Bs.interval = Bs[, varmeta[type == "interval", id]]
+  Bs.interval.ij = data.table(Matrix::which(Bs.interval != 0, arr.ind=T))
+  six = Bs.interval.ij[, col, by=row][order(row), col]
+#  six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+
+  s_slack_hat = rep(0, length(n_hat))
+  if (length(varmeta[type == "edge", id])>0)
+    s_slack_hat[six] = Bs[, varmeta[type == "edge", id]] %*% e_hat + n_hat[six]
+  s_slack_hat[is.na(s_slack_hat)] = 0
+  varmeta[type == 'source.slack', mipstart := s_slack_hat]
+
+  ## Bt stores the constraints c_i - - slack_t_i - sum_j \in Et(i) e_j for all i in tix
+  Bt = Amat[consmeta[type == 'EdgeTarget', id],]
+  Bt.interval = Bt[, varmeta[type == "interval", id]]
+  Bt.interval.ij = data.table(Matrix::which(Bt.interval != 0, arr.ind=T))
+  tix = Bt.interval.ij[, col, by=row][order(row), col]
+#  tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
+
+  t_slack_hat = rep(0, length(n_hat))
+  if (length(varmeta[type == "edge", id])>0)
+    t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
+  t_slack_hat[is.na(t_slack_hat)] = 0
+
+  varmeta[type == 'target.slack', mipstart := t_slack_hat]
+  varmeta[label == 'beta', mipstart := beta]
+  varmeta[label == 'gamma', mipstart := gamma]
+
+  ## compute residual as difference between rounded and "mean" value
+  n_hat = varmeta[type == 'interval', mipstart]
+  mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta-segstats$ncn/2*gamma, 0)
+  eps_hat = mu_hat - n_hat
+  varmeta[type == 'residual', mipstart := eps_hat]
+
+  return(varmeta$mipstart)
+}
+
+#' @name varmeta
+#' @title makes varmeta in jbaMIP
+#' @description
+#'
+#'
+#' assumes that segstats and rows of edges are named with sid
+#'
+#'   varmeta will keep track of all variables
+#' (i.e. interval, edge, source.slack, target.slack, residual, source.slack.indicator, target.slack.indicator)
+#' id = actual column index in the final matrix
+#'  pid = integer for edges the row in the edges matrix, for everything else the index of the parent interval in segstats
+#'  psid = parent signed id, so that both strands of the same edges / segstats parent, have the same abs(psid), as.character(psid) also indexes names of the respective edges / segstats object
+#' @rdname internal
+#' @param segstats GRanges named with "sid" (ie output of sid
+#' @param edges Matrix with columns named row and col, rows labeled with esid
+#' @noRd
+#'
+.varmeta = function(segstats, edges, adj.lb, adj.ub, cn.lb, cn.ub, gamma, beta, use.L0)
+{
+  ##
+  ## Setting up MIP variables (tracked in varmeta data.table)
+  ##
+  sid = as.numeric(names(segstats)) ## assume that segstats has signed integer sid
+
+  varmeta = data.table()
+  v.ix = nrow(varmeta) +  1:length(segstats)
+
+  varmeta = data.table(
+    id = v.ix,
+    pid = 1:length(sid),
+    psid = sid,
+    label = paste0('interval', ifelse(sid>0, sid, paste0(-sid, 'r'))),
+    type = 'interval',
+    dup = sid<0,
+    vtype = 'I',
+    lb = pmax(0, cn.lb, na.rm = TRUE),
+    ub = pmin(cn.ub, Inf, na.rm = TRUE),
+    stringsAsFactors = F)
+
+  s.ix = nrow(varmeta) + v.ix
+  varmeta = rbind(varmeta,
+                  data.table(
+                    id = s.ix,
+                    pid = 1:length(sid),
+                    psid = sid,
+                    label = paste0('residual', ifelse(sid>0, sid, paste0(-sid, 'r'))),
+                    dup = sid<0,
+                    vtype = 'C',
+                    lb = -Inf,
+                    ub = Inf,
+                    type = 'residual',
+                    stringsAsFactors = F))
+
+  if (nrow(edges)>0)
+  {
+    if (any(tmpix <- adj.ub<0)) ## tmp fix for negative adj.ub if any exist
+      adj.ub[tmpix] = 0.1 ## ie make them >0 <1 effectively constraining to 0
+
+    eub = ifelse(adj.ub[edges]==0, Inf, round(pmax(adj.ub[edges], 0)))
+    edges.dt = as.data.table(edges)[, esid := as.numeric(rownames(edges))]
+    edges.dt[, lb := pmax(adj.lb[edges], 0)]
+    edges.dt[, ub := eub]
+
+    e.ix = nrow(varmeta) + (1:nrow(edges.dt))
+    varmeta = rbind(varmeta,
+                    data.table(
+                      id = e.ix,
+                      pid = 1:nrow(edges.dt),
+                      psid = edges.dt$esid,
+                      label = paste0('edge', ifelse(edges.dt$esid>0, edges.dt$esid, paste0(-edges.dt$esid, 'r'))),
+                      type = 'edge',
+                      dup = edges.dt$esid<0,
+                      vtype = 'I',
+                      lb = edges.dt$lb,
+                      ub = edges.dt$ub,
+                      stringsAsFactors = F))
+  }
+
+  gb.ix = nrow(varmeta) + 1:2
+  varmeta = rbind(varmeta,
+                  data.table(
+                    id = gb.ix,
+                    pid = rep(1,2),
+                    psid = rep(1, 2),
+                    label = c('gamma', 'beta'),
+                    type = 'global',
+                    dup = FALSE,
+                    vtype = 'C',
+                    lb = c(gamma, beta),
+                    ub = c(gamma, beta),
+                    stringsAsFactors = F))
+
+  es.s.ix = nrow(varmeta)+(1:length(v.ix)) ## "source slack" variable
+  varmeta = rbind(varmeta,
+                  data.table(
+                    id = es.s.ix,
+                    pid = 1:length(sid),
+                    psid = sid,
+                    label = paste0('source.slack', ifelse(sid>0, sid, paste0(-sid, 'r'))),
+                    type = 'source.slack',
+                    dup = sid<0,
+                    vtype = 'I',
+                    lb = 0,
+                    ub = Inf,
+                    stringsAsFactors = F))
+
+  es.t.ix = nrow(varmeta)+(1:length(v.ix))
+  varmeta = rbind(varmeta,
+                  data.table(
+                    id = es.t.ix,
+                    pid = 1:length(sid),
+                    psid = sid,
+                    label = paste0('target.slack', ifelse(sid>0, sid, paste0(-sid, 'r'))),
+                    type = 'target.slack',
+                    dup = sid<0,
+                    vtype = 'I',
+                    lb = 0,
+                    ub = Inf, stringsAsFactors = F))
+
+  if (use.L0)
+  {
+    ## add loose end binary indicator variables for all (non dup) loose end
+    ## source and target slack variables
+    lix = varmeta[type %in% c('source.slack') & !dup, id]
+    ilix = nrow(varmeta) + 1:length(lix)
+    varmeta = rbind(varmeta,
+                    data.table(
+                      id = ilix,
+                      pid = varmeta$pid[lix],
+                      psid = varmeta$psid[lix],
+                      label = paste0('SourceSlackIndicator', ifelse(varmeta$psid[lix]>0, varmeta$psid[lix], paste0(varmeta$psid[lix], 'r'))),
+                      type = 'source.slack.indicator',
+                      dup = varmeta$psid[lix]<0,
+                      vtype = 'B',
+                      lb = 0,
+                      ub = 1,
+                      stringsAsFactors = FALSE))
+
+    lix = varmeta[type %in% c('target.slack') & !dup, id]
+    ilix = nrow(varmeta) + 1:length(lix)
+    varmeta = rbind(varmeta,
+                    data.table(
+                      id = ilix,
+                      pid = varmeta$pid[lix],
+                      psid = varmeta$psid[lix],
+                      label = paste0('TargetSlackIndicator', ifelse(varmeta$psid[lix]>0, varmeta$psid[lix], paste0(varmeta$psid[lix], 'r'))),
+                      type = 'target.slack.indicator',
+                      dup = varmeta$psid[lix]<0,
+                      vtype = 'B',
+                      lb = 0,
+                      ub = 1,
+                      stringsAsFactors = FALSE))
+  }
+
+  return(varmeta)
+}
 
 
 ####################################################################
@@ -3708,7 +3520,7 @@ jabba.alleles = function(
 
         ## now test deviation from each absolute copy combo using poisson model
         ## i.e. counts ~ poisson(expected mean)
-        ## TODO: is this slow?
+        ##
         re.seg$low = sapply(1:length(re.seg), function(i)
         {
             ##        if (verbose)
@@ -3883,35 +3695,17 @@ jabba.alleles = function(
     asegstats.final = asegstats.final[ix]
     aadj.final = aadj.final[ix, ix]
 
-    if (verbose){
+    if (verbose)
         jmessage('Annotating allelic vertices')
-    }
 
     tmp.string = gr.string(asegstats, mb = F, other.cols = 'type'); tmp.string2 = gr.string(gr.flipstrand(asegstats), mb = F, other.cols = 'type')
     asegstats$flip.ix = match(tmp.string, tmp.string2)
     asegstats$phased = !unphased
 
-    ij = Matrix::which(aadj.final!=0, arr.ind=T)
-    if (nrow(ij)>0){
-        ij = data.table(ij)
-        e.in = ij[, paste(row, '(', aadj.final[row,col], ')', '->', sep = '', collapse = ','), keyby="col"]
-        e.out = ij[, paste(col, '(', aadj.final[row,col], ')', '->', sep = '', collapse = ','), keyby="row"]
-        asegstats.final$edges.in = e.in
-        asegstats.final$edges.out = e.out
-    } else {
-        asegstats.final$edges.in = "()->"
-        asegstats.final$edges.out = "->()"
-    }
-    ## asegstats.final$edges.in = sapply(1:length(asegstats.final),
-    ##                                   function(x) {
-    ##                                       ix = Matrix::which(aadj.final[,x]!=0);
-    ##                                       paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')
-    ##                                   })
-    ## asegstats.final$edges.out = sapply(1:length(asegstats.final),
-    ##                                    function(x) {
-    ##                                        ix = Matrix::which(aadj.final[x, ]!=0);
-    ##                                        paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')
-    ##                                    })
+    asegstats.final$edges.in = sapply(1:length(asegstats.final),
+                                      function(x) {ix = Matrix::which(aadj.final[,x]!=0); paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')})
+    asegstats.final$edges.out = sapply(1:length(asegstats.final),
+                                       function(x) {ix = Matrix::which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
 
     asegstats.final$slack.in = asegstats.final$cn - Matrix::colSums(aadj.final)
     asegstats.final$slack.out = asegstats.final$cn - Matrix::rowSums(aadj.final)
@@ -4050,73 +3844,24 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 ## cplex set max threads (warning can only do once globally per machine, so be wary of multiple hosts running on same machine)
 ##
-.cplex_customparams = function(out.file,
-                               numthreads = 0,
-                               nodefileind = NA,
-                               treememlim = NA,
-                               breaksymmetry = NA)
+.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
     param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t'))
 
-    if (!is.na(nodefileind)){
+    if (!is.na(nodefileind))
         param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
-    }
 
     if (!is.na(treememlim))
     {
-        ## param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+                                        #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
         param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
-    }
-
-    if (!is.na(breaksymmetry)){
-        breaksymmetry = round(as.numeric(breaksymmetry))
-        if (breaksymmetry<=5 & breaksymmetry >= (-1)){
-            param_lines = c(param_lines,
-                            paste("CPX_PARAM_SYMMETRY", breaksymmetry, sep = "\t"))
-        }
     }
 
     writeLines(param_lines, out.file)
     Sys.setenv(ILOG_CPLEX_PARAMETER_FILE=out.file)
 }
-
-## .cplex_customparams = function(out.file,
-##                                numthreads = 0,
-##                                nodefileind = NA,
-##                                treememlim = NA,
-##                                breaksymmetry = NA)
-## {
-##     param_lines = "CPLEX Parameter File Version 12.6.2.0"
-
-##     param_lines = c(param_lines, paste("CPXPARAM_Threads",
-##                                        numthreads, sep = '\t'))
-
-##     if (!is.na(nodefileind)){
-##         param_lines = c(param_lines, paste("CPXPARAM_MIP_Strategy_File",
-##                                            nodefileind, sep = '\t'))
-##     }
-
-##     if (!is.na(treememlim))
-##     {
-##         ## param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
-##         param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory",
-##                                            treememlim, sep = '\t'))
-##     }
-
-##     if (!is.na(breaksymmetry)){
-##         breaksymmetry = round(as.numeric(breaksymmetry))
-##         if (breaksymmetry<=5 & breaksymmetry >= (-1)){
-##             param_lines = c(param_lines,
-##                             paste("CPXPARAM_Preprocessing_Symmetry",
-##                                   breaksymmetry, sep = "\t"))
-##         }
-##     }
-
-##     writeLines(param_lines, out.file)
-##     Sys.setenv(ILOG_CPLEX_PARAMETER_FILE=out.file)
-## }
 
 
 
@@ -5811,14 +5556,14 @@ read_vcf = function(fn, hg = 'hg19', swap.header = NULL, verbose = FALSE, add.pa
   ##   {
   ##     if (!file.exists(swap.header))
   ##       stop(sprintf('Swap header file %s does not exist\n', swap.header))
-      
+
   ##     system(paste('mkdir -p', tmp.dir))
   ##     tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
   ##     if (grepl('gz$', fn))
   ##       system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
   ##     else
   ##       system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
-      
+
   ##     system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
   ##     vcf = VariantAnnotation::readVcf(tmp.name, hg, ...)
   ##     system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
@@ -6156,8 +5901,8 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
 #' @param mc.cores integer number of cores to use (default 1)
 #' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
 ############################################
-ppgrid = function(segstats, 
-                  allelic = FALSE, 
+ppgrid = function(segstats,
+                  allelic = FALSE,
                   purity.min = 0.01,
                   purity.max = 1.0,
                   ploidy.step = 0.01,
