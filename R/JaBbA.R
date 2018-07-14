@@ -2417,11 +2417,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         if (field.ncn %in% names(values(segstats)))
             segstats$ncn = values(segstats)[, field.ncn]
 
-    edges = Matrix::which(adj!=0, arr.ind = T)
     sid = .sid(segstats)
-    esid = .esid(edges, sid)
     names(segstats) = sid
-    rownames(edges) = esid
+
+    edges = Matrix::which(adj!=0, arr.ind = T)
+    if (nrow(edges)>0)
+    {
+        rownames(edges) = .esid(edges, sid)
+    }
 
     ##
     ## Setting up MIP variables (tracked in varmeta data.table)
@@ -2504,12 +2507,22 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     if (use.L0)
     {
+      if (verbose)
+      {
+        jmessage('Applying L0 slack penalty')
+      }
+
         slack.ix = varmeta[type %in% c('source.slack.indicator', 'target.slack.indicator') & !dup, id]
         cvec[slack.ix] = 1/slack.prior
     }
     else   {
-        slack.ix = varmeta[type %in% c('source.slack', 'target.slack') & !dup, id]
-        cvec[slack.ix] = 1/slack.prior
+
+      if (verbose)
+      {
+        jmessage('Applying L1 slack penalty')
+      }
+      slack.ix = varmeta[type %in% c('source.slack', 'target.slack') & !dup, id]
+      cvec[slack.ix] = 1/slack.prior
     }
 
     ## let any specified "loose ends" have unpenalized slack
@@ -2548,7 +2561,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     if (!is.null(mipstart))
     {
-        varmeta$mipstart = .mipstart(mipstart, segstats, edges, varmeta, consmeta, Amat, beta, gamma)
+        varmeta$mipstart = .mipstart(mipstart, segstats, edges, varmeta, consmeta, Amat, beta, gamma, use.L0)
     }
 
     ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
@@ -2600,6 +2613,17 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         if (verbose)
             jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
+
+        ## ## DEBUG
+        ## val = Amat %*% varmeta$mipstart
+        ## eq = which(consmeta$sense == 'E')
+        ## ge = which(consmeta$sense == 'G')
+        ## le = which(consmeta$sense == 'L')
+        ## cons.problem = unique(c(eq[abs(val[eq])>1e-5], ge[val[ge]<0], le[val[le]>0]))
+        ## if (length(cons.problem)>0)
+        ## {
+        ##   browser()
+        ## }
 
         sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = consmeta$b, sense = consmeta$sense, Qmat = Qobj, lb = varmeta$lb, ub = varmeta$ub, n = nsolutions, objsense = "min", vtype = varmeta$vtype, control = control)
     }
@@ -2984,7 +3008,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(pid), cn], na.rm = TRUE)]
     varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
 
-    varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[pid, ])), cn]]
+    varmeta[type == 'edge', mipstart := mips.dt[list(as.data.table(edges[pid,,drop = FALSE])), cn]]
     varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
     varmeta[, mipstart := pmax(pmin(mipstart, ub), lb)]
 
@@ -2998,7 +3022,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     Bs.interval = Bs[, varmeta[type == "interval", id]]
     Bs.interval.ij = data.table(Matrix::which(Bs.interval != 0, arr.ind=T))
     six = Bs.interval.ij[, col, by=row][order(row), col]
-                                        #  six = apply(Bs[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
 
     s_slack_hat = rep(0, length(n_hat))
     if (length(varmeta[type == "edge", id])>0)
@@ -3011,14 +3034,33 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     Bt.interval = Bt[, varmeta[type == "interval", id]]
     Bt.interval.ij = data.table(Matrix::which(Bt.interval != 0, arr.ind=T))
     tix = Bt.interval.ij[, col, by=row][order(row), col]
-                                        #  tix = apply(Bt[, varmeta[type == "interval", id]], 1, function(x) which(x!=0))
 
     t_slack_hat = rep(0, length(n_hat))
     if (length(varmeta[type == "edge", id])>0)
         t_slack_hat[tix] = Bt[, varmeta[type == "edge", id]] %*% e_hat + n_hat[tix]
     t_slack_hat[is.na(t_slack_hat)] = 0
 
+
     varmeta[type == 'target.slack', mipstart := t_slack_hat]
+
+    ## negative slacks can happen when the number of incoming and outgoing
+    ## edges exceed the number of nodes ..
+    ## this will only happen when lb is provided to certain edges
+    ## in this case, we adjust the mipstart by adding cn to nodes and slacks
+    ## so that the copy number of the parent nodes associated
+    ## with the negative slacks to make everything non-negative
+    bad.slacks = varmeta[type %in% c('source.slack', 'target.slack') & mipstart<0, pid]
+    slacks.to.adjust = varmeta[type %in% c('source.slack', 'target.slack'), ][pid %in% bad.slacks, ]
+    if (nrow(slacks.to.adjust)>0)
+    {
+      cn.to.adjust = slacks.to.adjust[, min(mipstart), keyby = pid]
+      nodes.to.adjust = varmeta[type == 'interval', ][slacks.to.adjust$pid, ]
+      nodes.to.adjust$adjust = -cn.to.adjust[.(nodes.to.adjust$pid), V1]
+      slacks.to.adjust$adjust = -cn.to.adjust[.(slacks.to.adjust$pid), V1]
+      varmeta[nodes.to.adjust$id, ]$mipstart =   nodes.to.adjust$mipstart + nodes.to.adjust$adjust
+      varmeta[slacks.to.adjust$id, ]$mipstart = slacks.to.adjust$mipstart + slacks.to.adjust$adjust
+    }
+
     varmeta[label == 'beta', mipstart := beta]
     varmeta[label == 'gamma', mipstart := gamma]
 
@@ -3027,6 +3069,15 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     mu_hat = ifelse(!is.na(segstats$mean), segstats$mean*beta-segstats$ncn/2*gamma, 0)
     eps_hat = mu_hat - n_hat
     varmeta[type == 'residual', mipstart := eps_hat]
+
+    if (use.L0)
+    {
+      ssid = varmeta[type == 'source.slack.indicator', pid]
+      varmeta[type == 'source.slack.indicator', ]$mipstart = sign(varmeta[type == 'source.slack', ][ssid, mipstart]>0)
+
+      tsid = varmeta[type == 'target.slack.indicator', pid]
+      varmeta[type == 'target.slack.indicator', ]$mipstart = sign(varmeta[type == 'target.slack', ][tsid, mipstart]>0)
+    }
 
     return(varmeta$mipstart)
 }
@@ -6301,4 +6352,48 @@ ppgrid = function(segstats,
     out$keep = out$i = out$j = NULL
     rownames(out) = NULL
     return(out)
+}
+
+
+
+####################
+#' @name arrstring
+#' @title arrstring
+#'
+#' @description
+#' string representation of row array as linear combination of nonzero entries
+#' of that row using column names as variables
+#'
+#' @param A array
+#' @param sep separator to use between table elements
+#' @return character representation of table
+#' @author Marcin Imielinski
+####################
+arrstring = function(A, x = NULL, sep = ', ', sep2 = '_', signif = 3, dt = FALSE)
+{
+  if (is.null(dim(A)))
+  {
+    A = rbind(A)
+  }
+
+  if (is.null(colnames(A)))
+  {
+    colnames(A) = paste0('V', 1:ncol(A))
+  }
+
+  if (is.null(x))
+  {
+    x = colnames(A)
+  }
+  else
+  {
+    x = signif(x, signif)
+  }
+
+  tmp = as.data.table(Matrix::which(A!=0, arr.ind = TRUE))
+  tmp[,  y := A[cbind(row, col)]][  , x:= x[col]]
+
+  str = tmp[, paste(signif(y,signif), x[y!=0], sep = '*', collapse = ' + '), keyby = row][.(1:nrow(A)), V1]
+
+  return(str)
 }

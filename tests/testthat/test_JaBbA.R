@@ -26,7 +26,7 @@ test_that("reciprocal.cycles", {
 
 junc = read.junctions(junctions)
 values(junc)$nudge = 0
-junc = rep(junc, 2)  
+junc = rep(junc, 2)
 
 test_that("ra.merge", {
     ram = JaBbA:::ra.merge(read.junctions(junctions),
@@ -75,6 +75,7 @@ jab.reiterate = JaBbA(junctions = junctions,
                       reiterate=3,
                       ploidy=3.72,
                       purity=0.99,
+                      loose.penalty.mode = 'boolean',
                       epgap = 0.8)  ## reiterate > 1
 
 test_that("karyograph", {
@@ -88,11 +89,15 @@ test_that("karyograph", {
 })
 
 test_that("JaBbA", {
-    ## expect_equal(length(jab$segstats), 88)
-    expect_equal(sum(values(jab$junctions)$cn>0), 8)
-    expect_true(abs(jab$ploidy - 3.6)<0.3)
-    expect_true(abs(jab$purity - 0.99)<0.05)
-    expect_equal(length(jab.reiterate$segstats), 64)
+  expect_equal(jab$segstats$cn, c(4, 3, 3, 1, 3, 28, 3, 32, 3, 27, 3, 27, 3, 33, 3, 32, 3, 24, 3, 4, 4, 3, 3, 1, 3, 28, 3, 32, 3, 27, 3, 27, 3, 33, 3, 32, 3, 24, 3, 4, 1, 1, 1, 1))
+  expect_equal(values(jab$junctions)$cn,  c(2, 25, 29, 24, 24, 30, 29, 21))
+  expect_true(abs(jab$ploidy - 3.41)<0.01)
+  expect_true(abs(jab$purity - .999)<0.01)
+
+  expect_equal(jab.reiterate$segstats$cn, c(4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 34, 27, 31, 39, 24, 32, 31, 32, 26, 19, 4, 3, 4, 10, 3, 4, 4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 34, 27, 31, 39, 24, 32, 31, 32, 26, 19, 4, 3, 4, 10, 3, 4, 1, 1, 1, 1))
+  expect_equal(values(jab.reiterate$junctions)$cn,  c(1, 2, 1, 2, 10, 11, 4, 7, 7, 0, 8, 15, 1, 6, 1))
+  expect_true(abs(jab.reiterate$ploidy - 3.70)<0.01)
+  expect_true(abs(jab.reiterate$purity - .99)<0.01)
 })
 
 
