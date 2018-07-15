@@ -2160,7 +2160,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             (m-cnmle+1)/segstats$sd
             )^2,
             1, min)
-        residual.diff = residual.other - residual.min ## penalty for moving to closest adjacent copy state
+        ## penalty for moving to closest adjacent copy state
+        residual.diff = residual.other - residual.min 
 
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
         ## is greater than k / slack.prior penalty (where k is some copy difference
@@ -2327,11 +2328,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          ' chromosomes, including chrs ',
                          paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
 
-            if (k==1){
-                saveRDS(args, paste0(outdir, "/first.args.rds"))
-            }
-
             out = do.call('jbaMIP', args)
+            
+            if (k<=6){
+                saveRDS(args, paste0(outdir, "/.args.", k,".rds"))
+                saveRDS(sol, paste0(outdir, "/.sol.", k,".rds"))
+            }
 
             gc() ## garbage collect .. not sure why this needs to be done
 
@@ -2613,17 +2615,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         if (verbose)
             jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
-
-        ## ## DEBUG
-        ## val = Amat %*% varmeta$mipstart
-        ## eq = which(consmeta$sense == 'E')
-        ## ge = which(consmeta$sense == 'G')
-        ## le = which(consmeta$sense == 'L')
-        ## cons.problem = unique(c(eq[abs(val[eq])>1e-5], ge[val[ge]<0], le[val[le]>0]))
-        ## if (length(cons.problem)>0)
-        ## {
-        ##   browser()
-        ## }
 
         sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = consmeta$b, sense = consmeta$sense, Qmat = Qobj, lb = varmeta$lb, ub = varmeta$ub, n = nsolutions, objsense = "min", vtype = varmeta$vtype, control = control)
     }
