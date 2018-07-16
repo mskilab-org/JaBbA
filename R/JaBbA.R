@@ -2332,7 +2332,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             
             if (k<=6){
                 saveRDS(args, paste0(outdir, "/.args.", k,".rds"))
-                saveRDS(sol, paste0(outdir, "/.sol.", k,".rds"))
+                ## out$varmeta = varmeta
+                ## out$consmeta = consmeta
+                saveRDS(out, paste0(outdir, "/.sol.", k,".rds"))
             }
 
             gc() ## garbage collect .. not sure why this needs to be done
