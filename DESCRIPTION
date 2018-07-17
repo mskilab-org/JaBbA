@@ -25,7 +25,9 @@ Imports:
   grDevices,
   stats,
   utils,
-  sequenza
+  sequenza,
+  GenomeInfoDb,
+  rtracklayer
 Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,

@@ -22,22 +22,26 @@
 
 #' @import igraph
 #' @import Matrix
-#' @importFrom gplots col2hex
-#' @importFrom graphics plot
 #' @import GenomicRanges
 #' @import parallel
-#' @importFrom data.table data.table as.data.table
 #' @import DNAcopy
 #' @import gUtils
+#' @import gTrack
+#' 
+#' @importFrom data.table data.table as.data.table
+#' @importFrom gplots col2hex
+#' @importFrom graphics plot
 #' @importFrom graphics abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames
 #' @importFrom utils read.delim write.table
 #' @importFrom methods as is
 #' @importFrom sequenza segment.breaks baf.model.fit get.ci
-#' @import gTrack
+#' @importFrom rtracklayer import
+#' @importFrom GenomeInfoDb seqlengths
+#' @importFrom DNAcopy CNA segment smooth.CNA
+#' 
 #' @useDynLib JaBbA
-#'
 
 ## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
 ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
@@ -73,29 +77,37 @@ ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.
 #'
 #'
 #' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
+#' @param junctions.unfiltered supplement junctions in the same format as \code{junctions}
 #' @param coverage  GRanges of coverage OR path to tsv of cov file w GRanges style columns, rds of GRanges or .wig / .bed file of (+/- normalized, GC corrected) fragment density
 #' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
 #' @param seg  optional path to existing segmentation, if missing then will segment coverage using DNACopy with standard settings
 #' @param cfield  character, junction confidence meta data field in ra
 #' @param tfield  character, tier confidence meta data field in ra
+#' @param nudge.balanced attempt to identify balanced reciprocal junctions and nudge them to be incorporated
+#' @param thresh.balanced when \code{nudge.balanced} is \code{TRUE}, the threshold distance between reciprocal junction pairs
 #' @param outdir  out directory to dump into, default ./
 #' @param nseg  optional path to normal seg file with $cn meta data field
 #' @param hets  optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
 #' @param name  prefix for sample name to be output to seg file
+#' @param purity cellularity value of the sample
+#' @param ploidy ploidy value of the sample (segment length weighted copy number)
 #' @param cores  number of cores to use (default 1)
-#' @param nseg  path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
 #' @param subsample  numeric between 0 and 1 specifying fraction with which to  sub-sample high confidence coverage data
 #' @param tilim  integer scalar timeout in seconds for jbaMIP computation (default 1200 seconds)
 #' @param mem  numeric scalar max memory in GB for MIP portion of algorithm (default 16)
 #' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
 #' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
+#' @param loose.penalty.mode either \code{"linear"} or \code{"boolean"}, for penalizing each copy or each of loose end
 #' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param use.gurobi  logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE) .. up to user to make sure the respective package is already installed
 #' @param reiterate  integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end
-#' @param allin if TRUE, use all available junctions except for tier 3 INDELs in the first interation
 #' @param indel if TRUE, force the small isolated tier 2 events into the model
+#' @param all.in whether to use all of the junctions but the tier 3 INDELs all at once
 #' @param rescue.window integer scalar bp window around which to rescue lower tier junctions
 #' @param strict logical flag specifying whether to only include junctions that exactly overlap segs
+#' @param max.threads maximum thread number CPLEX/Gurobi is allowed to use
+#' @param max.mem maximum memory CPLEX/Gurobi is allowed to use
+#' @param epgap relative optimality gap tolerated by the solver
 #' @param mc.cores integer how many cores to use to fork subgraphs generation (default = 1)
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @return gGraph (gGnome package) of balanced rearrangement graph
@@ -1122,8 +1134,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         else
             this.ra = readRDS(ra.file)
     }
+    
     ## if we don't have normal segments then coverage file will be our bible for seqlengths
-
     if (is.character(cov.file))
     {
         if (grepl('\\.rds$', cov.file))
@@ -1187,7 +1199,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     this.ra = gr.fix(this.ra, sl, drop = T)
 
-    this.kag = karyograph(this.ra, this.seg)
+    ## TODO: add segmentation to isolate the NA runs
+    ## there were a lot of collateral damage because of bad segmentation
+    na.runs = streduce(
+        this.cov[which(is.na(values(this.cov)[, field]))], 1e4
+    ) %Q% (width>1e5)
+    
+    ## this.kag.old = karyograph(this.ra, this.seg)
+    this.kag = karyograph(this.ra, c(this.seg, na.runs))
 
     if (is.null(nseg.file))
         this.kag$segstats$ncn = 2
@@ -1877,10 +1896,16 @@ segstats = function(target,
             stop('Field not found in signal GRanges')
 
         utarget = unique(gr.stripstrand(target))
+        ## target$raw.sd = target$sd
+        ## good.bin = signal[which(!is.na(values(signal)[, field]) &
+        ##                         !is.infinite(values(signal)[, field]))]
+        ## signal$good.prop = (signal+1e5) %O% good.bin
+        ## signal$col = ifelse(signal$good.prop>0.8, "grey", "red")
 
         map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
         val = values(signal)[, field]
         val[is.infinite(val)] = NA
+        ## val[which(signal$good.prop<0.9)] = NA
         vall = lapply(map, function(x) val[x])
         vall = vall[match(gr.stripstrand(target), utarget)]
 
@@ -1906,16 +1931,45 @@ segstats = function(target,
 
         ## final clean up
         target$raw.mean = target$mean
-        ## target$raw.sd = target$sd
-        good.bin = signal[which(!is.na(values(signal)[, field]) &
-                                !is.infinite(values(signal)[, field]))]
-        target$good.prop = (target+1e5) %O% good.bin
+        
+        ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
+        ## val = values(signal)[, field]
+        ## val[is.infinite(val)] = NA
+        ## vall = lapply(map, function(x) val[x])
+        ## vall = vall[match(gr.stripstrand(target), utarget)]
+
+        ## ## sample mean and sample var
+        ## sample.mean = sapply(vall, mean, na.rm = TRUE)
+        ## sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
+        ## ix = !is.na(sample.mean) & !is.na(sample.var)
+
+        ## target$mean = NA;
+        ## if (any(ix)){
+        ##     target$mean[ix] = sample.mean[ix]
+        ##     target$var[ix] = sample.var[ix]
+        ## } else {
+        ##     jmessage("Abort: No valid coverage present anywhere!")
+        ##     stop("No valid coverage present anywhere!")
+        ## }
+
+        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
+        ##     as.character(abs(as.numeric(names(target))))
+        ## ]
+        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+        ## target$nbins.nafrac = 1-target$nbins/target$nbins.tot
+
+        ## ## final clean up
+        ## target$raw.mean = target$mean
+
+        ## target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-        if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
+        ## if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
+        ## if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
+        if (length(bad.nodes <- which(target$nbins.nafrac > 0.1))>0)
         {
+            target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
-            target$bad = seq_along(target) %in% bad.nodes
             if (verbose)
             {
                 jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
@@ -6010,6 +6064,14 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
 #'
 #' @param segstats GRanges object of intervals with meta data fields "mean" and "sd" (i.e. output of segstats function)
 #' @param allelic logical flag, if TRUE will also look for mean_high, sd_high, mean_low, sd_low variables and choose among top solutions from top copy number according to the best allelic fit
+#' @param purity.min min purity value allowed
+#' @param purity.max max purity value allowed
+#' @param ploidy.min min ploidy value allowed
+#' @param ploidy.max max ploidy value allowed
+#' @param ploidy.step grid length of ploidy values
+#' @param purity.step grid length of purity values
+#' @param plot whether to plot the results to file
+#' @param verbose print intermediate outputs
 #' @param mc.cores integer number of cores to use (default 1)
 #' @return data.frame with top purity and ploidy solutions and associated gamma and beta values, for use in downstream jbaMI
 ############################################
