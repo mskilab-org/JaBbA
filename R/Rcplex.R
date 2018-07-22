@@ -120,7 +120,7 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
     if (isMIP) {
         intvars <- which(vtype != 'C')
         .canonicalize <- function(x){
-            names(x) <- c("xopt", "obj", "status", "extra")
+            names(x) <- c("xopt", "obj", "status", "extra", 'epgap')
             names(x$extra) <- c("nodecnt", "slack")
             if(control$R$round){
                 x$xopt[intvars] <- round(x$xopt[intvars])

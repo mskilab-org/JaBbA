@@ -34,6 +34,7 @@ SEXP Rcplex2(SEXP numcols_p,
 
   SEXP res = NULL; /* set to avoid uninitialized warning */
   SEXP xopt;
+  SEXP epgap;
   SEXP obj;
   SEXP solstat;
   SEXP extra;
@@ -241,16 +242,17 @@ SEXP Rcplex2(SEXP numcols_p,
     } /* END multiple solutions */
     else {
       /* MIP optimization 1 solution */
-      PROTECT(res   = allocVector(VECSXP,  4));
+      PROTECT(res   = allocVector(VECSXP,  5));
       PROTECT(obj   = allocVector(REALSXP, 1));
       PROTECT(xopt  = allocVector(REALSXP, numcols));
+      PROTECT(epgap  = allocVector(REALSXP, 1)); /* added by Marcin */
       PROTECT(extra = allocVector(VECSXP,  2));
       PROTECT(slack = allocVector(REALSXP, numrows));
 
       status = CPXgetmipobjval(env, lp, REAL(obj));
       /* if no integer solution exists, return NA */
       if (status) {
-	*REAL(obj) = NA_REAL;
+        *REAL(obj) = NA_REAL;
       }
 
       status = CPXgetmipx(env, lp, REAL(xopt), 0, cur_numcols - 1);
@@ -265,6 +267,8 @@ SEXP Rcplex2(SEXP numcols_p,
 	  REAL(slack)[i] = NA_REAL;
       }
 
+      status = CPXgetmiprelgap(env, lp, REAL(epgap)); /* added by Marcin */
+
       /* Provide some little extra information */
       PROTECT(nodecnt = allocVector(INTSXP, 1));
       *INTEGER(nodecnt) = CPXgetnodecnt(env, lp);
@@ -276,8 +280,9 @@ SEXP Rcplex2(SEXP numcols_p,
       SET_VECTOR_ELT(res, 1, obj); 
       SET_VECTOR_ELT(res, 2, solstat); 
       SET_VECTOR_ELT(res, 3, extra);
+      SET_VECTOR_ELT(res, 4, epgap); /* added by Marcin */
       
-      UNPROTECT(5);
+      UNPROTECT(6);
     } /* END MIP optimization 1 solution */
   } /* END MIP optimization */
   else {

@@ -137,7 +137,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                  use.gurobi = FALSE, ## use gurobi instead of CPLEX
                  slack.penalty = 1e2, ## nll penalty for each loose end copy
-                 loose.penalty.mode = c("linear", "boolean"),
+                 loose.penalty.mode = "boolean",
                  overwrite = FALSE, ## whether to overwrite existing output in outdir
                  mc.cores = 1,
                  strict = FALSE,
@@ -535,7 +535,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
-                      loose.penalty.mode = c("linear", "boolean"),
+                      loose.penalty.mode = "boolean",
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE
@@ -1215,7 +1215,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ) %Q% (width>1e5)
     
     ## this.kag.old = karyograph(this.ra, this.seg)
-    this.kag = karyograph(this.ra, c(this.seg, na.runs))
+    this.kag = karyograph(this.ra, grbind(this.seg, na.runs))
 
     if (is.null(nseg.file))
         this.kag$segstats$ncn = 2
@@ -1584,7 +1584,7 @@ ramip_stub = function(kag.file,
                       edge.nudge = 0,
                       ab.force = NULL,
                       ab.exclude = NULL,
-                      loose.penalty.mode = c("linear", "boolean")
+                      loose.penalty.mode = "boolean"
                       )
 {
     outdir = normalizePath(dirname(kag.file))
@@ -2426,7 +2426,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         }
 
         ## segstats
-        sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
+      sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
+
         out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
 
         ## annotate segstats keep to keep track and "fixed nodes"
@@ -2440,6 +2441,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         tmp = vaggregate(sol.ixul[,1], by = list(sol.ixul[,3]), FUN = paste, collapse = ',')
         out$segstats$cl = NA
         out$segstats$cl[as.numeric(names(tmp))] = tmp
+
+      out$segstats$epgap = NA
+      out$segstats$epgap[sol.ixul[,3]] = rep(sapply(sols, '[[', "epgap")[sol.ixul[,1]])
 
         out$purity = 2/(2+gamma)
         v = out$segstats$cn; w = as.numeric(width(out$segstats))
@@ -2710,7 +2714,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         sol$purity = 2/(2+sol$gamma)
         sol$ploidy = (vcn%*%width(segstats))/sum(as.numeric(width(segstats)))
         sol$adj = adj*0;
-
+        
         sol$nll.cn = ((sol$xopt[s.ix]%*%Qobj[s.ix, s.ix])%*%sol$xopt[s.ix])[1,1]
 
         if (sum(!is.na(segstats$mean))>0)
