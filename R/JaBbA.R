@@ -281,6 +281,15 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
             jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
 
+            if (this.iter>1){
+                kag1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds'))
+                ploidy = kag1$ploidy
+                purity = kag1$purity
+                jmessage("Using ploidy ", ploidy,
+                         " and purity ", purity,
+                         " consistent with the initial iteration")
+            }
+
             this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
             saveRDS(last.ra, this.ra.file)
 
@@ -1931,6 +1940,7 @@ segstats = function(target,
 
         ## final clean up
         target$raw.mean = target$mean
+        target$raw.var = target$var
         
         ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
         ## val = values(signal)[, field]
@@ -1965,7 +1975,7 @@ segstats = function(target,
         target$bad = FALSE
         ## if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
         ## if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
-        if (length(bad.nodes <- which(target$nbins.nafrac > 0.1))>0)
+        if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
         {
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
@@ -2077,7 +2087,7 @@ segstats = function(target,
         target$var = pmax(predict(loe, target$mean), min.var)
 
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
-        ## basically assign all means below the left domain bound of the function the variance of the left domain bound
+        ## basically assign all means below the left domain bnound of the function the variance of the left domain bound
         ## and analogously for all means above the right domain bound
         na.var = is.na(target$var)
         rrm = range(target$mean[!na.var])
@@ -2565,22 +2575,20 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     if (use.L0)
     {
-      if (verbose)
-      {
-        jmessage('Applying L0 slack penalty')
-      }
+        if (verbose)
+        {
+            jmessage('Applying L0 slack penalty')
+        }
 
         slack.ix = varmeta[type %in% c('source.slack.indicator', 'target.slack.indicator') & !dup, id]
         cvec[slack.ix] = 1/slack.prior
-    }
-    else   {
-
-      if (verbose)
-      {
-        jmessage('Applying L1 slack penalty')
-      }
-      slack.ix = varmeta[type %in% c('source.slack', 'target.slack') & !dup, id]
-      cvec[slack.ix] = 1/slack.prior
+    } else {
+        if (verbose)
+        {
+            jmessage('Applying L1 slack penalty')
+        }
+        slack.ix = varmeta[type %in% c('source.slack', 'target.slack') & !dup, id]
+        cvec[slack.ix] = 1/slack.prior
     }
 
     ## let any specified "loose ends" have unpenalized slack
@@ -2596,10 +2604,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          sum(cvec[slack.ix])))
     }
 
-
     if (nrow(edges)>0)
     {
-        ## Future to do: weigh the edges in objective functions
+        ## Future TODO: weigh the edges in objective functions
         ## what is the conversion from supporting reads to copy number space?
         en = max(abs(adj.nudge), na.rm=T)
         if (!is.na(en)){
