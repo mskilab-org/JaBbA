@@ -27,13 +27,17 @@
 #' @import DNAcopy
 #' @import gUtils
 #' @import gTrack
-#' 
-#' @importFrom data.table data.table as.data.table
+#' @import gGnome
+#' @import optparse
+#' @import data.table
+
+# @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
 #' @importFrom gplots col2hex
+#' @importFrom Ppurple ppurple
 #' @importFrom graphics plot
 #' @importFrom graphics abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
-#' @importFrom stats C aggregate dist loess median ppois predict runif setNames
+#' @importFrom stats C aggregate dist loess median ppois predict runif setNames hclust cutree
 #' @importFrom utils read.delim write.table
 #' @importFrom methods as is
 #' @importFrom sequenza segment.breaks baf.model.fit get.ci
@@ -44,7 +48,7 @@
 #' @useDynLib JaBbA
 
 ## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
-ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
+low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=predict.var=dup=psid=.N=es=res=esid=pid=ub=lb=esid=dup=lb=ub=dup=y=dup=pid=lb=es.s.ix=km=es.t.ix=adjusted.ratio=ref.count.t=alt.count.t=depth.normal=depth.tumor=good.reads=zygosity.normal=Bf=ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
 
 
 #' @name JaBbA
@@ -1393,14 +1397,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             max.chunk = 1e3
             numchunks = ceiling(length(ss.tmp)/max.chunk)
             if (numchunks>length(purity)*length(ploidy)){
-                pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
                              purities = purity, ploidies = ploidy,
                              verbose = verbose,
                              mc.cores = mc.cores,
                              ## numchunks = numchunks,
                              ignore.sex = TRUE)
             } else {
-                pp = ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+                pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
                              purities = purity, ploidies = ploidy,
                              verbose = verbose,
                              mc.cores = mc.cores,
@@ -1890,10 +1894,10 @@ segstats = function(target,
             asignal.dt = asignal.dt[!duplicated(ix), ]
             setkey(asignal.dt, ix)
 
-            target$mean_high = asignal.dt[.(seq_along(target)), alpha_high / beta_high]
-            target$sd_high = asignal.dt[.(seq_along(target)), sqrt(alpha_high / (beta_high)^2)]
-            target$mean_low = asignal.dt[.(seq_along(target)), alpha_low / beta_low]
-            target$sd_low = asignal.dt[.(seq_along(target)), sqrt(alpha_low / (beta_low)^2)]
+            target$mean_high = asignal.dt[list(seq_along(target)), alpha_high / beta_high]
+            target$sd_high = asignal.dt[list(seq_along(target)), sqrt(alpha_high / (beta_high)^2)]
+            target$mean_low = asignal.dt[list(seq_along(target)), alpha_low / beta_low]
+            target$sd_low = asignal.dt[list(seq_along(target)), sqrt(alpha_low / (beta_low)^2)]
         }
         else
             stop('One or more of the afields ', paste(afields, collapse = ', '), ' not found as meta data columns of asignal')
@@ -3113,8 +3117,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     {
       cn.to.adjust = slacks.to.adjust[, min(mipstart), keyby = pid]
       nodes.to.adjust = varmeta[type == 'interval', ][slacks.to.adjust$pid, ]
-      nodes.to.adjust$adjust = -cn.to.adjust[.(nodes.to.adjust$pid), V1]
-      slacks.to.adjust$adjust = -cn.to.adjust[.(slacks.to.adjust$pid), V1]
+      nodes.to.adjust$adjust = -cn.to.adjust[list(nodes.to.adjust$pid), V1]
+      slacks.to.adjust$adjust = -cn.to.adjust[list(slacks.to.adjust$pid), V1]
       varmeta[nodes.to.adjust$id, ]$mipstart =   nodes.to.adjust$mipstart + nodes.to.adjust$adjust
       varmeta[slacks.to.adjust$id, ]$mipstart = slacks.to.adjust$mipstart + slacks.to.adjust$adjust
     }
@@ -5281,7 +5285,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
                                         # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
     ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) == as.character(seqnames(tile[ref.pairs[,2]]))), ]
 
-    if (nrow(ref.pairs)>0)
+    if (nrow(ref.pairs)>0 & length(edge.id)>0)
     {
         edge.id = c(edge.id, max(edge.id) + rep(1:nrow(ref.pairs), 2))
         ref.pairs = rbind(ref.pairs, cbind(-ref.pairs[,2], -ref.pairs[,1])) # reverse ref pairs
@@ -5344,8 +5348,11 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     if (length(ab.pairs.bpid)>0)
         E(G)$bp.id[ab.ix] = ab.pairs.bpid[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
     E(G)$eid = NA; ## what is edge ID??? how is different from edge.ix?
-    E(G)$eid[ab.ix] = edge.id[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
-    E(G)$eid[!ab.ix] = edge.id[adj.ref[cbind(E(G)$from[!ab.ix], E(G)$to[!ab.ix])]]
+    if (length(ab.ix)>0)
+      {
+        E(G)$eid[ab.ix] = edge.id[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
+        E(G)$eid[!ab.ix] = edge.id[adj.ref[cbind(E(G)$from[!ab.ix], E(G)$to[!ab.ix])]]
+      }
     values(tile) = values(tile)[, c('tile.id', 'is.tel')]
     tile$ab.source = 1:length(tile) %in% E(G)$from[ab.ix]
     tile$ab.target = 1:length(tile) %in% E(G)$to[ab.ix]
@@ -6096,7 +6103,7 @@ ppgrid = function(segstats,
                   ploidy.max = 6,
                   plot = F,
                   verbose = F,
-                  mc.cores = 10
+                  mc.cores = 1
                   ){
     if (verbose)
         jmessage('setting up ppgrid matrices .. \n')
@@ -6131,6 +6138,14 @@ ppgrid = function(segstats,
     ## else
     ##     ncn = segstats$ncn
 
+    if (any(tmpix <-is.infinite(segstats$mean) | is.infinite(segstats$sd)))
+    {
+      segstats$sd[tmpix] = segstats$mean[tmpix] = NA
+    }
+    segstats = segstats[!is.na(segstats$mean) & !is.na(segstats$sd), ]
+    if (length(segstats)==0)
+      stop('No non NA segments provided')
+
     mu = segstats$mean
     w = as.numeric(width(segstats))
     Sw = sum(as.numeric(width(segstats)))
@@ -6150,27 +6165,9 @@ ppgrid = function(segstats,
             alpha = purity.guesses[i]
             tau = ploidy.guesses[j]
             gamma = 2/alpha - 2
-            beta = (tau + gamma)/m0 ## replaced with below 9/10/14
-                                        #          beta = ( tau + tau_normal * gamma /2 ) / m0
-                                        #          v = pmax(0, round(beta*mu-ncn*gamma/2))
+            beta = (tau + gamma)/m0 
             v = pmax(0, round(beta*mu-gamma))
-
-            ## using normal cn
-                                        #          nll[j] = sum((v-beta*mu+ncn*gamma/2)^2/((sd)^2))
-
-                                        # REVERT
             nll[j] = sum((v-beta*mu+gamma)^2/((sd)^2))
-
-                                        #  mv = pmax(20, pmin(20, max(v, na.rm = TRUE)))
-                                        #  mv = 2
-                                        # log likelihood matrix across approximately "all" integer copy states
-                                        # we are obviously ignoring very high states in this estimate
-                                        # but they are likely to have high sd and thus contribute less to the overall log likelihood
-            ##           ll = -sapply(0:mv, function(x) (x-beta*mu+gamma)^2/((sd)^2)) ## OG VERSION
-                                        #    ll = -sapply(0:mv, function(x) ((x+gamma)/beta-mu)^2 / sd^2)  ## NEWFANGLED VERSION
-            ##        ml = apply(ll, 1, max) ##  get maximum likelihood
-            ##       probs  = 1/rowSums(exp(ll-ml)) ## normalize to get posterior probabilities (assuming uniform prior)
-            ##      nll[j] = sum(-log(probs))
         }
         return(nll)
     }, mc.cores = mc.cores)), nrow = length(purity.guesses), byrow = T)
@@ -6328,89 +6325,6 @@ ppgrid = function(segstats,
 
     out.all$keep = 1:nrow(out.all) %in% ix ## keep track of other ploidy group peaks for drawing purposes
     out.all = out.all[out.all$group %in% out$group, ] ## only draw the groups in the top solution
-
-    if (plot)
-    {
-        library(ellipse)
-        library(numDeriv)
-
-        ## xval = as.numeric(rownames(NLL))
-        ## yval = as.numeric(colnames(NLL))
-        ## f = function(x) {
-        ##     i = x[1]; ## interpolate between closest values of NLL
-        ##     im = which(i<=xval)[1]
-        ##     ip = (i-xval[im-1])/diff(xval[c(im-1, im)]);  ## proportion of lower value to consider
-        ##     j = x[2];
-        ##     jm = which(j<=yval)[1]
-        ##     jp = (j-yval[jm-1])/diff(yval[c(jm-1, jm)]);  ## proportion of lower value to consider
-        ##     nllm = NLL[c(im-1, im), c(jm-1, jm)] ## piece of NLL matrix containing the low and high i and j matches
-        ##     nllp = cbind(c(ip, 1-ip)) %*% rbind(c(jp, 1-jp)) ## proportion of values to input into interpolation
-        ##     return(sum(-nllm*nllp))
-        ## }
-
-        plot(out.all$purity, out.all$ploidy, pch = 19,
-             xlim = c(purity.min, purity.max), ylim = c(ploidy.min, ploidy.max), xlab = 'purity', ylab = 'ploidy', cex = 0.2, col = alpha('white', out.all$intensity))
-
-
-        f = function(x) -NLL[((x[1]-1) %% nrow(NLL))+1, ((x[2]-1) %% ncol(NLL))+1]
-          ir = range(as.numeric(rownames(NLL)))
-          jr = range(as.numeric(colnames(NLL)))
-          txf = function(z) cbind(affine.map(z[,1], ir, c(1, nrow(NLL))), affine.map(z[,2], jr, c(1, ncol(NLL))))
-
-          levs = c(0.95, 0.99)
-                                        #          levs = c(1-1e-7)
-          tmp.out = out.all
-          tmp.out$NLL = as.data.table(tmp.out)[, NLL := min(NLL), by = group][, NLL]
-          tmp.out$intensity = affine.map(tmp.out$NLL, c(1, 0.1))
-          tmp.out = tmp.out[rev(1:nrow(tmp.out)), ]
-                                        #          tmp.out$col = brewer.master(length(levels(tmp.out$group)), 'PuRd')[as.integer(tmp.out$group)]
-          tmp.out$col = brewer.pal(length(unique(out$group))+2, 'PuRd')[match(tmp.out$group, unique(tmp.out$group))]
-          tmp.out$rank = ''; ## hacky stuff to just plot ranks for the top per group solutions
-          tmp.out$rank[tmp.out$keep] = match(tmp.out$group[tmp.out$keep], out$group)
-
-          require(DiceKriging)
-          bla = mapply(function(x, y, c, a)
-          {
-              ## grab k square from computed NLL values to krig around
-              k = 4
-              ir = pmin(nrow(NLL), pmax(1, (x-k):(x+k)))
-              jr = pmin(ncol(NLL), pmax(1, (y-k):(y+k)))
-              ij = expand.grid(ir, jr)
-              xy = expand.grid(purity.guesses[ir], ploidy.guesses[jr])
-              m = tryCatch(km(design = xy[, 1:2], response = -NLL[as.matrix(ij)]), error = function(e) NULL)
-              ## custom function gives best krigged interpolation in
-              ## region will be used for hessian computaiton
-              f = function(x) predict(m, newdata = data.frame(Var1 = x[1], Var2 = x[2]), type = 'UK')$mean
-              for (lev in levs) ## TOFIX: MESS
-              {
-                  if (!is.null(m))
-                      F = tryCatch(-hessian(f, c(purity.guesses[x], ploidy.guesses[y])), error = function(e) matrix(NA, ncol = 2, nrow = 2))
-                  else
-                      F = NA
-
-                  if (all(!is.na(F)))
-                      V = solve(F)
-                  else
-                      V = NA
-                  if (any(is.na(V)))
-                      V = diag(rep(1,2))
-                  M = cov2cor(V)
-                  XY = ellipse(M, scale = .01*c(diff(par('usr')[1:2]),diff(par('usr')[3:4])), centre = c(purity.guesses[x], ploidy.guesses[y]), level = lev)
-                  polygon(XY[,1], XY[,2], border = NA, col = alpha(c, a*affine.map(lev, c(1, 0.3))));
-              }
-          }, tmp.out$i, tmp.out$j, tmp.out$col, tmp.out$intensity, SIMPLIFY = FALSE)
-
-          tmp.out = tmp.out[tmp.out$keep, ]
-          text(tmp.out$purity, tmp.out$ploidy, tmp.out$rank, col = alpha('black', 0.5))
-
-          tmp.out = tmp.out[rev(1:nrow(tmp.out)), ]
-          legend(0, par('usr')[4]*0.98, legend = paste(tmp.out$rank, ') ', sapply(tmp.out$purity, function(x) sprintf('%0.2f',x)), ', ',
-                                                       sapply(tmp.out$ploidy, function(x) sprintf('%0.2f',x)),
-                                                       ' (gamma = ',sapply(tmp.out$gamma, function(x) sprintf('%0.3f',x)),
-                                                       ', beta = ',sapply(tmp.out$beta, function(x) sprintf('%0.3f',x)),
-                                                       ')', sep = ''), fill = tmp.out$col, cex = 0.8, yjust = 1, ncol = 1)
-      }
-
     out = out.all;
     out = out[order(out$group, !out$keep, out$NLL), ]
     out$rank = NA
@@ -6459,7 +6373,7 @@ arrstring = function(A, x = NULL, sep = ', ', sep2 = '_', signif = 3, dt = FALSE
   tmp = as.data.table(Matrix::which(A!=0, arr.ind = TRUE))
   tmp[,  y := A[cbind(row, col)]][  , x:= x[col]]
 
-  str = tmp[, paste(signif(y,signif), x[y!=0], sep = '*', collapse = ' + '), keyby = row][.(1:nrow(A)), V1]
+  str = tmp[, paste(signif(y,signif), x[y!=0], sep = '*', collapse = ' + '), keyby = row][list(1:nrow(A)), V1]
 
   return(str)
 }
