@@ -138,7 +138,7 @@ test_that("JaBbA", {
     identical(jab$segstats$cn,c(4, 5, 4, 3, 3, 1, 3, 28, 3, 4, 32, 4, 27, 4, 28, 4, 33, 4, 32, 4, 24, 4, 4, 5, 4, 3, 3, 1, 3, 28, 3, 4, 32, 4, 27, 4, 28, 4, 33, 4, 32, 4, 24, 4, 1, 1, 1, 1, 1, 1, 1, 1))
     , TRUE)
 
-  expect_true(identical(values(jab$junctions)$cn,  c(2, 4, 5, 4, 20)),
+  expect_true(identical(values(jab$junctions)$cn,  c(2, 4, 5, 4, 20)) | 
               identical(values(jab$junctions)$cn,  c(2, 25, 28, 23, 24, 29, 28, 20)))
 
   expect_true(abs(jab$ploidy - 3.75)<0.01 | abs(jab$ploidy - 3.60)<0.01)
