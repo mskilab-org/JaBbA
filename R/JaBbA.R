@@ -1875,7 +1875,7 @@ ramip_stub = function(kag.file,
                                                nll.cn = nll.cn,
                                                nll.opt = x$nll.opt,
                                                gap.cn = x$gap.cn,
-                                               epgap = x$epgap)
+                                               epgap = ifelse(is.null(x$epgap), NA, x$epgap))
                                 }))
     saveRDS(opt.report, paste0(outdir, "/opt.report.rds"))
 
@@ -2307,10 +2307,10 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
         ## is greater than k / slack.prior penalty (where k is some copy difference
         ## since each node has 4 loose ends
-        fix = as.integer(which(residual.diff>(4/slack.prior) &
-                               cnmle >= 0))
-        ## fix = as.integer(which(residual.diff>(2/slack.prior) &
+        ## fix = as.integer(which(residual.diff>(4/slack.prior) &
         ##                        cnmle >= 0))
+        fix = as.integer(which(residual.diff>(2/slack.prior) &
+                               cnmle >= 0))
 
         ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
         ## each bigger and harder to solve
@@ -2327,7 +2327,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         unfix = as.numeric(setdiff(1:length(segstats), fix))
         tmp.adj = adj
         if (!is.null(adj.ub)){
-            tmp.adj[Matrix::which(adj.ub != 0)] = 0
+            tmp.ix = Matrix::which(adj.ub != 0, arr.ind=TRUE)
+            tmp.adj[tmp.ix] = 0
         }
         G = graph(as.numeric(t(which(tmp.adj != 0, arr.ind=T))), n = length(segstats), directed = T)
         V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
@@ -2489,23 +2490,28 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             this.args = args
             out = do.call('jbaMIP', this.args)
 
-            if (out$status %in% c(101, 102)){
-                jmessage("Subgraph ", k, " converged quickly.")
-            } else {
-                ## prolong the tilim to tilim.long
-                jmessage("Subgraph ", k, " needs prolonged running.")
-                if (out$epgap > epgap.high){
-                    ## Harder prob, try if
-                    this.args$tilim = tilim.long
-                    this.args$epgap = epgap.high
-                    this.args$mipstart = out$adj
-                    out = do.call('jbaMIP', this.args)
-                    jab.step = FALSE
+            if (!is.na(out$status)){
+                if (out$status %in% c(101, 102)){
+                    jmessage("Subgraph ", k, " converged quickly.")
                 } else {
-                    this.args$tilim = tilim.long
-                    this.args$mipstart = out$adj
-                    out = do.call('jbaMIP', this.args)
+                    ## prolong the tilim to tilim.long
+                    jmessage("Subgraph ", k, " needs prolonged running.")
+                    if (out$epgap > epgap.high){
+                        ## Harder prob, try if
+                        this.args$tilim = tilim.long
+                        this.args$epgap = epgap.high
+                        this.args$mipstart = out$adj
+                        out = do.call('jbaMIP', this.args)
+                        jab.step = FALSE
+                    } else {
+                        ## this.args$tilim = tilim.long
+                        ## this.args$mipstart = out$adj
+                        ## out = do.call('jbaMIP', this.args)
+                        jmessage("Subgraph ", k, " roughly converged.")
+                    }
                 }
+            } else {
+                jmessage("Subgraph ", k, " has no data to optimize.")
             }
             
             if (k<=6){
@@ -2515,7 +2521,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             gc() ## garbage collect .. not sure why this needs to be done
 
             return(out)
-        }, args, mc.cores = mc.cores)
+        }, args, mc.cores = mc.cores, mc.preschedule = FALSE)
 
         out = list()
         ## scalar fields --> length(cluster) vector
@@ -2668,6 +2674,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         sol$segstats$eslack.in = NA;
         sol$segstats$eslack.out = NA;
         sol$slack.prior = slack.prior;
+        sol$status = NA;
+        sol$epgap = NA;
         return(sol)
     }
 
