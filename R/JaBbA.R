@@ -759,6 +759,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     } else {
         warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
+
     ## }
     ## else
     ## {
@@ -780,6 +781,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## }
 
     kag = readRDS(kag.file)
+    ab.force = kag$ab.force
 
     if (!is.null(cfield))
     {
@@ -793,7 +795,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     gc()
 
-    juncs = kag$junctions
+    juncs = kag$junctions ## already removed ab.exclude!!!
     bpss = grl.unlist(juncs)
 
     if (nudge.balanced) {
@@ -824,7 +826,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-        ## some edges should be excluded:
+    ## some edges should be excluded:
     ## completely "dark" reference contigs
     nothing.contig = gr2dt(kag$segstats)[, list(nothing = all(is.na(mean))), by=seqnames][nothing==TRUE, seqnames]
     ## both breakpoints in NA regions
@@ -841,11 +843,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         junc.dt[, both.na := is.na(mean.a) & is.na(mean.b)]
         both.na.ix = junc.dt[, which(both.na==TRUE)] ## both breakpoint in NA
 
-        ## no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)]
+        no.man.land = junc.dt[, which(chr.a %in% nothing.contig | chr.b %in% nothing.contig)]
         ## either breakpoint in a contig that's completely NA
         ## excluding those whose both bp in NA regions or mapped to completely NA contigs
-        ## ab.exclude = union(ab.exclude, union(both.na.ix, no.man.land))
-        ab.exclude = union(ab.exclude, both.na.ix)
+        ab.exclude = union(ab.exclude, union(both.na.ix, no.man.land))
+        ## ab.exclude = union(ab.exclude, both.na.ix)
         ab.force = setdiff(ab.force, ab.exclude)
         edgenudge[ab.exclude] = 0
         ## furthermore, some extra edges should not be nudged
@@ -863,6 +865,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                  " junctions, excluding ", length(ab.exclude),
                  " junctions, and nudging ", sum(edgenudge>0), " junctions")
     }
+
 
     saveRDS(ab.exclude, paste0(outdir, "/ab.exclude.rds"))
     saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
@@ -1167,7 +1170,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     }
 
     ab.exclude = intersect(seq_along(this.ra), ab.exclude)
-    ab.force = intersect(seq_along(this.ra), ab.force)
+    ab.force = setdiff(intersect(seq_along(this.ra), ab.force), ab.exclude)
+    remaining = setdiff(seq_along(this.ra), ab.exclude)
+    this.ra = this.ra[remaining]
+    ab.force = which(remaining %in% ab.force)
+
     
     ## if we don't have normal segments then coverage file will be our bible for seqlengths
     if (is.character(cov.file))
@@ -1190,7 +1197,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         sl = .fixsl(GenomeInfoDb::seqlengths(this.ra), this.cov)
     else
         sl = .fixsl(force.seqlengths, this.cov)
-                                        #      sl = .fixsl(seqlengths(this.ra), this.cov)
+    ##      sl = .fixsl(seqlengths(this.ra), this.cov)
 
     if (!is.null(nseg.file))
     {
@@ -1859,25 +1866,32 @@ ramip_stub = function(kag.file,
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
-    opt.report = do.call(`rbind`,
-                         lapply(seq_along(ra.sol$sols),
-                                function(cl){
-                                    x = ra.sol$sols[[cl]]
-                                    if (inherits(x$nll.cn, "Matrix") |
-                                        inherits(x$nll.cn, "matrix")){
-                                        nll.cn = x$nll.cn[1, 1]
-                                    } else {
-                                        nll.cn = NA
-                                    }
-                                    data.table(cl = cl,
-                                               obj = ifelse(is.null(x$obj), NA, x$obj),
-                                               status = ifelse(is.null(x$status), NA, x$status),
-                                               nll.cn = nll.cn,
-                                               nll.opt = x$nll.opt,
-                                               gap.cn = x$gap.cn,
-                                               epgap = ifelse(is.null(x$epgap), NA, x$epgap))
-                                }))
+    opt.report =
+        do.call(`rbind`,
+                lapply(seq_along(ra.sol$sols),
+                       function(cl){
+                           x = ra.sol$sols[[cl]]
+                           if (inherits(x$nll.cn, "Matrix") |
+                               inherits(x$nll.cn, "matrix")){
+                               nll.cn = x$nll.cn[1, 1]
+                           } else {
+                               nll.cn = NA
+                           }
+                           width.tot = sum(width(x$segstats %Q% (strand=="+"))/1e6)
+                           data.table(cl = cl,
+                                      obj = ifelse(is.null(x$obj), NA, x$obj),
+                                      width.tot = width.tot,
+                                      status = ifelse(is.null(x$status), NA, x$status),
+                                      nll.cn = nll.cn,
+                                      nll.opt = x$nll.opt,
+                                      gap.cn = x$gap.cn,
+                                      epgap = ifelse(is.null(x$epgap), NA, x$epgap),
+                                      converge = ifelse(is.null(x$converge), NA, x$converge))
+                       }))
     saveRDS(opt.report, paste0(outdir, "/opt.report.rds"))
+    if (verbose){
+        jmessage("Recording convergence status of subgraphs")
+    }
 
     if (customparams)
     {
@@ -2182,6 +2196,7 @@ segstats = function(target,
             warning('Ratio of highest and lowest segment variances exceed 1e7. This could result from very noisy bin data and/or extreme hypersegmentation.  Downstream optimization results may be unstable.')
         }
     }
+
     return(target)
 }
 
@@ -2272,6 +2287,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   outdir = NULL,
                   mc.cores = 1, ## only matters if partition = T
                   slack.prior = 1,
+                  tuning = FALSE, ## whether to invoke CPLEX auto parameter tuning
                   ... # passed to optimizer
                   )
 {
@@ -2482,31 +2498,60 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             ##
             ## New tilim, epgap interplay
             ## the given tilim is tilim.short
-            tilim.short = args$tilim
-            tilim.long = 9 * tilim.short ## total time not exceeding 10 times user-defined tilim
-            epgap.low = args$epgap
-            epgap.high = pmin(10 * epgap.low, 0.3) ## permissive bound for hard problems
+            ## tilim.short = args$tilim
+            tilim.long = args$tilim
+            tilim.short = pmax(tilim.long/10, 10)
+            ## tilim.long = 9 * tilim.short ## total time not exceeding 10 times user-defined tilim
+            ## epgap.low = args$epgap
+            epgap.high = args$epgap
+            epgap.low = pmax(epgap.high/100, 1e-4)
+            ## epgap.high = pmin(10 * epgap.low, 0.3) ## permissive bound for hard problems
 
             this.args = args
+            this.args$tilim = tilim.short
+            this.args$epgap = epgap.low
+            this.args$tuning = FALSE
+            if (verbose){
+                jmessage("Starting initial run for subgraph ", k,
+                         ", aiming epgap at ", this.args$epgap,
+                         ", within time limit of ", this.args$tilim)
+            }
             out = do.call('jbaMIP', this.args)
 
             if (!is.na(out$status)){
                 if (out$status %in% c(101, 102)){
+                    out$converge = 1
                     jmessage("Subgraph ", k, " converged quickly.")
                 } else {
                     ## prolong the tilim to tilim.long
                     jmessage("Subgraph ", k, " needs prolonged running.")
                     if (out$epgap > epgap.high){
+                        this.args$tuning = TRUE
                         ## Harder prob, try if
                         this.args$tilim = tilim.long
                         this.args$epgap = epgap.high
+                        ## this.args$segstats = out$segstats
                         this.args$mipstart = out$adj
+
+                        if (verbose){
+                            jmessage("Starting prolonged run with tuning for subgraph ", k,
+                                     ", aiming epgap at ", this.args$epgap,
+                                     ", within time limit of ", this.args$tilim)
+                        }
                         out = do.call('jbaMIP', this.args)
-                        jab.step = FALSE
+                        ## converge value:
+                        if (out$status %in% c(101, 102)){
+                            jmessage("Subgraph ", k, " roughly converged after prolonged session.")
+                            out$converge = 3
+                        } else {
+                            jmessage("Subgraph ", k, " VERYHARD.")
+                            out$converge = 4
+                        }
                     } else {
                         ## this.args$tilim = tilim.long
                         ## this.args$mipstart = out$adj
                         ## out = do.call('jbaMIP', this.args)
+                        out$converge = 2
                         jmessage("Subgraph ", k, " roughly converged.")
                     }
                 }
@@ -2676,6 +2721,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         sol$slack.prior = slack.prior;
         sol$status = NA;
         sol$epgap = NA;
+        sol$converge = NA
         return(sol)
     }
 
@@ -2806,7 +2852,38 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         if (verbose)
             jmessage('Running CPLEX with relative optimality gap threshold ', epgap)
 
-        sol = Rcplex2(cvec = cvec, Amat = Amat, bvec = consmeta$b, sense = consmeta$sense, Qmat = Qobj, lb = varmeta$lb, ub = varmeta$ub, n = nsolutions, objsense = "min", vtype = varmeta$vtype, control = control)
+        if (tuning){
+            tuning.control = control
+            ## add a few more controls to the parameter tuning function
+            tuning.control$tuning.display = 2L
+            tuning.control$tuning.rep = 3L
+            tuning.control$tuning.tilim = 30
+            sol = Rcplex2(cvec = cvec,
+                          Amat = Amat,
+                          bvec = consmeta$b,
+                          sense = consmeta$sense,
+                          Qmat = Qobj,
+                          lb = varmeta$lb,
+                          ub = varmeta$ub,
+                          n = nsolutions,
+                          objsense = "min",
+                          vtype = varmeta$vtype,
+                          control = tuning.control,
+                          tuning = TRUE)
+        } else {
+            sol = Rcplex2(cvec = cvec,
+                          Amat = Amat,
+                          bvec = consmeta$b,
+                          sense = consmeta$sense,
+                          Qmat = Qobj,
+                          lb = varmeta$lb,
+                          ub = varmeta$ub,
+                          n = nsolutions,
+                          objsense = "min",
+                          vtype = varmeta$vtype,
+                          control = control,
+                          tuning = FALSE)
+        }
     }
     
     if (is.null(sol$xopt))

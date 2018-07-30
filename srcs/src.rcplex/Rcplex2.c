@@ -2,21 +2,22 @@
 #include "Rcplex2.h"
 
 SEXP Rcplex2(SEXP numcols_p,
-	    SEXP numrows_p,
-	    SEXP objsen_p,
-	    SEXP cvec,
-	    SEXP bvec,
-	    SEXP Amat,
-	    SEXP Qmat,
-	    SEXP lb_p,
-	    SEXP ub_p,
-	    SEXP Rsense,
-	    SEXP Rvtype,
-	    SEXP isQP_p,
-	    SEXP isMIP_p,
-	    SEXP num_poplim,
-	    SEXP control,
-	    SEXP maxcalls)
+	     SEXP numrows_p,
+	     SEXP objsen_p,
+	     SEXP cvec,
+	     SEXP bvec,
+	     SEXP Amat,
+	     SEXP Qmat,
+	     SEXP lb_p,
+	     SEXP ub_p,
+	     SEXP Rsense,
+	     SEXP Rvtype,
+	     SEXP isQP_p,
+	     SEXP isMIP_p,
+	     SEXP num_poplim,
+	     SEXP control,
+	     SEXP maxcalls,
+	     SEXP tuning)
 {
   char *probname = "Rcplex";
   int numcols    = INTEGER(numcols_p)[0]; 
@@ -46,13 +47,14 @@ SEXP Rcplex2(SEXP numcols_p,
   int i, j;
   int cur_numrows, cur_numcols;
 
+  int tstat;
   /*
    * solution pools not supprted until cplex 11.0
    */
-  #if CPX_VERSION >= 1100 
+#if CPX_VERSION >= 1100 
   int num_sol = 1;
   SEXP tmp;
-  #endif
+#endif
 
   /* set maxnumcalls before init */
   max_numcalls = INTEGER(maxcalls)[0];
@@ -64,12 +66,12 @@ SEXP Rcplex2(SEXP numcols_p,
   /*
    * solution pools not supported until cplex 11.0
    */
-  #if CPX_VERSION < 1100
+#if CPX_VERSION < 1100
   if (INTEGER(num_poplim)[0] > 1) {
     warning("Multiple solutions not supported in CPLEX version");
     INTEGER(num_poplim)[0] = 1;
   }
-  #endif 
+#endif 
 
   /* lb and ub */
   for (j = 0; j < numcols; ++j) {
@@ -135,6 +137,32 @@ SEXP Rcplex2(SEXP numcols_p,
     /* MARCIN ADDED set starts */
     setstarts(env, lp, control, isMIP);
 
+    int do_tuning = asLogical(tuning);
+    if (do_tuning){
+      /* set the tuning total tilim to hard-setted value 600s */
+      SEXP tuning_control = setListElement(control, "tilim", 600);
+      /* temporarily change the tilim*/
+      setparams(env, tuning_control, isQP, isMIP);
+      
+      /* tune the hidden parameters */
+      status = CPXtuneparam(env, lp,
+			    0, NULL, NULL, // zero fixed int par
+			    0, NULL, NULL,
+			    0, NULL, NULL, &tstat);
+      if (status) {
+	my_error(("Failed to tune params."));
+      }
+      /* Write the optimized parameters to file */
+      status = CPXwriteparam (env, "tuned.prm");
+
+      setparams(env, control, isQP, isMIP);
+      /* MARCIN ADDED set starts */
+      setstarts(env, lp, control, isMIP);
+    } else {
+      /* Write the optimized parameters to file */
+      status = CPXwriteparam (env, "raw.prm");
+    }
+
     status = CPXmipopt(env, lp);
     
     /*
@@ -142,18 +170,18 @@ SEXP Rcplex2(SEXP numcols_p,
      * e.g., CPX_PARAM_POPULATELIM is not defined
      */
 
-    #if CPX_VERSION >= 1100
+#if CPX_VERSION >= 1100
     if(INTEGER(num_poplim)[0] > 1){
-    /* in MIPs it is possible to have more than 1 solution. If
-       num_poplim > 1 we now try to find these solutions.
-       For populating the solution pool a couple of parameters are
-       relevant:
-       1. the 'absolute gap' solution pool parameter
-          CPX_PARAM_SOLNPOOLAGAP (see Rcplex C control parameters), 
-       2. the 'solution pool intensity' parameter
-          CPX_PARAM_SOLNPOOLINTENSITY (see Rcplex C control parameters),
-       3. the 'limit on number of solutions generated' for solution
-          pool CPX_PARAM_POPULATELIM */
+      /* in MIPs it is possible to have more than 1 solution. If
+	 num_poplim > 1 we now try to find these solutions.
+	 For populating the solution pool a couple of parameters are
+	 relevant:
+	 1. the 'absolute gap' solution pool parameter
+	 CPX_PARAM_SOLNPOOLAGAP (see Rcplex C control parameters), 
+	 2. the 'solution pool intensity' parameter
+	 CPX_PARAM_SOLNPOOLINTENSITY (see Rcplex C control parameters),
+	 3. the 'limit on number of solutions generated' for solution
+	 pool CPX_PARAM_POPULATELIM */
       status = CPXsetintparam(env, CPX_PARAM_POPULATELIM, 
 			      INTEGER(num_poplim)[0] - 1);
       if (status) {
@@ -162,7 +190,7 @@ SEXP Rcplex2(SEXP numcols_p,
       /* now populate the solutions pool */
       status = CPXpopulate(env, lp);
     }
-    #endif
+#endif
   }
   else if (isQP) {
     status = CPXqpopt(env, lp);
@@ -197,7 +225,7 @@ SEXP Rcplex2(SEXP numcols_p,
       /*
        * solution pools not supported until cplex 11.0
        */
-      #if CPX_VERSION >= 1100 
+#if CPX_VERSION >= 1100 
       num_sol = CPXgetsolnpoolnumsolns(env, lp);
 
       /* MIP optimization results -> more than 1 solution */
@@ -237,7 +265,7 @@ SEXP Rcplex2(SEXP numcols_p,
 
     	UNPROTECT(6);
       } /* END FOR */
-      #endif /* end #if CPX_VERSION >= 1100 */
+#endif /* end #if CPX_VERSION >= 1100 */
 
     } /* END multiple solutions */
     else {

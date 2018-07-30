@@ -161,7 +161,6 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
     }
     else if(strcmp(cur_parm, "mipstart") == 0) {
     }
-
     else if(strcmp(cur_parm, "solnpoolagap") == 0){
       /* solution pool parameters */
       #if CPX_VERSION >= 1100 
@@ -186,6 +185,21 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
       #if CPX_VERSION >= 1100
       status = CPXsetintparam(env, CPX_PARAM_SYMMETRY,
     			      *INTEGER(VECTOR_ELT(control, i)));
+      #endif
+    } else if (strcmp(cur_parm, "tuning.display") == 0){
+      #if CPX_VERSION >= 1100
+      status = CPXsetintparam(env, CPX_PARAM_TUNINGDISPLAY,
+    			      *INTEGER(VECTOR_ELT(control, i)));
+      #endif
+    } else if (strcmp(cur_parm, "tuning.rep") == 0){
+      #if CPX_VERSION >= 1100
+      status = CPXsetintparam(env, CPX_PARAM_TUNINGREPEAT,
+    			      *INTEGER(VECTOR_ELT(control, i)));
+      #endif
+    } else if (strcmp(cur_parm, "tuning.tilim") == 0){
+      #if CPX_VERSION >= 1100
+      status = CPXsetdblparam(env, CPX_PARAM_TUNINGTILIM,
+    			      *REAL(VECTOR_ELT(control, i)));
       #endif
     }
     else {

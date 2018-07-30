@@ -75,4 +75,23 @@ SEXP getListElement(SEXP list, char *str) {
     }
   }
   return element;
-}    
+}
+
+SEXP setListElement(SEXP list, char* str, double value) {
+  /* SEXP element = R_NilValue, */
+  SEXP out = allocVector(VECSXP, length(list));
+  SEXP names = getAttrib(list, R_NamesSymbol);
+
+  setAttrib(out, R_NamesSymbol, names);
+  int i;
+
+  for (i=0; i < length(list); i++) {
+    if (strcmp(CHAR(STRING_ELT(names,i)), str) == 0) {
+      /* element = VECTOR_ELT(list,i); */
+      SET_VECTOR_ELT(out, i, ScalarReal(value));
+    } else {
+      SET_VECTOR_ELT(out, i, VECTOR_ELT(list, i));
+    }
+  }
+  return out;
+}

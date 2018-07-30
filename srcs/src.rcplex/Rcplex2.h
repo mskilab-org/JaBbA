@@ -18,6 +18,7 @@ int forceCplxClose;
 
 /* Function definitions */
 SEXP getListElement( SEXP, char* );
+SEXP setListElement( SEXP, char*, double);
 void setparams( CPXENVptr, SEXP, int, int );
 void setstarts( CPXENVptr, CPXLPptr, SEXP, int );
 void Rcplex_init( void );
