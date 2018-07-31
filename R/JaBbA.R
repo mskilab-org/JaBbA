@@ -81,7 +81,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #'
 #'
 #' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
-#' @param junctions.unfiltered supplement junctions in the same format as \code{junctions}
+#' @param juncs.uf supplement junctions in the same format as \code{junctions}
 #' @param coverage  GRanges of coverage OR path to tsv of cov file w GRanges style columns, rds of GRanges or .wig / .bed file of (+/- normalized, GC corrected) fragment density
 #' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
 #' @param seg  optional path to existing segmentation, if missing then will segment coverage using DNACopy with standard settings
@@ -118,7 +118,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #'
 #' @export
 JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
-                 junctions.unfiltered = NULL,
+                 juncs.uf = NULL,
                  coverage, # path to cov file, rds of GRanges
                  seg = NULL, # path to seg file, rds of GRanges
                  outdir = './JaBbA', # out directory to dump into
@@ -193,15 +193,15 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ## Only when tier exists or unfiltered junctions provided, do we do the iterations
     ## if unfiltered set is given first parse it
     ra.uf = NULL
-    if (!is.null(junctions.unfiltered)){
-        if (inherits(junctions.unfiltered, "character") & file.exists(junctions.unfiltered)){
-            if (grepl(".rds$", junctions.unfiltered)){
-                ra.uf = readRDS(junctions.unfiltered)
+    if (!is.null(juncs.uf)){
+        if (inherits(juncs.uf, "character") & file.exists(juncs.uf)){
+            if (grepl(".rds$", juncs.uf)){
+                ra.uf = readRDS(juncs.uf)
             } else {
-                ra.uf = read.junctions(junctions.unfiltered)
+                ra.uf = read.junctions(juncs.uf)
             }
-        } else if (inherits(junctions.unfiltered, "GRangesList")){
-            ra.uf = junctions.unfiltered
+        } else if (inherits(juncs.uf, "GRangesList")){
+            ra.uf = juncs.uf
         }
     }
 
@@ -6051,7 +6051,7 @@ chr2num = function(x, xy = FALSE)
 #' @return indices of the identified junctions
 which.indel = function(juncs,
                        max.size = 1e4){
-    bps = grl.unlist(juncs)
+    bps = unname(grl.unlist(juncs))
     sort.grl.ix = rle((bps %Q% (order(seqnames, start)))$grl.ix)
     ## criterion 1: they are non-overlapping with others
     iso.ix = sort.grl.ix$values[which(sort.grl.ix$lengths==2)]
