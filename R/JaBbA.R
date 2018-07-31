@@ -150,8 +150,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  epgap = 1e-4, ## default to 1e-2
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
-                 verbose = TRUE ## whether to provide verbose output
-                 )
+                 verbose = TRUE, ## whether to provide verbose output
+                 dyn.tuning = TRUE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', normalizePath(outdir))
@@ -325,8 +325,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 purity = as.numeric(purity),
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
-                verbose = as.numeric(verbose)
-            )
+                verbose = as.numeric(verbose),
+                dyn.tuning = dyn.tuning)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -454,8 +454,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             indel = as.logical(indel),
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
-            verbose = as.numeric(verbose)
-        )
+            verbose = as.numeric(verbose),
+            dyn.tuning = dyn.tuning)
     }
     return(jab)
 }
@@ -541,8 +541,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       loose.penalty.mode = "boolean",
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
-                      verbose = TRUE
-                      )
+                      verbose = TRUE,
+                      dyn.tuning = TRUE)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -907,7 +907,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ploidy.min = ploidy,
                    ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty,
-                   loose.penalty.mode = loose.penalty.mode)
+                   loose.penalty.mode = loose.penalty.mode,
+                   dyn.tuning = dyn.tuning)
     }
 
     kag = readRDS(kag.file)
@@ -1651,8 +1652,8 @@ ramip_stub = function(kag.file,
                       edge.nudge = 0,
                       ab.force = NULL,
                       ab.exclude = NULL,
-                      loose.penalty.mode = "boolean"
-                      )
+                      loose.penalty.mode = "boolean",
+                      dyn.tuning = TRUE)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -1862,7 +1863,8 @@ ramip_stub = function(kag.file,
                     outdir = outdir,
                     cn.ub = rep(500, length(this.kag$segstats)),
                     use.L0 = loose.penalty.mode == 'boolean',
-                    verbose = verbose)
+                    verbose = verbose,
+                    dyn.tuning = dyn.tuning)
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -2288,6 +2290,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   mc.cores = 1, ## only matters if partition = T
                   slack.prior = 1,
                   tuning = FALSE, ## whether to invoke CPLEX auto parameter tuning
+                  dyn.tuning = TRUE,
                   ... # passed to optimizer
                   )
 {
@@ -2495,69 +2498,73 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                          ' chromosomes, including chrs ',
                          paste(names(sort(-table(as.character(seqnames((segstats[uix])))))[1:min(4,length(unique(seqnames((segstats[uix])))))]), collapse = ', '))
 
-            ##
-            ## New tilim, epgap interplay
-            ## the given tilim is tilim.short
-            ## tilim.short = args$tilim
-            tilim.long = args$tilim
-            tilim.short = pmax(tilim.long/10, 10)
-            ## tilim.long = 9 * tilim.short ## total time not exceeding 10 times user-defined tilim
-            ## epgap.low = args$epgap
-            epgap.high = args$epgap
-            epgap.low = pmax(epgap.high/100, 1e-4)
-            ## epgap.high = pmin(10 * epgap.low, 0.3) ## permissive bound for hard problems
+            if (dyn.tuning){
+                ##
+                ## New tilim, epgap interplay
+                ## the given tilim is tilim.short
+                ## tilim.short = args$tilim
+                tilim.long = args$tilim
+                tilim.short = pmax(tilim.long/10, 10)
+                ## tilim.long = 9 * tilim.short ## total time not exceeding 10 times user-defined tilim
+                ## epgap.low = args$epgap
+                epgap.high = args$epgap
+                epgap.low = pmax(epgap.high/100, 1e-4)
+                ## epgap.high = pmin(10 * epgap.low, 0.3) ## permissive bound for hard problems
+                this.args = args
+                this.args$tilim = tilim.short
+                this.args$epgap = epgap.low
+                this.args$tuning = FALSE
+                if (verbose){
+                    jmessage("Starting initial run for subgraph ", k,
+                             ", aiming epgap at ", this.args$epgap,
+                             ", within time limit of ", this.args$tilim)
+                }
+                out = do.call('jbaMIP', this.args)
 
-            this.args = args
-            this.args$tilim = tilim.short
-            this.args$epgap = epgap.low
-            this.args$tuning = FALSE
-            if (verbose){
-                jmessage("Starting initial run for subgraph ", k,
-                         ", aiming epgap at ", this.args$epgap,
-                         ", within time limit of ", this.args$tilim)
-            }
-            out = do.call('jbaMIP', this.args)
-
-            if (!is.na(out$status)){
-                if (out$status %in% c(101, 102)){
-                    out$converge = 1
-                    jmessage("Subgraph ", k, " converged quickly.")
-                } else {
-                    ## prolong the tilim to tilim.long
-                    jmessage("Subgraph ", k, " needs prolonged running.")
-                    if (out$epgap > epgap.high){
-                        this.args$tuning = TRUE
-                        ## Harder prob, try if
-                        this.args$tilim = tilim.long
-                        this.args$epgap = epgap.high
-                        ## this.args$segstats = out$segstats
-                        this.args$mipstart = out$adj
-
-                        if (verbose){
-                            jmessage("Starting prolonged run with tuning for subgraph ", k,
-                                     ", aiming epgap at ", this.args$epgap,
-                                     ", within time limit of ", this.args$tilim)
-                        }
-                        out = do.call('jbaMIP', this.args)
-                        ## converge value:
-                        if (out$status %in% c(101, 102)){
-                            jmessage("Subgraph ", k, " roughly converged after prolonged session.")
-                            out$converge = 3
-                        } else {
-                            jmessage("Subgraph ", k, " VERYHARD.")
-                            out$converge = 4
-                        }
+                if (!is.na(out$status)){
+                    if (out$status %in% c(101, 102)){
+                        out$converge = 1
+                        jmessage("Subgraph ", k, " converged quickly.")
                     } else {
-                        ## this.args$tilim = tilim.long
-                        ## this.args$mipstart = out$adj
-                        ## out = do.call('jbaMIP', this.args)
-                        out$converge = 2
-                        jmessage("Subgraph ", k, " roughly converged.")
+                        ## prolong the tilim to tilim.long
+                        jmessage("Subgraph ", k, " needs prolonged running.")
+                        if (out$epgap > epgap.high){
+                            this.args$tuning = TRUE
+                            ## Harder prob, try if
+                            this.args$tilim = tilim.long
+                            this.args$epgap = epgap.high
+                            ## this.args$segstats = out$segstats
+                            this.args$mipstart = out$adj
+
+                            if (verbose){
+                                jmessage("Starting prolonged run with tuning for subgraph ", k,
+                                         ", aiming epgap at ", this.args$epgap,
+                                         ", within time limit of ", this.args$tilim)
+                            }
+                            out = do.call('jbaMIP', this.args)
+                            ## converge value:
+                            if (out$status %in% c(101, 102)){
+                                jmessage("Subgraph ", k, " roughly converged after prolonged session.")
+                                out$converge = 3
+                            } else {
+                                jmessage("Subgraph ", k, " VERYHARD.")
+                                out$converge = 4
+                            }
+                        } else {
+                            ## this.args$tilim = tilim.long
+                            ## this.args$mipstart = out$adj
+                            ## out = do.call('jbaMIP', this.args)
+                            out$converge = 2
+                            jmessage("Subgraph ", k, " roughly converged.")
+                        }
                     }
+                } else {
+                    jmessage("Subgraph ", k, " has no data to optimize.")
                 }
             } else {
-                jmessage("Subgraph ", k, " has no data to optimize.")
+                out = do.call('jbaMIP', args)
             }
+
             
             if (k<=6){
                 saveRDS(out, paste0(outdir, "/.sol.", k,".rds"))
