@@ -142,11 +142,11 @@ test_that("JaBbA", {
         identical(jab$segstats$cn,
                   c(4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 1, 26, 1, 26, 1, 1)) |
         identical(jab$segstats$cn,
-                  c(4, 5, 4, 3, 3, 1, 3, 28, 3, 4, 32, 4, 27, 4, 28, 4, 33, 4, 32, 4, 24, 4, 4, 5, 4, 3, 3, 1, 3, 28, 3, 4, 32, 4, 27, 4, 28, 4, 33, 4, 32, 4, 24, 4, 1, 1, 1, 1, 1, 1, 1, 1)),
+                  c(4, 3, 3, 1, 3, 29, 3, 32, 3, 28, 3, 28, 3, 34, 3, 33, 3, 24, 3, 4, 4, 3, 3, 1, 3, 29, 3, 32, 3, 28, 3, 28, 3, 34, 3, 33, 3, 24, 3, 4, 1, 1, 1, 1)),
         info = print(list.expr(jab$segstats$cn)))
 
-    expect_true(identical(values(jab$junctions)$cn,  c(2, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn,  c(2, 25, 28, 23, 24, 29, 28, 20)),
+    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
+                identical(values(jab$junctions)$cn, c(2, 26, 29, 25, 25, 31, 30, 21)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
     expect_true(abs(jab$ploidy - 3.60)<0.01 |
