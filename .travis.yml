@@ -26,11 +26,11 @@ r_github_packages:
 - mskilab/bamUtils
 - mskilab/Ppurple
 script:
-- travis_wait 60 ./travis-tool.sh run_tests
+- travis_wait 90 ./travis-tool.sh run_tests
 after_failure:
-- "./travis-tool.sh dump_logs"
+- ./travis-tool.sh dump_logs
 after_success:  
-- travis_wait 60 Rscript -e 'covr::codecov()'
+- travis_wait 90 Rscript -e 'covr::codecov()'
 env:
   global:
   - secure: p4UXcB9d5974jheZBUvsJSZc7rtLvkn1PslWCR0a2d/H4warAFuaPr5nX23lq0ZDE7IT1FmQNVEkEbEalNYwXmLSOoNH4v8BnVEutMX3ypjNVT4xpSu/oOnFdrHy5oNyP9JanHwoxMiwmeGufZhMd/ZqsAbDgTL450dXwzlCfF0WxPxvidq9wvyrdYbLO2sihwesmZ3wfJxQn23r/x6yLSoTuKIUFaam+FPXghU3ROl3+raSkBC+FFz4yN5aOiDsnebRNjShI/9mJMEDWL1FvshJkqz+rQViINRCf8rk2RWgnls1PSfKeuzi5UAxeGriHwV2v1XWOq+/4ZPphm0vVenhM8Vp7pKScm+VQVM0/1+NTZ1aNMdIeTYVa/WgdHzZ12kuIEXs+5NGbKIIjIBljC4MpbDLa02LGpESgGgq3JV4LgqmN/88fBbiUSXSlgsAYvMgyvR2HobHI0pwrazremogKv6XgoSM8a8avFGHMUm4IIMMYnW0gLCrD6R3Ys30tAjyLTE/47Mt9D6yz5qBm5M1Qz1zo6wuIUG+xbtQ51n8IWyxy+WN8fzQTYm32ZPQ8jh2usPo02AUyK2VfWrB3WSJ/puqMad0u7qdYJB4HKqR7QEDvKKj/pskzAFkqoG8g4z6uGCdfJE/oRaVdEIDcW+FMJlTrMsHutYRZGmoFgY=
