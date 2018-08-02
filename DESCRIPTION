@@ -33,9 +33,11 @@ Remotes:
   github::mskilab/gTrack,
   github::mskilab/gGnome,
   github::mskilab/Ppurple,
-  bitbucket:sequenza_tools/sequenza
+  bitbucket:sequenza_tools/sequenza,
+  r-lib/covr
 Suggests:  
-  testthat (>= 2.0)
+  testthat (>= 2.0),
+  covr
 License: GPL-2
 LazyData: true
 RoxygenNote: 6.0.1
