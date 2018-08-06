@@ -639,9 +639,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = gaps(seg) %Q% (strand == "*")
+            gap.seg = gaps(seg) %Q% (strand == "*") %Q% (width>1000)
             if (length(gap.seg)>0){
-                bps = c(gr.start(seg)[, c()], gr.start(gap.seg %Q% (width>1000))[, c()])
+                bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
             } else {
                 bps = gr.start(seg)[, c()]
             }
