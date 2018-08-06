@@ -636,12 +636,21 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
             seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
             seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverage), drop = T)
+            names(seg) = NULL
 
+            ## Filter out small gaps in CBS output (<=1e3)
+            gap.seg = gaps(seg) %Q% (strand == "*")
+            bps = c(gr.start(seg), gr.start(gap.seg %Q% (width>1000)))
+            ## keep the breakpoints of the big enough gaps (>1E3), they may contain bad regions
+            new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+            names(new.segs) = NULL
+            seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+            
             if (verbose)
             {
                 jmessage(length(seg), ' segments produced')
             }
-            names(seg) = NULL
+
         }
         else
         {
