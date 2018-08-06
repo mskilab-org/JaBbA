@@ -640,7 +640,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
             ## Filter out small gaps in CBS output (<=1e3)
             gap.seg = gaps(seg) %Q% (strand == "*")
-            bps = c(gr.start(seg), gr.start(gap.seg %Q% (width>1000)))
+            if (length(gap.seg)>0){
+                bps = c(gr.start(seg)[, c()], gr.start(gap.seg %Q% (width>1000))[, c()])
+            } else {
+                bps = gr.start(seg)[, c()]
+            }
+            
             ## keep the breakpoints of the big enough gaps (>1E3), they may contain bad regions
             new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
             names(new.segs) = NULL
