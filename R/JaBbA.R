@@ -815,8 +815,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (nudge.balanced) {
         balanced.jix = c()
         if (length(juncs)>0) {
-            ##  tmpkag = karyograph(juncs) ## make tmp graph with just junctions
-            ##  balanced.jix = chromoplexy(tmpkag, filt.jab=F, verbose=T, junc.only=T, dist=thresh.balanced)
             jmessage("Brand new function for reciprocal junctions calling.")
             balanced.jix = unlist(reciprocal.cycles(juncs, thresh = 1e3, mc.cores = mc.cores, verbose = verbose>1))
             dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
@@ -1263,6 +1261,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     ## this.kag.old = karyograph(this.ra, this.seg)
     this.kag = karyograph(this.ra, grbind(this.seg, na.runs))
+    if (length(this.kag$tile)>5e4){
+        jmessage("WARNING: big karyograph > 50000 nodes, may take longer to finish.")
+    }
 
     ## NA junctions thrown out
     ## if (length(this.kag$junctions)>0){
