@@ -2544,19 +2544,35 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                         ## prolong the tilim to tilim.long
                         jmessage("Subgraph ", k, " needs prolonged running.")
                         if (out$epgap > epgap.high){
-                            this.args$tuning = TRUE
-                            ## Harder prob, try if
-                            this.args$tilim = tilim.long
-                            this.args$epgap = epgap.high
-                            ## this.args$segstats = out$segstats
-                            this.args$mipstart = out$adj
+                            ## this.args$tuning = TRUE
+                            ## ## Harder prob, try if
+                            ## this.args$tilim = tilim.long
+                            ## this.args$epgap = epgap.high
+                            ## ## this.args$segstats = out$segstats
+                            ## this.args$mipstart = out$adj
 
-                            if (verbose){
-                                jmessage("Starting prolonged run with tuning for subgraph ", k,
-                                         ", aiming epgap at ", this.args$epgap,
-                                         ", within time limit of ", this.args$tilim)
-                            }
+                            ## if (verbose){
+                            ##     jmessage("Starting prolonged run with tuning for subgraph ", k,
+                            ##              ", aiming epgap at ", this.args$epgap,
+                            ##              ", within time limit of ", this.args$tilim)
+                            ## }
+
+                            ## run a round of L1 mode
+                            jmessage("Using half the time limit on L1 mode optimization")
+                            this.args$tilim = tilim.long/2
+                            this.args$epgap = epgap.high
+                            this.args$mipstart = out$adj
+                            this.args$use.L0 = FALSE
                             out = do.call('jbaMIP', this.args)
+                            if (k==1){
+                                saveRDS(out, paste0(outdir,"/.tmp.sol.1.rds"))
+                            }
+
+                            ## then run a round of L0
+                            this.args$use.L0 = TRUE
+                            this.args$mipstart = out$adj
+                            out = do.call('jbaMIP', this.args)
+                            
                             ## converge value:
                             if (out$status %in% c(101, 102)){
                                 jmessage("Subgraph ", k, " roughly converged after prolonged session.")
