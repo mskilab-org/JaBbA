@@ -47,7 +47,7 @@ test_that("ra.merge", {
     ram = JaBbA:::ra.merge(read.junctions(juncs.fn),
                            read.junctions(bedpe),
                            read.junctions(juncs.fn))
-    expect_equal(ncol(values(ram)), 29)
+    expect_equal(ncol(values(ram)), 30)
     expect_equal(length(ram), 83)
     junc2 = GenomicRanges::split(GenomicRanges::shift(unlist(junc),400),
                                  rep(c(1,2), each = length(junc)))
@@ -142,15 +142,15 @@ test_that("JaBbA", {
         identical(jab$segstats$cn,
                   c(4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 1, 26, 1, 26, 1, 1)) |
         identical(jab$segstats$cn,
-                  c(4, 3, 3, 1, 3, 29, 3, 32, 3, 28, 3, 28, 3, 34, 3, 33, 3, 24, 3, 4, 4, 3, 3, 1, 3, 29, 3, 32, 3, 28, 3, 28, 3, 34, 3, 33, 3, 24, 3, 4, 1, 1, 1, 1)),
+                  c(3, 4, 3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 3, 4, 3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 1, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1)),
         info = print(list.expr(jab$segstats$cn)))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn, c(2, 26, 29, 25, 25, 31, 30, 21)),
+                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
     expect_true(abs(jab$ploidy - 3.60)<0.01 |
-                abs(jab$ploidy - 3.42)<0.01,
+                abs(jab$ploidy - 3.72)<0.01,
                 info = print(jab$ploidy))
 
     expect_true(abs(jab$purity - .98)<0.01 |
