@@ -249,7 +249,7 @@ test_that("JaBbA", {
     ##     info = print(list.expr(jab$segstats$cn)))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
+                identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
     expect_true(abs(jab$ploidy - 3.60)<0.1 |
