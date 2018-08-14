@@ -149,8 +149,8 @@ test_that("JaBbA", {
                 identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
-    expect_true(abs(jab$ploidy - 3.7)<0.1 |
-                abs(jab$ploidy - 3.72)<0.01,
+    expect_true(abs(jab$ploidy - 3.60)<0.01 |
+                abs(jab$ploidy - 3.7)<0.1,
                 info = print(jab$ploidy))
 
     expect_true(abs(jab$purity - .98)<0.01 |
