@@ -1140,10 +1140,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            max.chunk = 1e8,
                            subsample = NULL,
                            ab.exclude = NULL,
-                           ab.force = NULL)
-{
+                           ab.force = NULL){
     loose.ends = GRanges()
-
 
     if (!is.null(ra))
         this.ra = ra
@@ -1776,12 +1774,14 @@ ramip_stub = function(kag.file,
             segs$cn[is.na(segs$cn)] = 0 ## NA given 0
 
             es = mipstart$edges
-            es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
-            es = es[type != "loose"]
-            es[type=="reference", cn := 0]
-            es[type=="aberrant", cn := 0]
+            if (nrow(es)>0){
+                es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
+                es = es[type != "loose"]
+                es[type=="reference", cn := 0]
+                es[type=="aberrant", cn := 0]
+            }
 
-            if (!is.null(ab.force)){
+            if (!is.null(ab.force) && length(ab.force)>0){
                 jmatch = data.table(ra.overlaps(mipstart$junctions, this.kag$junctions))
                 ab.force.mipstart = jmatch[, setNames(ra1.ix, ra2.ix)][as.character(ab.force)]
                 jdt = data.table(data.frame(values(mipstart$junctions)))
@@ -1807,8 +1807,7 @@ ramip_stub = function(kag.file,
 
             es[type=="reference", cn := pmin(from.remain, to.remain)]
 
-            mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()
-            mipstart = gGnome::gGraph$new(segs = segs, es = es)$fillin()
+            mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()$fillin()
             saveRDS(mipstart, paste0(outdir, "/mipstart.gg.rds"))
         }
     }
@@ -1847,7 +1846,9 @@ ramip_stub = function(kag.file,
         gend = gr.string(gre)
         gstart = gr.string(grs)
         ij = Matrix::which(this.kag$adj!=0, arr.ind = TRUE)
-        ijs = data.table(i = ij[,1], j = ij[,2], gstr = paste(gend[ij[,1]], gstart[ij[,2]]), mipstart = as.numeric(NA))
+        ijs = data.table(i = ij[,1],
+                         j = ij[,2], gstr = paste(gend[ij[,1]], gstart[ij[,2]]),
+                         mipstart = as.numeric(NA))
         ijs$is.ref = GenomicRanges::shift(gre[ij[,1]], ifelse(as.logical(strand(gre)[ij[,1]]=="+"), 1, -1)) == grs[ij[,2]]
         setkey(ijs, gstr)
 
@@ -3360,12 +3361,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     slacks.to.adjust = varmeta[type %in% c('source.slack', 'target.slack'), ][pid %in% bad.slacks, ]
     if (nrow(slacks.to.adjust)>0)
     {
-      cn.to.adjust = slacks.to.adjust[, min(mipstart), keyby = pid]
-      nodes.to.adjust = varmeta[type == 'interval', ][slacks.to.adjust$pid, ]
-      nodes.to.adjust$adjust = -cn.to.adjust[list(nodes.to.adjust$pid), V1]
-      slacks.to.adjust$adjust = -cn.to.adjust[list(slacks.to.adjust$pid), V1]
-      varmeta[nodes.to.adjust$id, ]$mipstart =   nodes.to.adjust$mipstart + nodes.to.adjust$adjust
-      varmeta[slacks.to.adjust$id, ]$mipstart = slacks.to.adjust$mipstart + slacks.to.adjust$adjust
+        cn.to.adjust = slacks.to.adjust[, min(mipstart), keyby = pid]
+        nodes.to.adjust = varmeta[type == 'interval', ][slacks.to.adjust$pid, ]
+        nodes.to.adjust$adjust = -cn.to.adjust[list(nodes.to.adjust$pid), V1]
+        slacks.to.adjust$adjust = -cn.to.adjust[list(slacks.to.adjust$pid), V1]
+        varmeta[nodes.to.adjust$id, ]$mipstart =   nodes.to.adjust$mipstart + nodes.to.adjust$adjust
+        varmeta[slacks.to.adjust$id, ]$mipstart = slacks.to.adjust$mipstart + slacks.to.adjust$adjust
     }
 
     varmeta[label == 'beta', mipstart := beta]
@@ -3379,11 +3380,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     if (use.L0)
     {
-      ssid = varmeta[type == 'source.slack.indicator', pid]
-      varmeta[type == 'source.slack.indicator', ]$mipstart = sign(varmeta[type == 'source.slack', ][ssid, mipstart]>0)
+        ssid = varmeta[type == 'source.slack.indicator', pid]
+        varmeta[type == 'source.slack.indicator', ]$mipstart = sign(varmeta[type == 'source.slack', ][ssid, mipstart]>0)
 
-      tsid = varmeta[type == 'target.slack.indicator', pid]
-      varmeta[type == 'target.slack.indicator', ]$mipstart = sign(varmeta[type == 'target.slack', ][tsid, mipstart]>0)
+        tsid = varmeta[type == 'target.slack.indicator', pid]
+        varmeta[type == 'target.slack.indicator', ]$mipstart = sign(varmeta[type == 'target.slack', ][tsid, mipstart]>0)
     }
 
 
@@ -4910,359 +4911,6 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
     return(t(K_i))
 }
 
-
-## read.junctions = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-##                           get.loose = FALSE ## if TRUE will return a list with fields $junctions and $loose.ends
-##                           )
-## {
-##     if (is.character(rafile) & length(rafile)==1)
-##     {
-##         if (grepl('(.bedpe$)', rafile))
-##         {
-##             ra.path = rafile
-##             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
-
-##             ln = readLines(ra.path)
-##             if (is.na(skip))
-##             {
-##                 nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-##                 if (is.infinite(nh))
-##                     nh = 1
-##             }
-##             else
-##                 nh = skip
-
-
-##             if ((length(ln)-nh)==0)
-##                 if (get.loose)
-##                     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-##                 else
-##                     return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-##                                         #                          return(GRangesList())
-
-
-##             if (nh ==0)
-##                 rafile = fread(rafile, header = FALSE)
-##             else
-##             {
-
-##                 rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
-##                 if (is.null(rafile))
-##                     rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
-
-##                 if (is.null(rafile))
-##                     rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
-
-##                 if (is.null(rafile))
-##                     stop('Error reading bedpe')
-##             }
-##             setnames(rafile, 1:length(cols), cols)
-##             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
-##             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-##                                         #                      rafile[, str1 := ifelse(str1=='+', '-', '+')]
-##                                         #                      rafile[, str2 := ifelse(str2=='+', '-', '+')]
-
-##         }
-##         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
-##         {
-##             vcf = suppressWarnings(VariantAnnotation::readVcf(rafile, GenomeInfoDb::Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths)))
-##             if (!('SVTYPE' %in% names(VariantAnnotation::info(vcf)))) {
-##                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-##                 return(GRangesList());
-##             }
-
-##             ## vgr = rowData(vcf) ## parse BND format
-##             vgr = suppressWarnings(read_vcf(rafile, swap.header = swap.header))
-
-##             ## no events
-##             if (length(vgr) == 0)
-##                 return (GRangesList())
-
-##             ## fix mateids if not included
-##             if (!"MATEID"%in%colnames(mcols(vgr))) {
-##                 nm <- vgr$MATEID <- names(vgr)
-##                 ix <- grepl("1$",nm)
-##                 vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-##                 vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-##                 vgr$SVTYPE="BND"
-##             }
-
-##             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
-##                 stop("MATEID or SVTYPE not included. Required")
-
-##             vgr$mateid = vgr$MATEID
-
-##             if (!is.character(vgr$mateid))
-##             {
-##                 vgr$mateid = S4Vectors::unstrsplit(vgr$MATEID)
-##                 if (any(nix<-nchar(vgr$mateid)==0))
-##                     vgr$mateid[nix] = NA
-##             }
-
-##             if (is.null(vgr$SVTYPE))
-##                 vgr$svtype = vgr$SVTYPE
-##             else
-##                 vgr$svtype = vgr$SVTYPE
-
-##             if (!is.null(VariantAnnotation::info(vcf)$SCTG))
-##                 vgr$SCTG = VariantAnnotation::info(vcf)$SCTG
-
-##             if (force.bnd)
-##                 vgr$svtype = "BND"
-
-##             if (sum(vgr$svtype == 'BND')==0)
-##                 warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
-
-##             if (!all(vgr$svtype == 'BND'))
-##                 warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
-
-##             bix = which(vgr$svtype == "BND")
-##             vgr = vgr[bix]
-##             alt <- sapply(vgr$ALT, function(x) x[1])
-##             vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-##             vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-##             vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-##             vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-##             vgr$mcoord = gsub('chr', '', vgr$mcoord)
-
-##             if (all(is.na(vgr$mateid)))
-##                 if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
-##                 {
-##                     warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-##                     vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-##                 }
-##                 else if (!is.null(vgr$SCTG))
-##                 {
-##                     warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-##                     ucoord = unique(c(vgr$coord, vgr$mcoord))
-##                     vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-##                     if (any(duplicated(vgr$mateid)))
-##                     {
-##                         warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-##                         bix = bix[!duplicated(vgr$mateid)]
-##                         vgr = vgr[!duplicated(vgr$mateid)]
-##                     }
-##                 }
-##                 else
-##                     stop('MATEID tag missing')
-
-##             vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
-
-##             pix = which(!is.na(vgr$mix))
-
-##             vgr.pair = vgr[pix]
-
-##             if (length(vgr.pair)==0)
-##                 stop('No mates found despite nonzero number of BND rows in VCF')
-##             vgr.pair$mix = match(vgr.pair$mix, pix)
-##             vix = which(1:length(vgr.pair)<vgr.pair$mix )
-##             vgr.pair1 = vgr.pair[vix]
-##             vgr.pair2 = vgr.pair[vgr.pair1$mix]
-
-##             ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
-
-##             ## if "first" and "right" then we set this entry "-" and the second entry "+"
-##             tmpix = vgr.pair1$first & vgr.pair1$right
-##             if (any(tmpix))
-##             {
-##                 strand(vgr.pair1)[tmpix] = '-'
-##                 strand(vgr.pair2)[tmpix] = '+'
-##             }
-
-##             ## if "first" and "left" then "-", "-"
-##             tmpix = vgr.pair1$first & !vgr.pair1$right
-##             if (any(tmpix))
-##             {
-##                 strand(vgr.pair1)[tmpix] = '-'
-##                 strand(vgr.pair2)[tmpix] = '-'
-##             }
-
-##             ## if "second" and "left" then "+", "-"
-##             tmpix = !vgr.pair1$first & !vgr.pair1$right
-##             if (any(tmpix))
-##             {
-##                 strand(vgr.pair1)[tmpix] = '+'
-##                 strand(vgr.pair2)[tmpix] = '-'
-##             }
-
-##             ## if "second" and "right" then "+", "+"
-##             tmpix = !vgr.pair1$first & vgr.pair1$right
-##             if (any(tmpix))
-##             {
-##                 strand(vgr.pair1)[tmpix] = '+'
-##                 strand(vgr.pair2)[tmpix] = '+'
-##             }
-
-##             pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-##             if (any(pos1))
-##             {
-##                 start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
-##                 end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
-##             }
-
-##             pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-##             if (any(pos2))
-##             {
-##                 start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
-##                 end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
-##             }
-##             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
-
-##             this.inf = values(vgr)[bix[pix[vix]], ]
-
-##             if (is.null(this.inf$POS))
-##                 this.inf = cbind(data.frame(POS = ''), this.inf)
-##             if (is.null(this.inf$CHROM))
-##                 this.inf = cbind(data.frame(CHROM = ''), this.inf)
-
-##             if (is.null(this.inf$MATL))
-##                 this.inf = cbind(data.frame(MALT = ''), this.inf)
-
-##             this.inf$CHROM = seqnames(vgr.pair1)
-##             this.inf$POS = start(vgr.pair1)
-##             this.inf$MATECHROM = seqnames(vgr.pair2)
-##             this.inf$MATEPOS = start(vgr.pair2)
-##             this.inf$MALT = vgr.pair2$AL
-
-##             ## NOT SURE WHY BROKEN
-##             ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
-##             ## if (!is.null(tmp))
-##             ##     values(ra) = tmp
-##             ## else
-##             ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
-
-##             values(ra) = this.inf
-
-##             if (is.null(values(ra)$TIER))
-##                 values(ra)$tier = ifelse(values(ra)$FILTER == "PASS", 2, 3) ## baseline tiering of PASS vs non PASS variants
-##             else
-##                 values(ra)$tier = values(ra)$TIER
-
-##             if (!get.loose)
-##                 return(ra)
-##             else
-##             {
-##                 npix = is.na(vgr$mix)
-##                 vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
-
-##                 tmp =  tryCatch( values(vgr)[bix[npix], ],
-##                                 error = function(e) NULL)
-##                 if (!is.null(tmp))
-##                     values(vgr.loose) = tmp
-##                 else
-##                     values(vgr.loose) = cbind(vcf@fixed[bix[npix], ],
-##                                               VariantAnnotation::info(vcf)[bix[npix], ])
-
-##                 return(list(junctions = ra, loose.ends = vgr.loose))
-##             }
-##         }
-##         else
-##             rafile = read.delim(rafile)
-##     }
-
-##     if (is.data.table(rafile))
-##     {
-##         rafile = as.data.frame(rafile)
-##     }
-
-##     out = GRangesList()
-
-##     if (nrow(rafile)==0)
-##     {
-##         values(out) = rafile
-##         return(out)
-##     }
-
-##     if (snowman) ## flip breaks so that they are pointing away from junction
-##     {
-##         rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
-##         rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
-##     }
-
-##     if (!is.null(seqlevels)) ## convert seqlevels from notation in tab delim file to actual
-##     {
-##         rafile$chr1 = seqlevels[rafile$chr1]
-##         rafile$chr2 = seqlevels[rafile$chr2]
-##     }
-
-
-##     if (is.null(rafile$str1))
-##         rafile$str1 = rafile$strand1
-
-##     if (is.null(rafile$str2))
-##         rafile$str2 = rafile$strand2
-##     if (!is.null(rafile$pos1) & !is.null(rafile$pos2))
-##     {
-##         if (breakpointer)
-##         {
-##             rafile$pos1 = rafile$T_BPpos1
-##             rafile$pos2 = rafile$T_BPpos2
-##         }
-
-##         if (!is.numeric(rafile$pos1))
-##             rafile$pos1 = as.numeric(rafile$pos1)
-
-##         if (!is.numeric(rafile$pos2))
-##             rafile$pos2 = as.numeric(rafile$pos2)
-
-##         ## clean the parenthesis from the string
-
-##         rafile$str1 <- gsub('[()]', '', rafile$str1)
-##         rafile$str2 <- gsub('[()]', '', rafile$str2)
-
-##         ## goal is to make the ends point <away> from the junction where - is left and + is right
-##         if (is.character(rafile$str1) | is.factor(rafile$str1))
-##             rafile$str1 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str1))))
-
-##         if (is.character(rafile$str2) | is.factor(rafile$str2))
-##             rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-
-
-##         if (is.numeric(rafile$str1))
-##             rafile$str1 = ifelse(rafile$str1>0, '+', '-')
-
-##         if (is.numeric(rafile$str2))
-##             rafile$str2 = ifelse(rafile$str2>0, '+', '-')
-
-##         rafile$rowid = 1:nrow(rafile)
-
-##         bad.ix = is.na(rafile$chr1) | is.na(rafile$chr2) | is.na(rafile$pos1) | is.na(rafile$pos2) | is.na(rafile$str1) | is.na(rafile$str2) | rafile$str1 == '*'| rafile$str2 == '*' | rafile$pos1<0 | rafile$pos2<0
-
-##         rafile = rafile[which(!bad.ix), ]
-
-##         if (nrow(rafile)==0)
-##             return(GRanges())
-
-##         seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
-##                     data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
-
-##         if (chr.convert)
-##             seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
-
-##         out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
-##         out = split(out, out$ra.index)
-##     }
-##     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
-##     {
-##         ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges::IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-##         ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges::IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-##         out = grl.pivot(GRangesList(ra1, ra2))
-##     }
-
-
-##     if (keep.features)
-##         values(out) = rafile[, ]
-
-##     if (!get.loose)
-##         return(out)
-##     else
-##         return(list(junctions = out, loose.ends = GRanges()))
-
-##     return(out)
-## }
-
-
 ############################################################
 #' read.junctions: parse junction data from various common formats
 #'
@@ -5328,17 +4976,17 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
 #' @export
 ###########################################################
 read.junctions = function(rafile,
-                     keep.features = T,
-                     seqlengths = hg_seqlengths(),
-                     chr.convert = T,
-                     geno=NULL,
-                     flipstrand = FALSE,
-                     swap.header = NULL,
-                     breakpointer = FALSE,
-                     seqlevels = NULL,
-                     force.bnd = FALSE,
-                     skip = NA,
-                     get.loose = FALSE){
+                          keep.features = T,
+                          seqlengths = hg_seqlengths(),
+                          chr.convert = T,
+                          geno=NULL,
+                          flipstrand = FALSE,
+                          swap.header = NULL,
+                          breakpointer = FALSE,
+                          seqlevels = NULL,
+                          force.bnd = FALSE,
+                          skip = NA,
+                          get.loose = FALSE){
     if (is.na(rafile)){
         return(NULL)
     }
@@ -5631,22 +5279,22 @@ read.junctions = function(rafile,
                         (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
                     else if (!is.null(vgr$SCTG))
-                {
-                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                    require(igraph)
-                    ucoord = unique(c(vgr$coord, vgr$mcoord))
-                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-                    if (any(duplicated(vgr$mateid)))
                     {
-                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                        bix = bix[!duplicated(vgr$mateid)]
-                        vgr = vgr[!duplicated(vgr$mateid)]
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        require(igraph)
+                        ucoord = unique(c(vgr$coord, vgr$mcoord))
+                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+
+                        if (any(duplicated(vgr$mateid)))
+                        {
+                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                            bix = bix[!duplicated(vgr$mateid)]
+                            vgr = vgr[!duplicated(vgr$mateid)]
+                        }
                     }
-                }
                     else{
-                    stop('Error: MATEID tag missing')
-                }
+                        stop('Error: MATEID tag missing')
+                    }
 
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
@@ -6032,16 +5680,18 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         if (length(tbp)>0)
             tbp$seg.bp = TRUE
     }
-    else
-        tbp = NULL;
+    else {
+        tbp = NULL
+    }
 
-    if (length(junctions)>0)
+    if (length(junctions)>0){
         if (length(tbp)>0)
             g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
         else
             g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()]))))
-    else
-        g = gaps(gr.stripstrand(sort(tbp)));
+    } else {
+        g = gaps(gr.stripstrand(sort(tbp)))
+    }
 
     g = g[as.logical( strand(g)=='*' )];
     strand(g) = '+';
@@ -6058,7 +5708,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     tile$is.tel = start(tile)==1 | end(tile) == GenomeInfoDb::seqlengths(tile)[as.character(seqnames(tile))]
     values(tile)$tile.id = 1:length(tile);
 
-                                        # find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
+    ## find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
     junc.bp = grbind(bp1, bp2)
     junc.bpix = numeric()
     if (length(junc.bp)>0)
@@ -6098,10 +5748,10 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ## a+ b+ junctions connect seg starting with position a+1 (on negative strand) to seg starting with position b+1
         ## a+ b- junctions connect seg starting with position a+1 (on negative strand) to seg ending with position b (on neg strand)
 
-                                        # collect all pairwise adjacencies implied by breakpoints
-                                        # eg imagine a|bp1|b
-                                        #            c|bp2|d
-                                        # "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
+        ## # collect all pairwise adjacencies implied by breakpoints
+        ## # eg imagine a|bp1|b
+        ## #            c|bp2|d
+        ## # "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
 
         ab.pairs = cbind(
             ifelse(as.logical(strand(bp1)=='+'), gr.match(GenomicRanges::shift(gr.start(bp1), 1), gr.start(tile)),
@@ -6121,21 +5771,21 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         pp = (sgn1*sgn2)>0 & sgn1>0;
         mm = (sgn1*sgn2)>0 & sgn1<0;
         mp = sgn1>0 & sgn2<0
-        ab.pairs[pp,1] = -ab.pairs[pp,1] # ++ breakpoints --> (-b)d adjacency
-        ab.pairs[mm,2] = -ab.pairs[mm,2] # -- breakpoints --> a(-c) adjacency
-        ab.pairs[mp, ] = -ab.pairs[mp, ] # +- breakpoints --> (-b)(-c) adjacency
+        ab.pairs[pp,1] = -ab.pairs[pp,1] ## # ++ breakpoints --> (-b)d adjacency
+        ab.pairs[mm,2] = -ab.pairs[mm,2] ## -- breakpoints --> a(-c) adjacency
+        ab.pairs[mp, ] = -ab.pairs[mp, ] ## +- breakpoints --> (-b)(-c) adjacency
 
-                                        # clean up adj pairs
-                                        # remove any that have crossed a chromosome boundary from their breakpoint
-                                        # this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
-                                        # from their telomeres)
+        ## # clean up adj pairs
+        ## # remove any that have crossed a chromosome boundary from their breakpoint
+        ## # this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
+        ## # from their telomeres)
         edge.id = rep(1:nrow(ab.pairs), 2)
         ab.pairs = rbind(ab.pairs, cbind(-ab.pairs[,2], -ab.pairs[,1]));
         ab.pairs.bpid = c(ab.pairs.bpid, ab.pairs.bpid)
 
-                                        # build "aberrant" adjacency matrix representing directed graph of edges connecting
-                                        # <signed> nodes.
-                                        # note: indices of matrix represent edge labels
+        ## # build "aberrant" adjacency matrix representing directed graph of edges connecting
+        ## # <signed> nodes.
+        ## # note: indices of matrix represent edge labels
         adj.ab = Matrix( 0,
                         nrow = 2*length(tile),
                         ncol = 2*length(tile),
@@ -6152,14 +5802,19 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
                         dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
     }
 
-                                        # build reference adjacency matrix (representing consecutive segments on the reference genome)
-                                        # note: indices of matrix represent edge labels
+    ## # build reference adjacency matrix (representing consecutive segments on the reference genome)
+    ## # note: indices of matrix represent edge labels
     seg.ix = 1:length(tile)
-    ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)], seg.ix[2:(length(seg.ix))])
-                                        # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
-    ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) == as.character(seqnames(tile[ref.pairs[,2]]))), ]
+    ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)],
+                      seg.ix[2:(length(seg.ix))])
+    ## # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
+    ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) ==
+                                as.character(seqnames(tile[ref.pairs[,2]]))), ]
 
-    if (nrow(ref.pairs)>0 & length(edge.id)>0)
+    ## XT fix 08/12: edge.id could be length 0 when no aberrant junction is used
+    ## we should still make the ref edges in that case
+    ## if (nrow(ref.pairs)>0 & length(edge.id)>0)
+    if (nrow(ref.pairs)>0)
     {
         edge.id = c(edge.id, max(edge.id) + rep(1:nrow(ref.pairs), 2))
         ref.pairs = rbind(ref.pairs, cbind(-ref.pairs[,2], -ref.pairs[,1])) # reverse ref pairs
