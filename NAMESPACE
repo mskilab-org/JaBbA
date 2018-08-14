@@ -2,7 +2,6 @@
 
 export(JaBbA)
 export(Rcplex2)
-export(Rcplex2_tuning)
 export(read.junctions)
 import(DNAcopy)
 import(GenomicRanges)
