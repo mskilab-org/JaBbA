@@ -36,8 +36,8 @@ pp = JaBbA:::ppgrid(segs.gr, allelic = TRUE)
 print(pp[1,])
 
 test_that("ppgrid", {
-  expect_equal(pp$purity[1], 0.98)
-  expect_equal(pp$ploidy[1], 3.88)
+    expect_equal(pp$purity[1], 0.98)
+    expect_equal(pp$ploidy[1], 3.88)
 })
 
 junc = read.junctions(juncs.fn)
@@ -221,7 +221,7 @@ cn.cor.single = function(segs,
             subset(!duplicated(query.id) & gs.cn<500 & gs.wd>=1e4) %>%
             ggplot() +
             geom_point(aes(x = inferred.cn,
-                       y = gs.cn),
+                           y = gs.cn),
                        shape=1) +
             geom_abline(slope=1, intercept=0,
                         color="salmon", linetype="dashed")
@@ -237,7 +237,7 @@ cn.cor.single = function(segs,
 
 cn.gs = readRDS(system.file("extdata/jab.cn.gs.rds", package="JaBbA"))
 cn.gs.reiterate = readRDS(system.file("extdata/jab.reiterate.cn.gs.rds", package="JaBbA"))
-    
+
 test_that("JaBbA", {
     print("Comparing results from boolean mode without iteration:")
     expect_true(cn.cor.single(jab$segstats, cn.gs)>0.9)
@@ -249,7 +249,8 @@ test_that("JaBbA", {
     ##     info = print(list.expr(jab$segstats$cn)))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)),
+                identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
+                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
     expect_true(abs(jab$ploidy - 3.60)<0.1 |
