@@ -131,6 +131,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  name = 'tumor', ## prefix for sample name to be output to seg file
                  purity = NA,
                  ploidy = NA,
+                 pp.method = "sequenza",
                  field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                  subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                  tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
@@ -323,6 +324,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 mipstart = init,
                 ploidy = as.numeric(ploidy),
                 purity = as.numeric(purity),
+                pp.method = pp.method,
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
                 verbose = as.numeric(verbose),
@@ -426,7 +428,6 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
         }
         jab = jabba_stub(
-            ## junctions = ra,
             junctions = ra.all,
             seg = seg,
             coverage = coverage,
@@ -451,6 +452,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             mipstart = init,
             ploidy = as.numeric(ploidy),
             purity = as.numeric(purity),
+            pp.method = pp.method,
             indel = as.logical(indel),
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
@@ -526,9 +528,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       max.threads = Inf,
                       max.mem = 16,
                       purity = NA,
-                      epgap = 1e-4,
                       ploidy = NA,
+                      pp.method = "sequenza",
                       strict = FALSE,
+                      epgap = 1e-4,
                       mipstart = NULL,
                       field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                       subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
@@ -769,30 +772,23 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## if (!is.character(ra))
     ## {
     if (overwrite | !file.exists(kag.file)){
-        karyograph_stub(seg, coverage, ra = ra, out.file = kag.file, nseg.file = nseg, field = field, purity = purity, ploidy = ploidy, subsample = subsample, het.file = hets, verbose = verbose, ab.exclude = ab.exclude, ab.force = ab.force)
+        karyograph_stub(seg,
+                        coverage,
+                        ra = ra,
+                        out.file = kag.file,
+                        nseg.file = nseg,
+                        field = field,
+                        purity = purity,
+                        ploidy = ploidy,
+                        pp.method = pp.method,
+                        subsample = subsample,
+                        het.file = hets,
+                        verbose = verbose,
+                        ab.exclude = ab.exclude,
+                        ab.force = ab.force)
     } else {
         warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
-
-    ## }
-    ## else
-    ## {
-    ##     if (grepl('rds$', ra) |
-    ##         grepl('vcf$', ra) |
-    ##         grepl('vcf\\.gz$', ra) |
-    ##         grepl('bedpe$', ra))
-    ##     {
-    ##         if (overwrite | !file.exists(kag.file))
-    ##             karyograph_stub(seg, coverage, ra.file = ra, out.file = kag.file, nseg.file = nseg, field = field, subsample = subsample, purity = purity, ploidy = ploidy, het.file = hets, mc.cores = mc.cores, verbose = verbose, ab.exclude = ab.exclude, ab.force = ab.force)
-    ##         else
-    ##             warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
-    ##     } else  {
-    ##         if (overwrite | !file.exists(kag.file))
-    ##             karyograph_stub(seg, coverage, junction.file = gsub('all.mat$', 'somatic.txt', ra), nseg.file = nseg, out.file = kag.file, field = field, purity = purity, ploidy = ploidy, subsample = subsample, mc.cores = mc.cores, het.file = hets, verbose = verbose, ab.exclude = ab.exclude, ab.force = ab.forc)e
-    ##         else
-    ##             warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
-    ##     }
-    ## }
 
     kag = readRDS(kag.file)
     ab.force = kag$ab.force
@@ -2607,6 +2603,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             return(out)
         }, args, mc.cores = mc.cores, mc.preschedule = FALSE)
 
+        saveRDS(sols, "raw.sols.rds")
         out = list()
         ## scalar fields --> length(cluster) vector
         for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')){
