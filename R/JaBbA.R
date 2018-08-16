@@ -658,7 +658,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             {
                 jmessage(length(seg), ' segments produced')
             }
-
         }
         else
         {
@@ -1139,9 +1138,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            ab.force = NULL){
     loose.ends = GRanges()
 
-    if (!is.null(ra))
+    if (!is.null(ra)){
         this.ra = ra
-    else
+    } else
     {
         if (!is.null(junction.file))
         {
@@ -1181,7 +1180,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     remaining = setdiff(seq_along(this.ra), ab.exclude)
     this.ra = this.ra[remaining]
     ab.force = which(remaining %in% ab.force)
-
     
     ## if we don't have normal segments then coverage file will be our bible for seqlengths
     if (is.character(cov.file))
@@ -1194,17 +1192,18 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             field = 'score';
         }
     }
-    else
+    else {
         this.cov = cov.file
+    }
 
     ## now make sure we have the "best" seqlengths
     .fixsl = function(sl, gr) {sl[seqlevels(gr)] = pmax(GenomeInfoDb::seqlengths(gr), sl[seqlevels(gr)]); return(sl)}
 
-    if (is.null(force.seqlengths))
+    if (is.null(force.seqlengths)){
         sl = .fixsl(GenomeInfoDb::seqlengths(this.ra), this.cov)
-    else
+    } else {
         sl = .fixsl(force.seqlengths, this.cov)
-    ##      sl = .fixsl(seqlengths(this.ra), this.cov)
+    }
 
     if (!is.null(nseg.file))
     {
@@ -1221,20 +1220,25 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                     nseg = dt2gr(fread(nseg.file))
                 }
             } else {
-                stop('Did not find nseg file!')
+                jmessage('Did not find nseg file! Ignore.')
+                nseg = nseg.file = NULL
             }
 
         }
-        else
+        else {
             nseg = nseg.file
-        sl = .fixsl(sl, nseg)
+        }
+        if (!is.null(nseg)){
+            sl = .fixsl(sl, nseg)
+        }
     }
 
     ## make sure all sl's are equiv
-    if (is.character(seg.file))
+    if (is.character(seg.file)){
         this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
-    else
+    } else {
         this.seg = seg.file
+    }
 
     if (length(loose.ends>0))
     {
@@ -1285,11 +1289,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ##     }
     ## }
     
-    if (is.null(nseg.file))
+    if (is.null(nseg.file)){
         this.kag$segstats$ncn = 2
+    }
 
     hets.gr = NULL
-
     if (!is.null(het.file))
     {
         if (is.character(het.file))
@@ -1377,17 +1381,16 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     this.kag$segstats$ncn = 2
 
-    if (!is.null(nseg.file))
-        if (is.null(nseg$cn))
+    if (!is.null(nseg.file)){
+        if (is.null(nseg$cn)){
             stop('Normal seg file does not have "cn" met data field')
-        else
-        {
+        } else {
             this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
             this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
         }
+    }
 
     ## filter ra here
-
     ## ## 6/15 temp fix for sd on short segments, which we overestimate for now
     ## cov.thresh = pmin(1e5, median(width(this.cov)))
     ## #    jmessage('!!!!!!!!!!! cov.thresh for fix.sd is', cov.thresh, '\n')
@@ -1430,10 +1433,12 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             hets.gr = NULL
         }
 
-        if (is.null(hets.gr)){
+        if (is.null(hets.gr) || !file.exists(het.file)){
             use.ppgrid = TRUE
+            use.ppurple = use.sequenza = FALSE
         } else if (length(hets.gr)==0){
             use.ppgrid = TRUE
+            use.ppurple = use.sequenza = FALSE
         } else if (!all(c("ref.count.t",
                           "alt.count.t",
                           "ref.count.n",
@@ -1444,6 +1449,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
         if (use.ppurple)
         {
+            jmessage("Using Ppurple to estimate purity ploidy")
             if (is.na(purity))
             {
                 purity = seq(0, 1, 0.1)
@@ -1477,7 +1483,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                       numchunks = numchunks,
                                       ignore.sex = TRUE)
             }
-        } else if (use.sequenza){
+        } else if (use.sequenza) {
+            jmessage("Using Sequenza to estimate purity ploidy")
             if (is.na(purity))
             {
                 purity = seq(0, 1, 0.01)
@@ -1504,7 +1511,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                      old = c("seqnames", "start", "alt.frac.t"),
                      new = c("chromosome", "position", "Bf"))
             sites = sites[which(Bf <= 0.5)] # They only include BAF w/ values 0-0.5
-            if (exists("nseg")){
+            if (exists("nseg") && !is.null(nseg)){
                 ## only running w/ diploid autosomes
                 ## to avoid situations like HCC1143BL
                 good.chr = union(seqnames(nseg %Q% (cn==2)), "X")
@@ -1541,6 +1548,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             pp = data.table(ploidy = confint$max.ploidy,
                             purity = confint$max.cellularity)
         } else if (use.ppgrid) {
+            jmessage("Using ppgrid to estimate purity ploidy")
             if (!is.null(het.file))
             {
                 pp = ppgrid(ss.tmp,
