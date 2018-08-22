@@ -85,7 +85,8 @@ list.expr = function(x)
 ## default is boolean
 jab = JaBbA(junctions = junc,
             coverage = cov.fn,
-            seg = segs, nseg = nsegs,
+            seg = segs,
+            nseg = nsegs,
             strict = TRUE,
             slack.penalty = 1e4,
             hets = hets,
