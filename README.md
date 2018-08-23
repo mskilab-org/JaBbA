@@ -14,8 +14,7 @@ Installation (R package)
    The software is proprietary, but can be obtained for free under [IBM's academic
    initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
 
-2. Set ${CPLEX_DIR} variable (e.g. in your shell or .bash_profile) to your CPLEX
-   Studio installation.
+2. Set `CPLEX_DIR` variable to your CPLEX Studio installation directory.
 
 ```{sh}
 export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
