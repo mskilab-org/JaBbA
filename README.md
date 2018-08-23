@@ -21,9 +21,8 @@ Installation (R package)
 
 ```{sh}
 export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
-export CPLEX_INCLUDE_PATH=${CPLEX_DIR}/include
-export CPLEX_LIB_PATH=${CPLEX_DIR}/lib
 ```
+## PSA: if `CPLEX_DIR` is set correctly then both `$CPLEX_DIR/cplex/include` and `$CPLEX_DIR/cplex/lib` should both exist.
 
 3. Install dependent packages and latest Bioconductor (if you haven't already)
 
