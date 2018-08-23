@@ -15,9 +15,7 @@ Installation (R package)
    initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
 
 2. Set ${CPLEX_DIR} variable (e.g. in your shell or .bash_profile) to your CPLEX
-   Studio installation. Set/replace the ${CPLEX_INCLUDE_PATH} and ${CPLEX_LIB_PATH} with the
-   corresponding paths to the 'include' and 'lib' directories of your
-   CPLEX installation on your system.
+   Studio installation.
 
 ```{sh}
 export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
