@@ -21,29 +21,7 @@ export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
 ```
 **NOTE: if `CPLEX_DIR` is set correctly then `$CPLEX_DIR/cplex/include` and `$CPLEX_DIR/cplex/lib` should both exist.**
 
-3. Install dependent packages and latest Bioconductor (if you haven't already)
-
-```{r}
-install.packages(DNAcopy')
-source("https://bioconductor.org/biocLite.R")
-biocLite("GenomicRanges")
-```
-
-4. Install devtools from CRAN (if you don't have it already)
-
-```{r}
-install.packages('devtools')
-```
-
-5. Install dependent mskilab R packages
-
-```{r}
-devtools::install_github('mskilab/gUtils')
-devtools::install_github('mskilab/gGnome')
-devtools::install_github('mskilab/Ppurple')
-```
-
-6. Install JaBbA
+3. Install JaBbA throught devtools
 
 ```{r}
 devtools::install_github('mskilab/JaBbA)
@@ -53,14 +31,14 @@ devtools::install_github('mskilab/JaBbA)
 Installation (jba executable)
 ------------
 
-7. (after installing R package) Pull JaBbA git and add pulled directory to PATH
+4. (after installing R package) Pull JaBbA git and add pulled directory to PATH
 
 ```{bash}
 $ git clone git@github:mskilab/JaBbA
 $ export PATH="$PATH:$PWD/JaBbA"
 ```
 
-8. test run jba executable on provided data
+5. test run jba executable on provided data
 ```{bash}
 
 $ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt 
