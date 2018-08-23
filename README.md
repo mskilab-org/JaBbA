@@ -24,7 +24,7 @@ export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
 3. Install JaBbA 
 
 ```{r}
-devtools::install_github('mskilab/JaBbA)
+devtools::install_github('mskilab/JaBbA')
 ```
 
 
