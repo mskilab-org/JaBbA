@@ -14,14 +14,14 @@ Installation (R package)
    The software is proprietary, but can be obtained for free under [IBM's academic
    initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
 
-2. Set `CPLEX_DIR` variable to your CPLEX Studio installation directory.
+2. Set `CPLEX_DIR` variable to your CPLEX Studio installation directory
 
 ```{sh}
 export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
 ```
 **NOTE: if `CPLEX_DIR` is set correctly then `$CPLEX_DIR/cplex/include` and `$CPLEX_DIR/cplex/lib` should both exist.**
 
-3. Install JaBbA throught devtools
+3. Install JaBbA 
 
 ```{r}
 devtools::install_github('mskilab/JaBbA)
