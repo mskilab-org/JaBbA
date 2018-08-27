@@ -1770,9 +1770,12 @@ ramip_stub = function(kag.file,
         } else {
             jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
             ## mipstart = gGnome::gread(kag.file)
+            ## mipstart = gGnome::gGraph$new(segs = this.kag$segstats,
+            ##                               es = data.table(Matrix::which(this.kag$adj != 0, arr.ind=T))[
+            ##                                 , ":="(from = row, to = col)])
             mipstart = gGnome::gGraph$new(segs = this.kag$segstats,
                                           es = data.table(Matrix::which(this.kag$adj != 0, arr.ind=T))[
-                                            , ":="(from = row, to = col)])
+                                            , .(from = row, to = col)])
             segs = mipstart$segstats
             segs$cn = pmax(round(segs$cn), 0) ## negative given 0
             segs$cn[is.na(segs$cn)] = 0 ## NA given 0
