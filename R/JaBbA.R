@@ -1518,7 +1518,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 sites = sites[which(chromosome %in% good.chr)]
             } else {
                 ## only running w/ chr1-22 and X
-                sites = sites[which(chromosome %in% unique(seg$chrom))]
+                sites = sites[which(chromosome %in% unique(this.seg$chrom))]
             }
 
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
