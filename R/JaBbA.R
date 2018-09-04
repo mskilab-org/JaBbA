@@ -1670,7 +1670,8 @@ ramip_stub = function(kag.file,
                       ab.force = NULL,
                       ab.exclude = NULL,
                       loose.penalty.mode = "boolean",
-                      dyn.tuning = TRUE)
+                      dyn.tuning = TRUE,
+                      debug.ix = NULL)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -1887,7 +1888,8 @@ ramip_stub = function(kag.file,
                     cn.ub = rep(500, length(this.kag$segstats)),
                     use.L0 = loose.penalty.mode == 'boolean',
                     verbose = verbose,
-                    dyn.tuning = dyn.tuning)
+                    dyn.tuning = dyn.tuning,
+                    debug.ix = debug.ix)
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -2314,6 +2316,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   slack.prior = 1,
                   tuning = FALSE, ## whether to invoke CPLEX auto parameter tuning
                   dyn.tuning = TRUE,
+                  debug.ix = c(96, 21, 621, 1122, 179, 28, 363, 180, 56, 239, 333),
                   ... # passed to optimizer
                   )
 {
@@ -2512,6 +2515,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             if (k<=6){
                 saveRDS(args, paste0(outdir, "/.args.", k,".rds"))
             }
+
+            if (!is.null(debug.ix)){
+                if (k %in% debug.ix){
+                    saveRDS(args, paste0(outdir, "/.args.", k,".rds"))
+                }
+            }
             
             if (verbose)
                 jmessage('Junction balancing subgraph ', k, ' of ',
@@ -2607,6 +2616,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             
             if (k<=6){
                 saveRDS(out, paste0(outdir, "/.sol.", k,".rds"))
+            }
+            if (!is.null(debug.ix)){
+                if (k %in% debug.ix){
+                    saveRDS(out, paste0(outdir, "/.sol.", k,".rds"))
+                }
             }
 
             gc() ## garbage collect .. not sure why this needs to be done
@@ -3107,7 +3121,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     Acn = Zero[rep(1, length(v.ix.c)+1), ]
     Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
     Acn[cbind(1:length(v.ix.c), s.ix)] = 1
-    Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 ## taking into account (normal) variable cn
+    ## taking into account (normal) variable cn
+    Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 
     Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
 
     ## ## final "conservation" constraint
@@ -3209,15 +3224,34 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         B = rbind(Bs, Bt)
 
+        ## edge duplicate constraints!
+        Aedup = Zero[
+            seq_len(varmeta[type=="edge", sum(dup)]),
+          , drop=FALSE]
+        tmp.e = varmeta[type=="edge"]
+        reid = tmp.e[, match(psid, -psid)]
+        tmp.e[, rid := tmp.e[reid, id]]
+        ijs = tmp.e[dup==FALSE, .(j1 = id, j2 = rid)][, i := 1:nrow(Aedup)]
+        Aedup[ijs[, cbind(i, j1)]] = 1
+        Aedup[ijs[, cbind(i, j2)]] = -1
+        
         consmeta =
             rbind(consmeta,
-                  data.frame(type = 'EdgeSource', label = paste('EdgeSource', 1:nrow(Bs)),
-                             sense = 'E', b = 0, stringsAsFactors = F),
-                  data.frame(type = 'EdgeTarget', label = paste('EdgeTarget', 1:nrow(Bt)),
-                             sense = 'E', b = 0, stringsAsFactors = F))
+                  data.table(type = 'EdgeSource',
+                             label = paste('EdgeSource', 1:nrow(Bs)),
+                             sense = 'E',
+                             b = 0),
+                  data.table(type = 'EdgeTarget',
+                             label = paste('EdgeTarget', 1:nrow(Bt)),
+                             sense = 'E',
+                             b = 0),
+                  data.table(type = 'EdgeDup',
+                             label = paste('EdgeDup', 1:nrow(Aedup)),
+                             sense = 'E',
+                             b = 0))
 
         ## populate linear constraints
-        Aed = B;
+        Aed = rbind(B, Aedup);
         Amat = rbind(Acn, Aed, Aineq);
     }
     else
