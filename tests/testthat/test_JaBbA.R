@@ -249,7 +249,7 @@ test_that("JaBbA", {
     ##               c(3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1)),
     ##     info = print(list.expr(jab$segstats$cn)))
 
-    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
+    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 907, 1)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
                 info = print(list.expr(values(jab$junctions)$cn)))
