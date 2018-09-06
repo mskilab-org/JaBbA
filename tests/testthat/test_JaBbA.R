@@ -119,13 +119,8 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
 
 print('jab cn')
 print(list.expr(
-    sort(jab$segstats %Q% (strand=="+" & loose==FALSE))$cn
+    gr.string(sort(gr.stripstrand(jab$segstats %Q% (strand=="+" & loose==FALSE))), other.cols="cn")
 ))
-
-print(list.expr(
-    gr.string(sort(jab$segstats %Q% (strand=="+" & loose==FALSE)))
-))
-
 
 print('jab junctions cn')
 print(list.expr(values(jab$junctions)$cn))
@@ -135,11 +130,7 @@ print(paste(jab$purity, jab$ploidy))
 
 print('jab.reiterate cn')
 print(list.expr(
-    sort(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE))$cn
-))
-
-print(list.expr(
-    gr.string(sort(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE)))
+    gr.string(sort(gr.stripstrand(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE))), other.cols="cn")
 ))
 
 print('jab.reiterate junctions cn')
@@ -242,11 +233,16 @@ cn.cor.single = function(segs,
 }
 
 cn.gs = readRDS(system.file("extdata/jab.cn.gs.rds", package="JaBbA"))
+cn.gs.2 = readRDS(system.file("extdata/jab.cn.gs.2.rds", package="JaBbA"))
 cn.gs.reiterate = readRDS(system.file("extdata/jab.reiterate.cn.gs.rds", package="JaBbA"))
+cn.gs.reiterate.2 = readRDS(system.file("extdata/jab.reiterate.cn.gs.2.rds", package="JaBbA"))
 
 test_that("JaBbA", {
     print("Comparing results from boolean mode without iteration:")
-    expect_true((jab.cn.cor <<- cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs)) > 0.8,
+    expect_true((jab.cn.cor <<- pmax(
+                     cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs),
+                     cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.2)
+                 )) > 0.8,
                 info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 9, 1)) |
@@ -263,7 +259,11 @@ test_that("JaBbA", {
                 info = print(jab$purity))
 
     print("Comparing results from linear mode with iteration:")
-    expect_true(cn.cor.single(jab.reiterate$segstats , cn.gs.reiterate)>0.9)
+    expect_true((jab.reiterate.cn.cor <<- pmax(
+                     cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate),
+                     cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate.2)
+                 )) > 0.8,
+                info = print(jab.reiterate.cn.cor))
     expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate)) > 0.8,
                 info = print(jab.reiterate.cn.cor))
 
