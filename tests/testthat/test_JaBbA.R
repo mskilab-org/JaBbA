@@ -122,6 +122,11 @@ print(list.expr(
     sort(jab$segstats %Q% (strand=="+" & loose==FALSE))$cn
 ))
 
+print(list.expr(
+    gr.string(sort(jab$segstats %Q% (strand=="+" & loose==FALSE)))
+))
+
+
 print('jab junctions cn')
 print(list.expr(values(jab$junctions)$cn))
 
@@ -131,6 +136,10 @@ print(paste(jab$purity, jab$ploidy))
 print('jab.reiterate cn')
 print(list.expr(
     sort(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE))$cn
+))
+
+print(list.expr(
+    gr.string(sort(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE)))
 ))
 
 print('jab.reiterate junctions cn')
@@ -236,8 +245,8 @@ cn.gs = readRDS(system.file("extdata/jab.cn.gs.rds", package="JaBbA"))
 cn.gs.reiterate = readRDS(system.file("extdata/jab.reiterate.cn.gs.rds", package="JaBbA"))
 
 test_that("JaBbA", {
-    message("Comparing results from boolean mode without iteration:")
-    expect_true(jab.cn.cor <<- cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs) > 0.9,
+    print("Comparing results from boolean mode without iteration:")
+    expect_true((jab.cn.cor <<- cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs)) > 0.8,
                 info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 9, 1)) |
@@ -253,9 +262,9 @@ test_that("JaBbA", {
                 abs(jab$purity -  1.000000)<0.01,
                 info = print(jab$purity))
 
-    message("Comparing results from linear mode with iteration:")
+    print("Comparing results from linear mode with iteration:")
     expect_true(cn.cor.single(jab.reiterate$segstats , cn.gs.reiterate)>0.9)
-    expect_true(jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate) > 0.9,
+    expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate)) > 0.8,
                 info = print(jab.reiterate.cn.cor))
 
     expect_true(identical(values(jab.reiterate$junctions)$cn,
