@@ -102,7 +102,6 @@ jab = JaBbA(junctions = junc,
             tfield = 'nothing',
             nudge.balanced = TRUE,
             dyn.tuning = TRUE)
-
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = juncs.fn,
                       coverage = cov.fn,
@@ -251,7 +250,8 @@ test_that("JaBbA", {
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 907, 1)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
-                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)),
+                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)) |
+                identical(values(jab$junctions)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
     expect_true(abs(jab$ploidy - 3.60)<0.1 |
