@@ -238,7 +238,7 @@ cn.gs.reiterate = readRDS(system.file("extdata/jab.reiterate.cn.gs.rds", package
 test_that("JaBbA", {
     message("Comparing results from boolean mode without iteration:")
     expect_true(jab.cn.cor <<- cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs) > 0.9,
-                info(print(jab.cn.cor)))
+                info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 9, 1)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
@@ -256,7 +256,7 @@ test_that("JaBbA", {
     message("Comparing results from linear mode with iteration:")
     expect_true(cn.cor.single(jab.reiterate$segstats , cn.gs.reiterate)>0.9)
     expect_true(jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate) > 0.9,
-                info(print(jab.reiterate.cn.cor)))
+                info = print(jab.reiterate.cn.cor))
 
     expect_true(identical(values(jab.reiterate$junctions)$cn,
                           c(1, 2, 1, 2, 10, 11, 4, 0, 0, 0, 0,
