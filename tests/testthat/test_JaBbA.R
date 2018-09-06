@@ -118,7 +118,9 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       dyn.tuning = FALSE)
 
 print('jab cn')
-print(list.expr(jab$segstats$cn))
+print(list.expr(
+    sort(jab$segstats %Q% (strand=="+" & loose==FALSE))$cn
+))
 
 print('jab junctions cn')
 print(list.expr(values(jab$junctions)$cn))
@@ -127,7 +129,9 @@ print('jab purity ploidy')
 print(paste(jab$purity, jab$ploidy))
 
 print('jab.reiterate cn')
-print(list.expr(jab.reiterate$segstats$cn))
+print(list.expr(
+    sort(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE))$cn
+))
 
 print('jab.reiterate junctions cn')
 print(list.expr(values(jab.reiterate$junctions)$cn))
@@ -153,9 +157,6 @@ cn.cor.single = function(segs,
     
     cn.gs = cn.gs %*% rd.el ## select only overlaps
 
-    ## tru.pl = sum(cn.gs$cn * (width(cn.gs)/1e6)) / sum(width(cn.gs)/1e6)
-    ## inferred.pl = sum(segs$cn * (width(segs)/1e6)) / sum(width(segs)/1e6)
-
     ov = gr2dt(gr.findoverlaps(cn.gs[, "cn"], segs[,"cn"]))
     ov[, ":="(cn = segs$cn[subject.id],
               gs.cn = cn.gs$cn[query.id],
@@ -164,10 +165,6 @@ cn.cor.single = function(segs,
        ":="(broken.into = .N,
             inferred.cn = sum(cn*width)/sum(width)),
        by="query.id"]
-
-    ## fold change compared to genome avg
-    ## ov[, ":="(inferred.fc = inferred.cn/inferred.pl,
-    ##           gs.fc = gs.cn/tru.pl)]
 
     sp.cor = ov[!duplicated(query.id) & gs.cn<500, cor(inferred.cn, gs.cn, use="na.or.complete", method="spearman")]
     
@@ -239,39 +236,34 @@ cn.gs = readRDS(system.file("extdata/jab.cn.gs.rds", package="JaBbA"))
 cn.gs.reiterate = readRDS(system.file("extdata/jab.reiterate.cn.gs.rds", package="JaBbA"))
 
 test_that("JaBbA", {
-    print("Comparing results from boolean mode without iteration:")
-    expect_true(cn.cor.single(jab$segstats, cn.gs)>0.9)
-    ## expect_true( ## accounting for difference in run speed local vs travis
-    ##     identical(jab$segstats$cn,
-    ##               c(4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 4, 3, 3, 1, 3, 29, 32, 29, 28, 34, 28, 16, 33, 16, 24, 16, 4, 3, 4, 1, 26, 1, 26, 1, 1)) |
-    ##     identical(jab$segstats$cn,
-    ##               c(3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 3, 3, 1, 3, 10, 15, 20, 24, 28, 29, 30, 31, 32, 29, 30, 31, 32, 34, 32, 39, 28, 33, 28, 27, 25, 16, 5, 4, 3, 4, 8, 9, 6, 4, 3, 4, 3, 4, 3, 4, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 7, 5, 5, 4, 4, 1, 1, 1, 1, 1, 1, 1, 7, 1, 1, 4, 1, 1, 1, 1, 1, 1, 2, 9, 1, 1, 2, 1, 1, 1)),
-    ##     info = print(list.expr(jab$segstats$cn)))
+    message("Comparing results from boolean mode without iteration:")
+    expect_true(jab.cn.cor <<- cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs) > 0.9,
+                info(print(jab.cn.cor)))
 
-    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 907, 1)) |
+    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 9, 1)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)) |
                 identical(values(jab$junctions)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
-    expect_true(abs(jab$ploidy - 3.60)<0.1 |
-                abs(jab$ploidy - 3.50)<0.1,
+    expect_true(abs(jab$ploidy - 3.50)<0.2,
                 info = print(jab$ploidy))
 
     expect_true(abs(jab$purity - .98)<0.01 |
                 abs(jab$purity -  1.000000)<0.01,
                 info = print(jab$purity))
 
-    print("Comparing results from linear mode with iteration:")
-    expect_true(cn.cor.single(jab.reiterate$segstats, cn.gs.reiterate)>0.9)
-    ## expect_true(identical(jab.reiterate$segstats$cn,
-    ##                       c(4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 33, 34, 33, 27, 31, 32, 31, 41, 23, 32, 33, 32, 31, 32, 27, 22, 4, 3, 4, 10, 3, 4, 4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 33, 34, 33, 27, 31, 32, 31, 41, 23, 32, 33, 32, 31, 32, 27, 22, 4, 3, 4, 10, 3, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)) |
-    ##             identical(jab.reiterate$segstats$cn,
-    ##                       c(4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 33, 27, 31, 40, 23, 32, 31, 32, 27, 21, 4, 3, 4, 9, 3, 4, 3, 4, 2, 4, 3, 2, 3, 3, 1, 3, 13, 24, 13, 23, 27, 33, 27, 31, 40, 23, 32, 31, 32, 27, 21, 4, 3, 4, 9, 3, 1, 1)),
-    ##             info = print(list.expr(jab.reiterate$segstats$cn)))
+    message("Comparing results from linear mode with iteration:")
+    expect_true(cn.cor.single(jab.reiterate$segstats , cn.gs.reiterate)>0.9)
+    expect_true(jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate) > 0.9,
+                info(print(jab.reiterate.cn.cor)))
 
     expect_true(identical(values(jab.reiterate$junctions)$cn,
-                          c(1, 2, 1, 2, 10, 11, 4, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 6, 0, 0, 0, 0, 0, 0, 0, 1, 9, 0, 18, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1)) |
+                          c(1, 2, 1, 2, 10, 11, 4, 0, 0, 0, 0,
+                            0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 1, 6, 0, 0, 0,
+                            0, 0, 0, 0, 1, 9, 0, 18, 0, 0, 0, 1,
+                            0, 0, 0, 1, 5, 1)) |
                 identical(values(jab.reiterate$junctions)$cn,
                           c(1, 2, 1, 2, 10, 11, 4, 6, 6, 0, 9, 17, 1, 5, 1)),
                 info = print(list.expr(values(jab.reiterate$junctions)$cn)))
