@@ -102,6 +102,7 @@ jab = JaBbA(junctions = junc,
             tfield = 'nothing',
             nudge.balanced = TRUE,
             dyn.tuning = TRUE)
+
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = juncs.fn,
                       coverage = cov.fn,
@@ -239,13 +240,14 @@ cn.gs.reiterate.2 = readRDS(system.file("extdata/jab.reiterate.cn.gs.2.rds", pac
 
 test_that("JaBbA", {
     print("Comparing results from boolean mode without iteration:")
+
     expect_true((jab.cn.cor <<- pmax(
                      cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs),
                      cn.cor.single(jab$segstats %Q% (strand=="+" & loose==FALSE), cn.gs.2)
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
-    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 9, 1)) |
+    expect_true(identical(values(jab$junctions)$cn, c(2, 12, 3, 6, 17, 8, 1)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 5, 3, 11)) |
                 identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)) |
                 identical(values(jab$junctions)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
@@ -254,7 +256,7 @@ test_that("JaBbA", {
     expect_true(abs(jab$ploidy - 3.50)<0.2,
                 info = print(jab$ploidy))
 
-    expect_true(abs(jab$purity - .98)<0.01 |
+    expect_true(abs(jab$purity - .98)<0.02 |
                 abs(jab$purity -  1.000000)<0.01,
                 info = print(jab$purity))
 
@@ -268,11 +270,10 @@ test_that("JaBbA", {
                 info = print(jab.reiterate.cn.cor))
 
     expect_true(identical(values(jab.reiterate$junctions)$cn,
-                          c(1, 2, 1, 2, 10, 11, 4, 0, 0, 0, 0,
-                            0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 0, 0, 0, 0, 1, 6, 0, 0, 0,
-                            0, 0, 0, 0, 1, 9, 0, 18, 0, 0, 0, 1,
-                            0, 0, 0, 1, 5, 1)) |
+                          c(1, 2, 1, 2, 10, 11, 0, 6, 0, 0, 0, 0, 0, 0,
+                            0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 1, 0, 0, 6, 0, 0, 1, 1, 0, 0, 0, 0,
+                            0, 0, 0, 10, 19, 0, 1, 5, 1, 0, 1)),
                 identical(values(jab.reiterate$junctions)$cn,
                           c(1, 2, 1, 2, 10, 11, 4, 6, 6, 0, 9, 17, 1, 5, 1)),
                 info = print(list.expr(values(jab.reiterate$junctions)$cn)))
@@ -283,4 +284,5 @@ test_that("JaBbA", {
     expect_true(abs(jab.reiterate$purity - .99)<0.01 |
                 abs(jab.reiterate$purity - .99)<0.01,
                 info = print(jab.reiterate$purity))
+
 })

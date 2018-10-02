@@ -2036,8 +2036,34 @@ segstats = function(target,
         vall = lapply(map, function(x) val[x])
         vall = vall[match(gr.stripstrand(target), utarget)]
 
+        ## valid bins per node
+        target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
+            as.character(abs(as.numeric(names(target))))
+        ]
+        target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+        target$nbins.nafrac = 1-target$nbins/target$nbins.tot
+
         ## sample mean and sample var
-        sample.mean = sapply(vall, mean, na.rm = TRUE)
+        ## sample.mean = sapply(vall, mean, na.rm = TRUE)
+        .geom.mean = function(x, na.rm = TRUE){
+            exp(mean(log(x[!is.infinite(log(x))]), na.rm=na.rm))
+        }
+
+        ## four type of means, all recorded but only use arithmetic
+        sample.art.mean = sapply(vall, mean, na.rm = TRUE)
+        sample.median = sapply(vall, median, na.rm = TRUE)
+        sample.geom.mean = sapply(vall, .geom.mean, na.rm = TRUE) ## change to geometric mean???
+        sample.trim.mean = sapply(vall,
+                                  function(x){
+                                      if (sum(!is.na(x))>20){
+                                          return(mean(x, trim=0.05, na.rm = TRUE))
+                                      } else {
+                                          return(mean(x, na.rm = TRUE))
+                                      }
+                                  })
+        
+        sample.mean = sample.art.mean ## no change right now
+
         sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
         ix = !is.na(sample.mean) & !is.na(sample.var)
 
@@ -2050,13 +2076,11 @@ segstats = function(target,
             stop("No valid coverage present anywhere!")
         }
 
-        target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
-            as.character(abs(as.numeric(names(target))))
-        ]
-        target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        target$nbins.nafrac = 1-target$nbins/target$nbins.tot
-
         ## final clean up
+        target$art.mean = sample.art.mean
+        target$median = sample.median
+        target$geom.mean = sample.geom.mean
+        target$trim.mean = sample.trim.mean
         target$raw.mean = target$mean
         target$raw.var = target$var
         
@@ -2173,14 +2197,6 @@ segstats = function(target,
 
         ## diagnostic plot of variance correction
         tmp[, predict.var := predict(loe, newdata = mean)]
-        ## tmp[, predict.var.rm.high.mean := predict(loe.robust, newdata = mean)]
-        ## tmp[, predict.var.rm.high.both := predict(loe.robust, newdata = mean)]
-
-
-        ## tmp.debug = melt(tmp,
-        ##                  measure.vars = c("var",
-        ##                                   "predict.var.rm.high.mean",
-        ##                                   "predict.var.rm.high.both"))
 
         ## ppng(print(
         ##     tmp.debug %>%
@@ -2200,10 +2216,21 @@ segstats = function(target,
         ##     ylab("var")
         ## ))
 
-        ## inferring segment specific variance using loess fit of mean to sample variance across dataset
+        ## inferring segment specific variance using loess fit of mean to variance per node
+        ## using loess fit as the prior sample var
+        ## get the bayesian point estimator (expectation of posterior distribution)
+        ## with conjugate prior of scaled inverse chi-sq
         min.var = min(tmp$var, na.rm = TRUE) ## min allowable var
-        target$var = pmax(predict(loe, target$mean), min.var)
 
+        target$loess.var = predict(loe, target$mean)
+        ## hyperparameter neu, same unit as sample size,
+        ## the larger the more weight is put on prior
+        neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
+        ## neu = 434 ## let's start with this
+        neu.post = target$nbins + neu
+        target$tau.sq.post = (neu * target$loess.var + (target$nbins - 1) * target$raw.var)/ (neu + target$nbins)
+        target$post.var = try(neu.post * target$tau.sq.post / (neu.post - 2))
+        target$var = target$post.var
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
         ## basically assign all means below the left domain bnound of the function the variance of the left domain bound
         ## and analogously for all means above the right domain bound
@@ -2347,7 +2374,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             )^2,
             1, min)
         ## penalty for moving to closest adjacent copy state
-        residual.diff = residual.other - residual.min 
+        residual.diff = residual.other - residual.min
 
         ## we fix nodes for which the penalty for moving to non (locally) optimal copy state
         ## is greater than k / slack.prior penalty (where k is some copy difference
@@ -2356,6 +2383,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ##                        cnmle >= 0))
         fix = as.integer(which(residual.diff>(2/slack.prior) &
                                cnmle >= 0))
+        ## save the fixing threshold
+        segstats$m = m
+        segstats$cnmle = cnmle
+        segstats$residual.min = residual.min
+        segstats$residual.other = residual.other
+        segstats$residual.diff = residual.diff
 
         ## If we have too few fixed nodes, we will have too few subgraphs to optimize,
         ## each bigger and harder to solve
@@ -2737,6 +2770,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         cn.lb[fix.ix] = cn.fix[fix.ix]
         cn.ub[fix.ix] = cn.fix[fix.ix]
     }
+
     varmeta = .varmeta(segstats,
                        edges,
                        adj.lb = adj.lb,
