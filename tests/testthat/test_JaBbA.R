@@ -248,8 +248,7 @@ test_that("JaBbA", {
                 info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions)$cn, c(3, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn, c(3, 12, 3, 6, 17, 8, 1)) |
-                identical(values(jab$junctions)$cn, c(2, 2, 4, 3, 11)) |
+                identical(values(jab$junctions)$cn, c(3, 3, 4, 4, 2)) |
                 identical(values(jab$junctions)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
                 info = print(list.expr(values(jab$junctions)$cn)))
 
