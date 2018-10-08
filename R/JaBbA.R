@@ -2061,8 +2061,10 @@ segstats = function(target,
                                           return(mean(x, na.rm = TRUE))
                                       }
                                   })
-        
-        sample.mean = sample.art.mean ## no change right now
+
+        ## DEBUGGING: replace arithmetic mean with geometric mean        
+        ## sample.mean = sample.art.mean 
+        sample.mean = sample.geom.mean
 
         sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
         ix = !is.na(sample.mean) & !is.na(sample.var)
@@ -2225,7 +2227,9 @@ segstats = function(target,
         target$loess.var = predict(loe, target$mean)
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
-        neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
+
+        ## neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
+        neu = target$nbins
         ## neu = 434 ## let's start with this
         neu.post = target$nbins + neu
         target$tau.sq.post = (neu * target$loess.var + (target$nbins - 1) * target$raw.var)/ (neu + target$nbins)
@@ -2833,7 +2837,8 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     Qobj = Zero = sparseMatrix(1, 1, x = 0, dims = c(nrow(varmeta), nrow(varmeta)))
     s.ix = varmeta[type == 'residual' & dup == FALSE, id]
     noisep = (1/segstats[varmeta[s.ix, pid]]$sd)^2
-    noisep = ifelse(is.infinite(noisep), NA, noisep) ## remove any infinite noise penalty, eg if sd = 0
+    noisep = ifelse(is.infinite(noisep), NA, noisep)
+    ## remove any infinite noise penalty, eg if sd = 0
     noisep = ifelse(is.na(noisep), 0, noisep) ## set all NA noise penalty segments to 0
     Qobj[cbind(s.ix, s.ix)] = noisep
 
@@ -3259,33 +3264,48 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         B = rbind(Bs, Bt)
 
         ## edge duplicate constraints!
-        Aedup = Zero[
-            seq_len(varmeta[type=="edge", sum(dup)]),
-          , drop=FALSE]
         tmp.e = varmeta[type=="edge"]
-        reid = tmp.e[, match(psid, -psid)]
-        tmp.e[, rid := tmp.e[reid, id]]
-        ijs = tmp.e[dup==FALSE, .(j1 = id, j2 = rid)][, i := 1:nrow(Aedup)]
-        Aedup[ijs[, cbind(i, j1)]] = 1
-        Aedup[ijs[, cbind(i, j2)]] = -1
-        
-        consmeta =
-            rbind(consmeta,
-                  data.table(type = 'EdgeSource',
-                             label = paste('EdgeSource', 1:nrow(Bs)),
-                             sense = 'E',
-                             b = 0),
-                  data.table(type = 'EdgeTarget',
-                             label = paste('EdgeTarget', 1:nrow(Bt)),
-                             sense = 'E',
-                             b = 0),
-                  data.table(type = 'EdgeDup',
-                             label = paste('EdgeDup', 1:nrow(Aedup)),
-                             sense = 'E',
-                             b = 0))
-
-        ## populate linear constraints
-        Aed = rbind(B, Aedup);
+        ## exact fold-back junctions don't have duplicate
+        fb.ix = tmp.e[, which(is.na(match(psid, -psid)))]
+        good.e.ix = setdiff(seq_len(nrow(tmp.e)), fb.ix)
+        if (length(good.e.ix)==0){
+            consmeta =
+                rbind(consmeta,
+                      data.table(type = 'EdgeSource',
+                                 label = paste('EdgeSource', 1:nrow(Bs)),
+                                 sense = 'E',
+                                 b = 0),
+                      data.table(type = 'EdgeTarget',
+                                 label = paste('EdgeTarget', 1:nrow(Bt)),
+                                 sense = 'E',
+                                 b = 0))
+            Aed = B
+        } else {
+            Aedup = Zero[
+                seq_len(tmp.e[good.e.ix, sum(dup)]),
+              , drop=FALSE]
+            reid = tmp.e[, match(psid, -psid)]
+            tmp.e[, rid := tmp.e[reid, id]]
+            ijs = tmp.e[good.e.ix][dup==FALSE, .(j1 = id, j2 = rid)][, i := 1:nrow(Aedup)]
+            Aedup[ijs[, cbind(i, j1)]] = 1
+            Aedup[ijs[, cbind(i, j2)]] = -1
+            consmeta =
+                rbind(consmeta,
+                      data.table(type = 'EdgeSource',
+                                 label = paste('EdgeSource', 1:nrow(Bs)),
+                                 sense = 'E',
+                                 b = 0),
+                      data.table(type = 'EdgeTarget',
+                                 label = paste('EdgeTarget', 1:nrow(Bt)),
+                                 sense = 'E',
+                                 b = 0),
+                      data.table(type = 'EdgeDup',
+                                 label = paste('EdgeDup', 1:nrow(Aedup)),
+                                 sense = 'E',
+                                 b = 0))
+            ## populate linear constraints
+            Aed = rbind(B, Aedup);
+        }
         Amat = rbind(Acn, Aed, Aineq);
     }
     else
@@ -3372,31 +3392,59 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     ## convert everything to data.tables
     consmeta[, id := 1:.N]
+    setkey(consmeta, "id")
     varmeta[, id := 1:.N]
-    varmeta[, mipstart := as.numeric(0)]
+    varmeta[type=="interval", mipstart := segstats$cn]
+    setkey(varmeta, "id")
 
     ## NODES
+    ## recompute
     ## first mipstart the node copy number n_hat by rounding
-    ix = varmeta[type == 'interval', id]
-    cnr = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
-    cnc = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
-    varmeta[type == 'interval', mipstart := cnc[list(pid), cn]]
-    varmeta[type == 'interval', mipstart := pmax(mipstart, cnr[list(pid), cn], na.rm = TRUE)]
+    cno = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
+    cni = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
+    varmeta[type == 'interval', in.e.lb := cni[list(pid), cn]]
+    varmeta[type == 'interval', out.e.lb := cno[list(pid), cn]]
 
-    ## varmeta[type == 'interval' & is.na(mipstart), mipstart := 0]
-    varmeta[type == 'interval' & is.na(mipstart), mipstart := ceiling(segstats$cn[pid])]
+    ## dial down the edge copy number when there can't be enough node
+    dial.down = varmeta[out.e.lb>ub | in.e.lb>ub, pid]
+    dial.down.rc = varmeta[type=="interval"][psid %in% varmeta[type=="interval"][pid %in% dial.down, -psid], pid]
+    ## dial.down.to = setkey(varmeta[dial.down, .(pid, ub)], "pid")
+    ## mips.dt[row %in% dial.down, cn := dial.down.to[.(row), ub]]
+    ## mips.dt[col %in% dial.down, cn := dial.down.to[.(col), ub]]
+    mips.dt[row %in% dial.down, cn := 0]
+    mips.dt[col %in% dial.down.rc, cn := 0]
+    mips.dt[col %in% dial.down, cn := 0]
+    mips.dt[row %in% dial.down.rc, cn := 0]
     
+    ## recompute
+    cno = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'row']
+    cni = mips.dt[, list(cn = sum(cn, na.rm = TRUE)),  keyby = 'col']
+    varmeta[type == 'interval', in.e.lb := cni[list(pid), cn]]
+    varmeta[type == 'interval', out.e.lb := cno[list(pid), cn]]
+
+    varmeta[type == "interval", mipstart := pmin(ub, pmax(mipstart, lb, out.e.lb, in.e.lb, na.rm = TRUE), na.rm=TRUE)]
+
+    varmeta[type == 'interval' & is.na(mipstart), mipstart := pmax(ceiling(segstats$cn[pid]), 0)]
     nna.ix = which(!is.na(segstats$cn))
     pl = sum(segstats$cn[nna.ix] * width(segstats[nna.ix])/1e6)/sum(width(segstats)[nna.ix]/1e6)
     varmeta[type == 'interval' & is.na(mipstart), mipstart := ceiling(pl)]
 
+    ## final cleanup
+    varmeta[type == 'interval', mipstart := pmin(ub, pmax(mipstart, lb, out.e.lb, in.e.lb, na.rm = TRUE), na.rm=TRUE)]
+    ## check
+    node.meta = setkey(varmeta[type=="interval"], "pid")
+    mips.dt[, ":="(row.mips = node.meta[.(row), mipstart],
+                   col.mips = node.meta[.(col), mipstart])]
+
     ## EDGES
-    varmeta[type == 'edge',
-            mipstart := mips.dt[
-                list(as.data.table(edges[pid,,drop = FALSE])), cn
-            ]]
+    varmeta[
+        type == 'edge',
+        mipstart := mips.dt[
+            list(as.data.table(edges[pid,,drop = FALSE])), cn
+        ]]
     varmeta[type == 'edge' & is.na(mipstart), mipstart := 0]
     varmeta[, mipstart := pmax(pmin(mipstart, ub), lb)]
+
 
     ## SLACKS
     ## which is just the difference between the copy number at
@@ -3463,11 +3511,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         varmeta[type == 'target.slack.indicator', ]$mipstart = sign(varmeta[type == 'target.slack', ][tsid, mipstart]>0)
     }
 
+    ## final check on variable upper bound
+    varmeta[, mipstart := pmin(mipstart, ub)]
+    varmeta[, mipstart := pmax(mipstart, lb)]
 
     ## sanity check
     b.mipstart = Amat %*% varmeta[, mipstart]
     consmeta[, mipstart := b.mipstart[, 1, drop=TRUE]]
-    
+
     return(varmeta$mipstart)
 }
 
@@ -6812,7 +6863,16 @@ ppgrid = function(segstats,
     NLLlr = rbind(b, b, cbind(a, a, NLL))
 
     if (min(c(ncol(NLL), nrow(NLL)))>1) ## up up down down left right left right ba ba start
-        M = (NLLc < NLLul & NLLc < NLLuc & NLLc < NLLur & NLLc < NLLcl & NLLc < NLLcr & NLLc < NLLll & NLLc < NLLlc & NLLc < NLLlr)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
+        M = (NLLc < NLLul &
+             NLLc < NLLuc &
+             NLLc < NLLur &
+             NLLc < NLLcl &
+             NLLc < NLLcr &
+             NLLc < NLLll &
+             NLLc < NLLlc &
+             NLLc < NLLlr)[-c(1, nrow(NLLc)),
+                           -c(1, ncol(NLLc)),
+                           drop = FALSE]
     else if (ncol(NLL)==1) ## one column, only go up and down
         M = (NLLc < NLLuc & NLLc < NLLlc)[-c(1, nrow(NLLc)), -c(1, ncol(NLLc)), drop = FALSE]
     else ## only row, only go left right
@@ -6820,7 +6880,7 @@ ppgrid = function(segstats,
 
     if (length(M)>1)
     {
-        ix = Matrix::which(M, arr.ind= T);
+        ix = Matrix::which(M, arr.ind=T);
         if (nrow(ix)>1)
         {
             C = hclust(d = dist(ix), method = 'single')

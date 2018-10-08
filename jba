@@ -102,7 +102,7 @@ if (!exists("opt"))
                     help = "if TRUE will put all tiers in the first round of iteration"),
         make_option(c("--boolean"),
                     action = "store_true",
-                    default = FALSE,
+                    default = TRUE,
                     help = "if TRUE will use Boolean loose end penalty"),
         make_option(c("--epgap"),
                     type="numeric",
