@@ -31,7 +31,7 @@
 #' @import optparse
 #' @import data.table
 
-# @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
+                                        # @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
 #' @importFrom gplots col2hex
 #' @importFrom Ppurple ppurple
 #' @importFrom graphics plot
@@ -213,8 +213,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ## if no tier field in junctions, set all of them to 2
     if (!(tfield %in% names(values(ra.all))) & length(ra.all)>0)
     {
-      warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
-      values(ra.all)[, tfield] = 2
+        warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
+        values(ra.all)[, tfield] = 2
     }
 
     if (!is.null(ra.uf)){
@@ -223,7 +223,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
         ## those match a record in junction, will be assigned to the tier in junction
         values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
-                            values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+            values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
         ## the rest will be tier 3
         values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
         ra.all = ra.all.uf
@@ -1765,58 +1765,50 @@ ramip_stub = function(kag.file,
     ## here we create an mipstart "adj" matrix for the new graph
     ## by looking up the junctions in the current graph in the old object
     if (is.null(mipstart)){
-        if (file.exists(paste0(outdir, "/mipstart.gg.rds"))){
+        if (file.exists(paste0(outdir, "/mipstart.rds"))){
             jmessage("Using existing mipstart in the current directory")
-            mipstart = readRDS(paste0(outdir, "/mipstart.gg.rds"))
+            mipstart = readRDS(paste0(outdir, "/mipstart.rds"))
         } else {
             jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
-            ## mipstart = gGnome::gread(kag.file)
-            ## mipstart = gGnome::gGraph$new(segs = this.kag$segstats,
-            ##                               es = data.table(Matrix::which(this.kag$adj != 0, arr.ind=T))[
-            ##                                 , ":="(from = row, to = col)])
-            mipstart = gGnome::gGraph$new(segs = this.kag$segstats,
-                                          es = data.table(Matrix::which(this.kag$adj != 0, arr.ind=T))[
-                                            , .(from = row, to = col)])
-            segs = mipstart$segstats
-            segs$cn = pmax(round(segs$cn), 0) ## negative given 0
-            segs$cn[is.na(segs$cn)] = 0 ## NA given 0
 
-            es = mipstart$edges
-            if (nrow(es)>0){
-                es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
-                es = es[type != "loose"]
-                es[type=="reference", cn := 0]
-                es[type=="aberrant", cn := 0]
+            ndt = gr2dt(this.kag$segstats)[, ":="(cnmle = cn)][, id := seq_along(this.kag$segstats)]
+            setkey(ndt, "id")
+            adj = this.kag$ab.adj ## logical mat
+            es = data.table(which(adj!=0, arr.ind=T))
+            es[, ":="(elb = adj.lb[cbind(row, col)],
+                      eub = adj.ub[cbind(row, col)])]
+            es[, eub := ifelse(eub!=0, 0, Inf)]
+            cn.out.lb = es[, .(out.lb = sum(elb)), keyby=row]
+            cn.in.lb = es[, .(in.lb = sum(elb)), keyby=col]
+            cn.out.ub = es[, .(out.ub = sum(eub)), keyby=row]
+            cn.in.ub = es[, .(in.ub = sum(eub)), keyby=col]
+            ## edge lb and ub
+            ndt = merge(ndt, cn.out.lb, all.x = TRUE, by.x = "id", by.y = "row")
+            ndt = merge(ndt, cn.in.lb, all.x = TRUE, by.x = "id", by.y = "col")
+            ndt = merge(ndt, cn.out.ub, all.x = TRUE, by.x = "id", by.y = "row")
+            ndt = merge(ndt, cn.in.ub, all.x = TRUE, by.x = "id", by.y = "col")
+            pl = this.kag$ploidy
+            ## make the best segment CN solution
+            ndt[, cn := cnmle]
+            ndt[is.na(cn), cn := ceiling(pl)]
+            ndt[, ":="(cn.lb = pmax(in.lb, out.lb),
+                       cn.ub = pmin(in.ub, out.ub))]
+            ndt[cn > cn.ub, cn := cn.ub]
+            ndt[cn < cn.lb, cn := cn.lb]
+            if (ndt[, any(is.na(cn) | cn>cn.ub | cn<cn.lb, na.rm=T)]){
+                stop("Infeasible bounds!!")
             }
-
-            if (!is.null(ab.force) && length(ab.force)>0){
-                jmatch = data.table(ra.overlaps(mipstart$junctions, this.kag$junctions))
-                ab.force.mipstart = jmatch[, setNames(ra1.ix, ra2.ix)][as.character(ab.force)]
-                jdt = data.table(data.frame(values(mipstart$junctions)))
-                jdt[ab.force.mipstart, force.in := TRUE]
-                jdt[, eid := paste(from1, to1)]
-                jdt[, reid := paste(from2, to2)]
-                es[eid %in% jdt[force.in==TRUE, c(eid, reid)] |
-                   eid %in% jdt[force.in==TRUE, c(eid, reid)],
-                   cn := 1]
-            }
-
-            es[, from.remain := from.cn - sum(cn), by=from]
-            es[, to.remain := to.cn - sum(cn), by=to]
-
-            if (any(es[, from.remain<0 | to.remain<0])){
-                segs$cn[es[from.remain<0, from]] = es[from.remain<0, abs(from.remain)]
-                segs$cn[es[to.remain<0, to]] = es[to.remain<0, abs(to.remain)]
-                ## re-annotate the es
-                es[, ":="(from.cn = segs$cn[from], to.cn = segs$cn[to])]
-                es[, from.remain := from.cn - sum(cn), by=from]
-                es[, to.remain := to.cn - sum(cn), by=to]
-            }
-
-            es[type=="reference", cn := pmin(from.remain, to.remain)]
-
-            mipstart = gGnome::gGraph$new(segs = segs, es = es)$make.balance()$fillin()
-            saveRDS(mipstart, paste0(outdir, "/mipstart.gg.rds"))
+            
+            ## construct the adj
+            es[, ":="(so.cn = ndt[.(row), cn],
+                      si.cn = ndt[.(col), cn])]
+            es[, ":="(cn = pmax(elb, pmin(eub, pmin(so.cn, si.cn, na.rm=T), na.rm=T), na.rm=T))]
+            es[is.na(cn), cn := 0] ## shouldn't be any tho
+            mipstart = list(segstats = this.kag$segstats,
+                            adj = sparseMatrix(es$row, es$col, x = es$cn,
+                                               dims = dim(this.kag$adj)))
+            mipstart$segstats$cn = ndt[, cn] ## use my new cn
+            saveRDS(mipstart, paste0(outdir, "/mipstart.rds"))
         }
     }
 
