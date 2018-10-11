@@ -408,8 +408,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         }
 
         this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
-
         system(sprintf('cp %s/* %s', this.iter.dir, outdir))
+        jab = readRDS(paste0(outdir, "/jabba.simple.gg.rds"))
         jmessage('Done Iterating')
     } else {
         ## if all.in, convert all tier 3 to tier 2
