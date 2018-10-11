@@ -94,7 +94,8 @@ jab = JaBbA(junctions = junc,
             tilim = TILIM,
             cfield = 'nudge',
             verbose = 2,
-            overwrite = TRUE,
+            outdir = '.JaBbA',
+            overwrite = FALSE,
             ploidy=3.72,
             purity=NA,
             epgap = EPGAP,
@@ -111,7 +112,8 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       slack.penalty = 1e4,
                       tilim = TILIM,
                       verbose = 2,
-                      overwrite = TRUE,
+                      outdir = 'JaBbA.reiterate',
+                      overwrite = FALSE,
                       reiterate=3,
                       ploidy=3.72,
                       purity=0.99,
@@ -181,18 +183,18 @@ test_that("JaBbA", {
     print("Comparing results from boolean mode without iteration:")
 
     expect_true((jab.cn.cor <<- pmax(
-                     cn.cor.single(jab$gr %Q% (strand=="+" & loose==FALSE), cn.gs),
-                     cn.cor.single(jab$gr %Q% (strand=="+" & loose==FALSE), cn.gs.2)
+                     cn.cor.single(jab$gr %Q% (strand=="+"), cn.gs),
+                     cn.cor.single(jab$gr %Q% (strand=="+"), cn.gs.2)
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
-    expect_true(identical(values(jab$junctions$grl)$cn, c(3, 12, 3, 6, 17, 8, 1)) |
+    expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
                 identical(values(jab$junctions$grl)$cn, c(3, 3, 4, 4, 2)) |
                 identical(values(jab$junctions$grl)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
 
-    expect_true(abs(jab$ploidy - 3.50)<0.2,
-                info = print(jab$ploidy))
+    ## expect_true(abs(jab$ploidy - 3.50)<0.2,
+    ##             info = print(jab$ploidy))
 
     ## expect_true(abs(jab$purity - .98)<0.02 |
     ##             abs(jab$purity -  1.000000)<0.01,
@@ -200,24 +202,24 @@ test_that("JaBbA", {
 
     print("Comparing results from linear mode with iteration:")
     expect_true((jab.reiterate.cn.cor <<- pmax(
-                     cn.cor.single(jab.reiterate$gr %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate),
-                     cn.cor.single(jab.reiterate$gr %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate.2)
+                     cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate),
+                     cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate.2)
                  )) > 0.8,
                 info = print(jab.reiterate.cn.cor))
-    expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$gr %Q% (strand=="+" & loose==FALSE), cn.gs.reiterate)) > 0.8,
+    expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate)) > 0.8,
                 info = print(jab.reiterate.cn.cor))
 
     expect_true(identical(values(jab.reiterate$junctions$grl)$cn,
-                          c(1, 2, 1, 2, 10, 11, 0, 6, 0, 0, 0, 0, 0, 0,
-                            0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 1, 0, 0, 6, 0, 0, 1, 1, 0, 0, 0, 0,
-                            0, 0, 0, 10, 19, 0, 1, 5, 1, 0, 1)) |
+                          c(4, 4, 1, 3, 10, 11, 5, 3, 6, 10, 19, 1, 1, 5, 1, 1, 2, 3, 3,
+                            3, 4, 3, 3, 4, 4, 4, 4, 4, 4, 3, 2, 2, 3, 4, 5, 4, 4, 5, 5,
+                            4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31,
+                            22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
                 identical(values(jab.reiterate$junctions$grl)$cn,
                           c(1, 2, 1, 3, 10, 11, 0, 5, 0, 3, 6, 10, 19, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 0, 1)),
                 info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 
-    expect_true(abs(jab.reiterate$ploidy - 3.62)<0.01 |
-                abs(jab.reiterate$ploidy - 3.51)<0.01, info = print(jab.reiterate$ploidy))
+    ## expect_true(abs(jab.reiterate$ploidy - 3.62)<0.01 |
+    ##             abs(jab.reiterate$ploidy - 3.51)<0.01, info = print(jab.reiterate$ploidy))
 
     ## expect_true(abs(jab.reiterate$purity - .99)<0.01 |
     ##             abs(jab.reiterate$purity - .99)<0.01,
