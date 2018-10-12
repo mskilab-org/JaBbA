@@ -1793,9 +1793,10 @@ ramip_stub = function(kag.file,
             ndt[is.na(cn), cn := ceiling(pl)]
             ndt[, ":="(cn.lb = pmax(in.lb, out.lb),
                        cn.ub = pmin(in.ub, out.ub))]
-            ndt[cn > cn.ub, cn := cn.ub]
+            ## if any violation
+            ## ndt[cn > cn.ub, cn := cn.ub]
             ndt[cn < cn.lb, cn := cn.lb]
-            if (ndt[, any(is.na(cn) | cn>cn.ub | cn<cn.lb, na.rm=T)]){
+            if (ndt[, any(is.na(cn) | cn<cn.lb, na.rm=T)]){
                 stop("Infeasible bounds!!")
             }
             
