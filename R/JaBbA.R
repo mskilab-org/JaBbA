@@ -173,10 +173,16 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         } else {
             ra.all = read.junctions(ra)
         }
+    } else if (is.null(ra)) {
+        ra.all = GRangesList()
     } else {
         ra.all = ra
     }
 
+    if (!inherits(ra.all, "GRangesList")){
+        stop("The given input `ra` is not valid.")
+    }
+    
     if (verbose)
     {
         jmessage("Read in ", length(ra.all), " total junctions")
@@ -1770,7 +1776,6 @@ ramip_stub = function(kag.file,
             mipstart = readRDS(paste0(outdir, "/mipstart.rds"))
         } else {
             jmessage("Adjusting the kag (naive solution) as mipstart (initial solution).")
-
             ndt = gr2dt(this.kag$segstats)[, ":="(cnmle = cn)][, id := seq_along(this.kag$segstats)]
             setkey(ndt, "id")
             adj = this.kag$ab.adj ## logical mat
