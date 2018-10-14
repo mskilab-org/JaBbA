@@ -122,6 +122,8 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       dyn.tuning = FALSE)
 
 print('jab cn')
+print(class(jab))
+print(jab$segstats)
 print(list.expr(
     gr.string(sort(gr.stripstrand(jab$gr %Q% (strand=="+"))), other.cols="cn")
 ))
@@ -133,6 +135,8 @@ print(list.expr(values(jab$junctions$grl)$cn))
 ## print(paste(jab$purity, jab$ploidy))
 
 print('jab.reiterate cn')
+print(class(jab.reiterate))
+print(jab.reiterate$segstats)
 print(list.expr(
     gr.string(sort(gr.stripstrand(jab.reiterate$gr %Q% (strand=="+"))), other.cols="cn")
 ))
