@@ -1,7 +1,7 @@
 language: r
 dist: trusty
 sudo: false
-r: 3.4.1
+r: 3.5.1
 r_check_args: --no-build-vignettes --no-manual --as-cran --no-tests --no-examples
 before_install:
   - curl -OL $URL
