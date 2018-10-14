@@ -1,6 +1,5 @@
 language: r
 dist: trusty
-cache: packages
 sudo: false
 r: 3.4.1
 r_check_args: --no-build-vignettes --no-manual --as-cran --no-tests --no-examples
