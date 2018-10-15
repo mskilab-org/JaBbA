@@ -13,7 +13,11 @@ cov.fn = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 segs = system.file("extdata", "segs.rds", package = 'JaBbA')
 
-Sys.setenv(DEFAULT_GENOME = system.file("extdata", "human_g1k_v37.chrom.sizes ", package = 'JaBbA'))
+Sys.setenv(DEFAULT_GENOME = paste0(system.file(
+               "extdata",
+               package = 'JaBbA'),
+               "/human_g1k_v37.chrom.sizes")) ## must do this           
+print(Sys.getenv("DEFAULT_GENOME"))
 print("This is the default seqlengths: ")
 print(hg_seqlengths())
 print("IS IT A VECTOR NOW??????!!!!!!")
