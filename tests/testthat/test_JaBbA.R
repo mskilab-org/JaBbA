@@ -13,6 +13,11 @@ cov.fn = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 segs = system.file("extdata", "segs.rds", package = 'JaBbA')
 
+print("This is the default seqlengths: ")
+print(hg_seqlengths())
+print("IS IT A VECTOR NOW??????!!!!!!")
+print(is.vector(hg_seqlengths()))
+
 test_that("read.junctions", {
     expect_equal(all(values(read.junctions(juncs.fn))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
     expect_equal(as.data.table(unlist(read.junctions(juncs.fn))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
