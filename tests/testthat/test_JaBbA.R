@@ -5,6 +5,8 @@ library(testthat)
 
 context('JaBbA')
 
+print(sessionInfo())
+
 juncs.fn = system.file("extdata", "junctions.vcf", package = 'JaBbA')
 bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
 cov.fn = system.file("extdata", "coverage.txt", package = 'JaBbA')

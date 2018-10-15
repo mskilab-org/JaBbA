@@ -5170,8 +5170,10 @@ read.junctions = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            require(VariantAnnotation)
-            vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+            vcf = VariantAnnotation::readVcf(
+                rafile, genome = Seqinfo(
+                            seqnames = names(seqlengths),
+                            seqlengths = as.vector(seqlengths)))
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
