@@ -923,6 +923,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    dyn.tuning = dyn.tuning)
     }
 
+
     kag = readRDS(kag.file)
     jab = readRDS(jabba.raw.rds.file)
 
@@ -1001,7 +1002,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         saveRDS(jabd.simple, jabba.simple.rds.file)
 
         jab.gg = gGnome::gGraph$new(jab = jabd)
-        jab.simple.gg = gGnome::gGraph$new(jab = jabd.simple)
+        tmp.jabd.simple = jabd.simple
+        values(tmp.jabd.simple$junctions)$cn = NULL
+        jab.simple.gg = gGnome::gGraph$new(jab = tmp.jabd.simple)
 
         saveRDS(jab.simple.gg, jabba.simple.gg.rds.file)
         saveRDS(jab.gg, jabba.gg.rds.file)
