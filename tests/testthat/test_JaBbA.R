@@ -205,8 +205,8 @@ test_that("JaBbA", {
                 info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
-                identical(values(jab$junctions$grl)$cn, c(3, 3, 4, 4, 2)) |
-                identical(values(jab$junctions$grl)$cn, c(2, 25, 29, 24, 25, 31, 30, 21)),
+                identical(values(jab$junctions$grl)$cn, c(3, 3, 3, 14, 20, 23, 28, 29, 30, 31, 28, 4, 28, 30, 31, 3, 31, 29, 2, 29, 4,
+                                                          29, 28, 7, 4, 3, 3, 4, 7, 5, 4, 3, 3, 2, 3, 3, 3)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
 
     ## expect_true(abs(jab$ploidy - 3.50)<0.2,
@@ -231,7 +231,10 @@ test_that("JaBbA", {
                             4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31,
                             22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
                 identical(values(jab.reiterate$junctions$grl)$cn,
-                          c(1, 2, 1, 3, 10, 11, 0, 5, 0, 3, 6, 10, 19, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 0, 1)),
+                          c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4,
+                            5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13,
+                            13, 23, 29, 26, 6, 26, 31, 22, 19, 22, 32, 1, 32, 31, 1, 31,
+                            27, 5, 3, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10)),
                 info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 
     ## expect_true(abs(jab.reiterate$ploidy - 3.62)<0.01 |
