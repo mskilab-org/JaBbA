@@ -705,7 +705,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-
     ra = junctions
     if (inherits(ra, "character")){
         if (grepl(".rds$", junctions)){
