@@ -5215,7 +5215,7 @@ read.junctions = function(rafile,
 
                 bp2 = data.table(as.data.frame(mcols(vgr)))
                 bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-                bp2.gr = dt2gr(bp2)
+                bp2.gr = dt2gr(bp2, seqlengths = seqlengths(vgr))
                 mcols(bp2.gr) = mcols(vgr)
 
                 if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
