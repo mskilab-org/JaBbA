@@ -189,3 +189,25 @@ Output (R package)
    - 4: hardly converged after a second round, even after long time limit still above the relaxed epgap
 
    For detailed explanation of `tilim` and `epgap` please read our manuscript and CPLEX help doc.
+
+Attributions
+------------
+> Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
+> Core Member, New York Genome Center.
+
+> Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Genome Center.
+
+Funding sources
+------------
+
+<img
+src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819f02b6a28750f79597c/1524111879079/DDCF.jpeg?format=1500w"
+height="150" class ="center"> <img
+src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819b8aa4a996c2d584594/1524111841815/BWF.png?format=500w"
+height="150" class ="center">
+
+
+
+
+```
