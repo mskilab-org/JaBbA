@@ -1782,41 +1782,45 @@ ramip_stub = function(kag.file,
             setkey(ndt, "id")
             adj = this.kag$ab.adj ## logical mat
             es = data.table(which(adj!=0, arr.ind=T))
-            es[, ":="(elb = adj.lb[cbind(row, col)],
-                      eub = adj.ub[cbind(row, col)])]
-            es[, eub := ifelse(eub!=0, 0, Inf)]
-            cn.out.lb = es[, .(out.lb = sum(elb)), keyby=row]
-            cn.in.lb = es[, .(in.lb = sum(elb)), keyby=col]
-            cn.out.ub = es[, .(out.ub = sum(eub)), keyby=row]
-            cn.in.ub = es[, .(in.ub = sum(eub)), keyby=col]
-            ## edge lb and ub
-            ndt = merge(ndt, cn.out.lb, all.x = TRUE, by.x = "id", by.y = "row")
-            ndt = merge(ndt, cn.in.lb, all.x = TRUE, by.x = "id", by.y = "col")
-            ndt = merge(ndt, cn.out.ub, all.x = TRUE, by.x = "id", by.y = "row")
-            ndt = merge(ndt, cn.in.ub, all.x = TRUE, by.x = "id", by.y = "col")
-            pl = this.kag$ploidy
-            ## make the best segment CN solution
-            ndt[, cn := cnmle]
-            ndt[is.na(cn), cn := ceiling(pl)]
-            ndt[, ":="(cn.lb = pmax(in.lb, out.lb),
-                       cn.ub = pmin(in.ub, out.ub))]
-            ## if any violation
-            ## ndt[cn > cn.ub, cn := cn.ub]
-            ndt[cn < cn.lb, cn := cn.lb]
-            if (ndt[, any(is.na(cn) | cn<cn.lb, na.rm=T)]){
-                stop("Infeasible bounds!!")
+            if (nrow(es)>0){
+                es[, ":="(elb = adj.lb[cbind(row, col)],
+                          eub = adj.ub[cbind(row, col)])]
+                es[, eub := ifelse(eub!=0, 0, Inf)]
+                cn.out.lb = es[, .(out.lb = sum(elb)), keyby=row]
+                cn.in.lb = es[, .(in.lb = sum(elb)), keyby=col]
+                cn.out.ub = es[, .(out.ub = sum(eub)), keyby=row]
+                cn.in.ub = es[, .(in.ub = sum(eub)), keyby=col]
+                ## edge lb and ub
+                ndt = merge(ndt, cn.out.lb, all.x = TRUE, by.x = "id", by.y = "row")
+                ndt = merge(ndt, cn.in.lb, all.x = TRUE, by.x = "id", by.y = "col")
+                ndt = merge(ndt, cn.out.ub, all.x = TRUE, by.x = "id", by.y = "row")
+                ndt = merge(ndt, cn.in.ub, all.x = TRUE, by.x = "id", by.y = "col")
+                pl = this.kag$ploidy
+                ## make the best segment CN solution
+                ndt[, cn := cnmle]
+                ndt[is.na(cn), cn := ceiling(pl)]
+                ndt[, ":="(cn.lb = pmax(in.lb, out.lb),
+                           cn.ub = pmin(in.ub, out.ub))]
+                ## if any violation
+                ## ndt[cn > cn.ub, cn := cn.ub]
+                ndt[cn < cn.lb, cn := cn.lb]
+                if (ndt[, any(is.na(cn) | cn<cn.lb, na.rm=T)]){
+                    stop("Infeasible bounds!!")
+                }
+                
+                ## construct the adj
+                es[, ":="(so.cn = ndt[.(row), cn],
+                          si.cn = ndt[.(col), cn])]
+                es[, ":="(cn = pmax(elb, pmin(eub, pmin(so.cn, si.cn, na.rm=T), na.rm=T), na.rm=T))]
+                es[is.na(cn), cn := 0] ## shouldn't be any tho
+                mipstart = list(segstats = this.kag$segstats,
+                                adj = sparseMatrix(es$row, es$col, x = es$cn,
+                                                   dims = dim(this.kag$adj)))
+                mipstart$segstats$cn = ndt[, cn] ## use my new cn
+                saveRDS(mipstart, paste0(outdir, "/mipstart.rds"))
+            } else {
+                mipstart = NULL
             }
-            
-            ## construct the adj
-            es[, ":="(so.cn = ndt[.(row), cn],
-                      si.cn = ndt[.(col), cn])]
-            es[, ":="(cn = pmax(elb, pmin(eub, pmin(so.cn, si.cn, na.rm=T), na.rm=T), na.rm=T))]
-            es[is.na(cn), cn := 0] ## shouldn't be any tho
-            mipstart = list(segstats = this.kag$segstats,
-                            adj = sparseMatrix(es$row, es$col, x = es$cn,
-                                               dims = dim(this.kag$adj)))
-            mipstart$segstats$cn = ndt[, cn] ## use my new cn
-            saveRDS(mipstart, paste0(outdir, "/mipstart.rds"))
         }
     }
 
@@ -5126,7 +5130,7 @@ read.junctions = function(rafile,
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
             ## validity check written for "junctions" class
-            return(junctions(ra))
+            return(ra)
         } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
