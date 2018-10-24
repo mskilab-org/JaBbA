@@ -613,7 +613,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!(field %in% names(values(coverage))))
     {
         new.field = names(values(coverage))[1]
-        warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
+        jmessage(paste0('Warning: Field ',
+                        field,
+                        ' not found in coverage GRanges metadata so using ',
+                        new.field,
+                        ' instead'))
         field = new.field
     }
 
