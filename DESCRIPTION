@@ -33,7 +33,6 @@ Remotes:
   github::mskilab/gTrack,
   github::mskilab/gGnome,
   github::mskilab/Ppurple,
-  bitbucket:sequenza_tools/sequenza,
   r-lib/covr
 Suggests:  
   testthat (>= 2.0),
