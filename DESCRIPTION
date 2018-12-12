@@ -30,9 +30,9 @@ Imports:
   rtracklayer
 Remotes:
   github::mskilab/gUtils,
-  github::mskilab/gTrack,
-  github::mskilab/gGnome,
+  github::mskilab/gTrack,  
   github::mskilab/Ppurple,
+  github::mskilab/gGnome,
   r-lib/covr
 Suggests:  
   testthat (>= 2.0),
