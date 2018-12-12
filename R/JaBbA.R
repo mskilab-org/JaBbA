@@ -148,6 +148,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
+                 max.na = 0.1,
+                 blacklist = NULL,
                  epgap = 1e-4, ## default to 1e-2
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
@@ -308,6 +310,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 junctions = this.ra.file,
                 seg = seg,
                 coverage = coverage,
+                blacklist = blacklist,
                 hets = hets,
                 nseg = nseg,
                 cfield = cfield,
@@ -317,6 +320,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 mc.cores = as.numeric(mc.cores),
                 max.threads = as.numeric(max.threads),
                 max.mem = as.numeric(max.mem),
+                max.na = max.na,
                 edgenudge = as.numeric(edgenudge),
                 tilim = as.numeric(tilim),
                 strict = strict,
@@ -437,6 +441,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             junctions = ra.all,
             seg = seg,
             coverage = coverage,
+            blacklist = blacklist,
             hets = hets,
             nseg = nseg,
             cfield = cfield,
@@ -446,6 +451,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             mc.cores = as.numeric(mc.cores),
             max.threads = as.numeric(max.threads),
             max.mem = as.numeric(max.mem),
+            max.na = max.na,
             edgenudge = as.numeric(edgenudge),
             tilim = as.numeric(tilim),
             strict = strict,
@@ -521,6 +527,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @import DNAcopy
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
+                      blacklist = NULL,
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
                       tfield = NULL, # character, tier confidence meta data field in ra
@@ -533,6 +540,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       mc.cores = 1, # default 1
                       max.threads = Inf,
                       max.mem = 16,
+                      max.na = 0.1,
                       purity = NA,
                       ploidy = NA,
                       pp.method = "sequenza",
@@ -619,6 +627,30 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         new.field,
                         ' instead'))
         field = new.field
+    }
+
+    ## filter out the data in blacklist if any
+    if (!is.null(blacklist)){
+        if (is.character(blacklist)){
+            if (file.exists(blacklist)){
+                if (grepl("[(txt)|(tsv)|(csv)]$", blacklist)){
+                    blacklist = try(gUtils::dt2gr(fread(blacklist)))                    
+                } else if (grepl("bed$", blacklist)){
+                    blacklist = rtracklayer::import.bed(blacklist)
+                } else if (grepl("rds$", blacklist)){
+                    blacklist = readRDS(blacklist)
+                }                
+            }
+        } else if (inherits(blacklist, "data.frame")){
+            blacklist = try(gUtils::dt2gr(data.table(blacklist)))
+        }
+        ## if at this point we have a GRanges, then proceed
+        if (inherits(blacklist, "GRanges")){
+            bad.ix = which(coverage %^% blacklist)
+            if (length(bad.ix)>0){
+                values(coverage)[bad.ix, field] = NA
+            }
+        }
     }
 
     seg.fn = paste0(outdir, '/seg.rds')
@@ -793,7 +825,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         het.file = hets,
                         verbose = verbose,
                         ab.exclude = ab.exclude,
-                        ab.force = ab.force)
+                        ab.force = ab.force,
+                        max.na = max.na)
     } else {
         warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -1145,6 +1178,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            field = 'ratio',
                            mc.cores = 1,
                            max.chunk = 1e8,
+                           max.na = 0.1,
                            subsample = NULL,
                            ab.exclude = NULL,
                            ab.force = NULL){
@@ -1379,7 +1413,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      asignal = hets.gr,
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
-                                     verbose = verbose)
+                                     verbose = verbose,
+                                     max.na = max.na)
     } else {
         this.kag$segstats = segstats(this.kag$tile,
                                      this.cov,
@@ -1388,7 +1423,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      max.chunk = max.chunk,
                                      subsample = subsample,
                                      mc.cores = mc.cores,
-                                     verbose = verbose)
+                                     verbose = verbose,
+                                     max.na = max.na)
     }
 
     this.kag$segstats$ncn = 2
@@ -1975,6 +2011,7 @@ segstats = function(target,
                     prior_beta = NA,
                     max.chunk = 1e8,
                     max.slice = 2e4,
+                    max.na = 0.1,
                     na.thresh = 0.2,
                     verbose = FALSE,
                     subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
@@ -2127,7 +2164,7 @@ segstats = function(target,
         target$bad = FALSE
         ## if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
         ## if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
-        if (length(bad.nodes <- which(target$nbins.nafrac > 0.1))>0)
+        if (length(bad.nodes <- which(target$nbins.nafrac > max.na))>0)
         {
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
