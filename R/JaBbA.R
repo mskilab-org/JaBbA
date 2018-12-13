@@ -181,6 +181,24 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ra.all = ra
     }
 
+    if (inherits(ra.all, "list") && all(sapply(ra.all, inherits, "GRangesList"))){
+        ## this is a multisample junction input
+        ids = names(ra.all)
+        match.nm = which(grepl(name, ids))
+        if (length(match.nm)==1){
+            ra.all = ra.all[[match.nm]]            
+        } else if (length(match.nm)==0){
+            stop("There's no junction matching this sample name: ", name)
+        } else {
+            jmessage("Warning: there are more than one sample id in the junciton input ",
+                     ids[match.nm],
+                     " match this run id ",
+                     name,
+                     " we are only using the first one.")
+            ra.all = ra.all[[match.nm[1]]]
+        }
+    }
+    
     if (!inherits(ra.all, "GRangesList")){
         stop("The given input `ra` is not valid.")
     }
@@ -5218,14 +5236,25 @@ read.junctions = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+            ## vcf = VariantAnnotation::readVcf(
+            ##     rafile, genome = Seqinfo(
+            ##                 seqnames = names(seqlengths),
+            ##                 seqlengths = as.vector(seqlengths)))
             vcf = VariantAnnotation::readVcf(
                 rafile, genome = Seqinfo(
                             seqnames = names(seqlengths),
                             seqlengths = as.vector(seqlengths)))
-
             ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
+            vgr = DelayedArray::rowRanges(vcf) ## this range is identical to using read_vcf
+            ## old.vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
             mc = data.table(as.data.frame(mcols(vgr)))
+
+            ## append the INFO
+            info.dt = data.table(
+                as.data.frame(VariantAnnotation::info(vcf))
+            )
+            mc = cbind(mc, info.dt)
+            values(vgr) = mc
 
             if (!('SVTYPE' %in% colnames(mc))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
@@ -5579,14 +5608,35 @@ read.junctions = function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            ## ra = ra.dedup(ra)
+            ## expand into a list of GRLs, named by the sample name in the VCF
+            geno.dt = data.table(
+                data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
+            )
+            ##
+
+            if (ncol(geno.dt)>1) {
+                cnms = colnames(geno.dt)
+                single.ra = ra
+                ra = lapply(setNames(cnms, cnms),
+                            function(cnm){
+                                this.ra = copy(single.ra)
+                                this.dt = data.table(as.data.frame(values(this.ra)))
+                                this.geno = geno.dt[[cnm]]
+                                this.dt[
+                                  , tier := ifelse(
+                                        tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
+                                values(this.ra) = this.dt
+                                return(this.ra)
+                            })
+                loose=FALSE ## TODO: temporary until we figure out how
+            }
 
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
-            }
-            else{
+            } else {
                 npix = is.na(vgr$mix)
-                vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
+                ## these are possible "loose ends" that we will add to the segmentation
+                vgr.loose = vgr[npix, c()] 
 
                 ## NOT SURE WHY BROKEN
                 tmp =  tryCatch( values(vgr)[bix[npix], ],
@@ -5605,7 +5655,6 @@ read.junctions = function(rafile,
     }
 
     if (is.data.table(rafile)){
-        require(data.table)
         rafile = as.data.frame(rafile)
     }
 
@@ -6434,7 +6483,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #' @author Marcin Imielinski
 #' @noRd
 read_vcf = function(fn,
-                    hg = 'hg19',
+                    hg = "hg19",
                     swap.header = NULL,
                     verbose = FALSE,
                     add.path = FALSE,
@@ -6466,7 +6515,8 @@ read_vcf = function(fn,
     ## else
 
     ## QUESTION: why isn't genome recognized when ... is provided?
-    ## vcf = VariantAnnotation::readVcf(file = fn, genome = hg, ...)
+    args = list(...)
+    ## vcf = VariantAnnotation::readVcf(file = fn, hg, ...)
     vcf = VariantAnnotation::readVcf(file = fn, genome = hg)
 
     out = granges(vcf)
