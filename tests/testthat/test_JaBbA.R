@@ -204,8 +204,14 @@ test_that("JaBbA", {
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
+<<<<<<< HEAD
     expect_true(identical(values(jab$junctions$grl)$cn,
                           c(3, 3, 3, 29, 3, 29, 28, 1, 28, 6, 28, 16, 12, 16, 17, 16, 16, 8, 16, 4, 3, 3, 0, 0)),
+=======
+    expect_true(identical(values(jab$junctions$grl)$cn, c(4, 4, 1, 3, 10, 11, 5, 3, 6, 10, 19, 1, 1, 5, 1, 1, 2, 3, 3, 3, 4, 3, 3, 4, 4, 4, 4, 4, 4, 3, 2, 2, 3, 4, 5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31, 22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
+                identical(values(jab$junctions$grl)$cn, c(3, 3, 3, 14, 20, 23, 28, 29, 30, 31, 28, 4, 28, 30, 31, 3, 31, 29, 2, 29, 4,
+                                                          29, 28, 7, 4, 3, 3, 4, 7, 5, 4, 3, 3, 2, 3, 3, 3)),
+>>>>>>> 25338bfd9cc502943403773776aa7960278cec3b
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
 
     ## expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |

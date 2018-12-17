@@ -22,6 +22,10 @@ if (!exists("opt"))
         make_option(c("-r", "--ra"),
                     type = "character",
                     help = "Path to rearrangement file, which can be VCF breakend format, dRanger tab delim output,  or an rds of GRangesList of signed locus pairs pointing AWAY from junction (required)"),
+        make_option(c("--ra.supp"),
+                    type = "character",
+                    default = NULL,
+                    help = "Supplementary junctions which will be used in subsequent iterations, same format as '--ra'"),
         make_option(c("-j", "--cfield"),
                     type = "character",
                     help = "Name of meta data field of ra GRanges or data frame that specifies a junction confidence score, this will be used as a score to nudge (ie reward) each copy of that junction in the optimization"),
@@ -123,7 +127,15 @@ if (!exists("opt"))
         make_option(c("-y", "--nudgebalanced"),
                     action = "store_true",
                     default = TRUE,
-                    help = "Manually nudge balanced junctions into the model.")
+                    help = "Manually nudge balanced junctions into the model."),
+        make_option(c("--maxna"),
+                  type = "numeric",
+                  default = 0.1,
+                  help = "Any node with more NA than this fraction will be ignored"),
+        make_option(c("--blacklist"),
+                    type = "character",
+                    default = NULL,
+                    help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome")
     )
 
     parseobj = OptionParser(usage = paste(c("jba [options] JUNCTIONS COVERAGE",
@@ -169,8 +181,10 @@ suppressPackageStartupMessages(
     jmessage('Loading packages ...')
     writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
     saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
-    jab = JaBbA(coverage = opt$coverage,
-                junctions = opt$junctions,
+    jab = JaBbA(coverage = opt$abu,
+                blacklist = opt$blacklist,
+                junctions = opt$ra,
+                juncs.uf = opt$ra.supp,
                 seg = opt$seg,
                 cfield = opt$cfield,
                 tfield = opt$tfield,
@@ -196,5 +210,6 @@ suppressPackageStartupMessages(
                 indel = opt$indel,
                 all.in = opt$allin,
                 use.gurobi = opt$gurobi,
-                epgap = opt$epgap)
+                epgap = opt$epgap,
+                max.na = opt$maxna)
 })

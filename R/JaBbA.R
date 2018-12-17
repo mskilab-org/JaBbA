@@ -148,6 +148,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
+                 max.na = 0.1,
+                 blacklist = NULL,
                  epgap = 1e-4, ## default to 1e-2
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
@@ -179,6 +181,24 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         ra.all = ra
     }
 
+    if (inherits(ra.all, "list") && all(sapply(ra.all, inherits, "GRangesList"))){
+        ## this is a multisample junction input
+        ids = names(ra.all)
+        match.nm = which(grepl(name, ids))
+        if (length(match.nm)==1){
+            ra.all = ra.all[[match.nm]]            
+        } else if (length(match.nm)==0){
+            stop("There's no junction matching this sample name: ", name)
+        } else {
+            jmessage("Warning: there are more than one sample id in the junciton input ",
+                     ids[match.nm],
+                     " match this run id ",
+                     name,
+                     " we are only using the first one.")
+            ra.all = ra.all[[match.nm[1]]]
+        }
+    }
+    
     if (!inherits(ra.all, "GRangesList")){
         stop("The given input `ra` is not valid.")
     }
@@ -308,6 +328,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 junctions = this.ra.file,
                 seg = seg,
                 coverage = coverage,
+                blacklist = blacklist,
                 hets = hets,
                 nseg = nseg,
                 cfield = cfield,
@@ -317,6 +338,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 mc.cores = as.numeric(mc.cores),
                 max.threads = as.numeric(max.threads),
                 max.mem = as.numeric(max.mem),
+                max.na = max.na,
                 edgenudge = as.numeric(edgenudge),
                 tilim = as.numeric(tilim),
                 strict = strict,
@@ -437,6 +459,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             junctions = ra.all,
             seg = seg,
             coverage = coverage,
+            blacklist = blacklist,
             hets = hets,
             nseg = nseg,
             cfield = cfield,
@@ -446,6 +469,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             mc.cores = as.numeric(mc.cores),
             max.threads = as.numeric(max.threads),
             max.mem = as.numeric(max.mem),
+            max.na = max.na,
             edgenudge = as.numeric(edgenudge),
             tilim = as.numeric(tilim),
             strict = strict,
@@ -521,6 +545,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @import DNAcopy
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
+                      blacklist = NULL,
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
                       tfield = NULL, # character, tier confidence meta data field in ra
@@ -533,6 +558,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       mc.cores = 1, # default 1
                       max.threads = Inf,
                       max.mem = 16,
+                      max.na = 0.1,
                       purity = NA,
                       ploidy = NA,
                       pp.method = "sequenza",
@@ -613,8 +639,36 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!(field %in% names(values(coverage))))
     {
         new.field = names(values(coverage))[1]
-        warning(paste0('Field ', field, ' not found in coverage GRanges metadata so using ', new.field, ' instead'))
+        jmessage(paste0('Warning: Field ',
+                        field,
+                        ' not found in coverage GRanges metadata so using ',
+                        new.field,
+                        ' instead'))
         field = new.field
+    }
+
+    ## filter out the data in blacklist if any
+    if (!is.null(blacklist)){
+        if (is.character(blacklist)){
+            if (file.exists(blacklist)){
+                if (grepl("[(txt)|(tsv)|(csv)]$", blacklist)){
+                    blacklist = try(gUtils::dt2gr(fread(blacklist)))                    
+                } else if (grepl("bed$", blacklist)){
+                    blacklist = rtracklayer::import.bed(blacklist)
+                } else if (grepl("rds$", blacklist)){
+                    blacklist = readRDS(blacklist)
+                }                
+            }
+        } else if (inherits(blacklist, "data.frame")){
+            blacklist = try(gUtils::dt2gr(data.table(blacklist)))
+        }
+        ## if at this point we have a GRanges, then proceed
+        if (inherits(blacklist, "GRanges")){
+            bad.ix = which(coverage %^% blacklist)
+            if (length(bad.ix)>0){
+                values(coverage)[bad.ix, field] = NA
+            }
+        }
     }
 
     seg.fn = paste0(outdir, '/seg.rds')
@@ -789,7 +843,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         het.file = hets,
                         verbose = verbose,
                         ab.exclude = ab.exclude,
-                        ab.force = ab.force)
+                        ab.force = ab.force,
+                        max.na = max.na)
     } else {
         warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -1141,6 +1196,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            field = 'ratio',
                            mc.cores = 1,
                            max.chunk = 1e8,
+                           max.na = 0.1,
                            subsample = NULL,
                            ab.exclude = NULL,
                            ab.force = NULL){
@@ -1375,7 +1431,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      asignal = hets.gr,
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
-                                     verbose = verbose)
+                                     verbose = verbose,
+                                     max.na = max.na)
     } else {
         this.kag$segstats = segstats(this.kag$tile,
                                      this.cov,
@@ -1384,14 +1441,16 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      max.chunk = max.chunk,
                                      subsample = subsample,
                                      mc.cores = mc.cores,
-                                     verbose = verbose)
+                                     verbose = verbose,
+                                     max.na = max.na)
     }
 
     this.kag$segstats$ncn = 2
 
     if (!is.null(nseg.file)){
-        if (is.null(nseg$cn)){
-            stop('Normal seg file does not have "cn" met data field')
+        if (is.null(nseg$ncn)){
+            warning('Normal seg file does not have "ncn" met data field. USING the default 2!!')
+            this.kag$segstats$ncn = 2
         } else {
             this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
             this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
@@ -1971,6 +2030,7 @@ segstats = function(target,
                     prior_beta = NA,
                     max.chunk = 1e8,
                     max.slice = 2e4,
+                    max.na = 0.1,
                     na.thresh = 0.2,
                     verbose = FALSE,
                     subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
@@ -2123,7 +2183,7 @@ segstats = function(target,
         target$bad = FALSE
         ## if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
         ## if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
-        if (length(bad.nodes <- which(target$nbins.nafrac > 0.1))>0)
+        if (length(bad.nodes <- which(target$nbins.nafrac > max.na))>0)
         {
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
@@ -5176,14 +5236,25 @@ read.junctions = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+            ## vcf = VariantAnnotation::readVcf(
+            ##     rafile, genome = Seqinfo(
+            ##                 seqnames = names(seqlengths),
+            ##                 seqlengths = as.vector(seqlengths)))
             vcf = VariantAnnotation::readVcf(
                 rafile, genome = Seqinfo(
                             seqnames = names(seqlengths),
                             seqlengths = as.vector(seqlengths)))
-
             ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
+            vgr = DelayedArray::rowRanges(vcf) ## this range is identical to using read_vcf
+            ## old.vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
             mc = data.table(as.data.frame(mcols(vgr)))
+
+            ## append the INFO
+            info.dt = data.table(
+                as.data.frame(VariantAnnotation::info(vcf))
+            )
+            mc = cbind(mc, info.dt)
+            values(vgr) = mc
 
             if (!('SVTYPE' %in% colnames(mc))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
@@ -5537,14 +5608,35 @@ read.junctions = function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            ## ra = ra.dedup(ra)
+            ## expand into a list of GRLs, named by the sample name in the VCF
+            geno.dt = data.table(
+                data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
+            )
+            ##
+
+            if (ncol(geno.dt)>1) {
+                cnms = colnames(geno.dt)
+                single.ra = ra
+                ra = lapply(setNames(cnms, cnms),
+                            function(cnm){
+                                this.ra = copy(single.ra)
+                                this.dt = data.table(as.data.frame(values(this.ra)))
+                                this.geno = geno.dt[[cnm]]
+                                this.dt[
+                                  , tier := ifelse(
+                                        tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
+                                values(this.ra) = this.dt
+                                return(this.ra)
+                            })
+                loose=FALSE ## TODO: temporary until we figure out how
+            }
 
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
-            }
-            else{
+            } else {
                 npix = is.na(vgr$mix)
-                vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
+                ## these are possible "loose ends" that we will add to the segmentation
+                vgr.loose = vgr[npix, c()] 
 
                 ## NOT SURE WHY BROKEN
                 tmp =  tryCatch( values(vgr)[bix[npix], ],
@@ -5563,7 +5655,6 @@ read.junctions = function(rafile,
     }
 
     if (is.data.table(rafile)){
-        require(data.table)
         rafile = as.data.frame(rafile)
     }
 
@@ -6392,7 +6483,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 #' @author Marcin Imielinski
 #' @noRd
 read_vcf = function(fn,
-                    hg = 'hg19',
+                    hg = "hg19",
                     swap.header = NULL,
                     verbose = FALSE,
                     add.path = FALSE,
@@ -6424,7 +6515,8 @@ read_vcf = function(fn,
     ## else
 
     ## QUESTION: why isn't genome recognized when ... is provided?
-    ## vcf = VariantAnnotation::readVcf(file = fn, genome = hg, ...)
+    args = list(...)
+    ## vcf = VariantAnnotation::readVcf(file = fn, hg, ...)
     vcf = VariantAnnotation::readVcf(file = fn, genome = hg)
 
     out = granges(vcf)
