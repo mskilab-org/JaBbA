@@ -211,7 +211,8 @@ test_that("JaBbA", {
                             23, 29, 26, 26, 31, 22, 22, 32, 32, 31, 31, 27, 23, 23,
                             23, 4, 3, 3, 4, 3, 3)) |
                 identical(values(jab$junctions$grl)$cn,
-                          c(3, 3, 3, 29, 3, 29, 28, 1, 28, 6, 28, 16, 12, 16, 17, 16, 16, 8, 16, 4, 3, 3)),
+                          c(3, 3, 3, 29, 3, 29, 28, 1, 28, 6, 28, 16, 12, 16, 17,
+                            16, 16, 8, 16, 4, 3, 3, 0, 0)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
 
     ## expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
