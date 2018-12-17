@@ -16,6 +16,7 @@ r_packages:
 - devtools
 - testthat
 - covr
+- sequenza
 bioc_packages:
 - GenomicRanges
 - VariantAnnotation
@@ -39,3 +40,4 @@ env:
   - R_CHECK_ARGS="--no-build-vignettes --no-manual --as-cran --no-examples"
   - _R_CHECK_TESTS_NLINES_=0
   - secure: QiBIHIKlCnkacBth0I7uSzWh22GN3ZibleS3YLQ63elHj2jimgKnU83yPVTIYUWG8mA4WpQ27k1cab/0TfG7Vsv97IwlDDZccPwM1wRSu5hnwBK1ozKd4zQG046QO93gBYOmJRhiD2xGv57uB+j8F7k0RCWNibZDQ/XUcSs6x/gBezGRq9756wCy1X270Eh17rcPivfb1Tl3y+ZShnFRwrauuh+AWipnlgJPqQku484ZbiY7XxDaujpep3M/7lpj2MhfthzqQzNVFQ8gQ39QokD8B+YTS0EbtJK6SlQRuT7ug5G4kKLDcaFoLVaF5KYHyQHYfP/fP70v689P/1kyF1lk40kk1zK93Skgk4n6rGMfi1+IkiKeFNAGKSD0JCUrohKd5KrGTuer85w/2nkNAO65vrH/WMNA71oXNaz0aFF37+hueY/4n4TzwBCsly2DBd23VQGTmX8eJOlgUoSfFi51Zdc6k/0fc9koaGGfqbdr0nAQownSR2AUL0DgK8D5U3xS5Nv0yRftGynui6eOUYUwNGwWcJ6+wgZErcpOpwlrqvCFpZi1DgBpIB60D7BgKXZGChVPhuntDLkxkxf9tOrnGO5y3sVjqyCyVLSjimYRRbBGzFXsIlT78zwFIPaKgVzErS4l33fISUQ5Gv93iKAfnj1nym1uWZHTB/xS4fI=
+
