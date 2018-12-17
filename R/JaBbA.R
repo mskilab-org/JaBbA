@@ -5101,7 +5101,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
 #'
 #' @return a \code{GRangesList} of the junctions
 #'
-#' @importFrom VariantAnnotation readVcf
+#' @importFrom VariantAnnotation readVcf info geno
 #' @import data.table
 #'
 #' @export

@@ -107,7 +107,7 @@ jab = JaBbA(junctions = junc,
             cfield = 'nudge',
             verbose = 2,
             outdir = 'JaBbA',
-            overwrite = FALSE,
+            overwrite = TRUE,
             ploidy=3.72,
             purity=NA,
             epgap = EPGAP,
@@ -125,7 +125,7 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       tilim = TILIM,
                       verbose = 2,
                       outdir = 'JaBbA.reiterate',
-                      overwrite = FALSE,
+                      overwrite = TRUE,
                       reiterate=3,
                       ploidy=3.72,
                       purity=0.99,
@@ -204,10 +204,14 @@ test_that("JaBbA", {
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
-    expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
-                identical(values(jab$junctions$grl)$cn, c(3, 3, 3, 14, 20, 23, 28, 29, 30, 31, 28, 4, 28, 30, 31, 3, 31, 29, 2, 29, 4,
-                                                          29, 28, 7, 4, 3, 3, 4, 7, 5, 4, 3, 3, 2, 3, 3, 3)),
+    expect_true(identical(values(jab$junctions$grl)$cn,
+                          c(3, 3, 3, 29, 3, 29, 28, 1, 28, 6, 28, 16, 12, 16, 17, 16, 16, 8, 16, 4, 3, 3, 0, 0)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
+
+    ## expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
+    ##             identical(values(jab$junctions$grl)$cn, c(3, 3, 3, 14, 20, 23, 28, 29, 30, 31, 28, 4, 28, 30, 31, 3, 31, 29, 2, 29, 4,
+    ##                                                       29, 28, 7, 4, 3, 3, 4, 7, 5, 4, 3, 3, 2, 3, 3, 3)),
+    ##             info = print(list.expr(values(jab$junctions$grl)$cn)))
 
     ## expect_true(abs(jab$ploidy - 3.50)<0.2,
     ##             info = print(jab$ploidy))
@@ -222,20 +226,24 @@ test_that("JaBbA", {
                      cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate.2)
                  )) > 0.8,
                 info = print(jab.reiterate.cn.cor))
+
     expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate)) > 0.8,
                 info = print(jab.reiterate.cn.cor))
 
     expect_true(identical(values(jab.reiterate$junctions$grl)$cn,
-                          c(4, 4, 1, 3, 10, 11, 5, 3, 6, 10, 19, 1, 1, 5, 1, 1, 2, 3, 3,
-                            3, 4, 3, 3, 4, 4, 4, 4, 4, 4, 3, 2, 2, 3, 4, 5, 4, 4, 5, 5,
-                            4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31,
-                            22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
-                identical(values(jab.reiterate$junctions$grl)$cn,
-                          c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4,
-                            5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13,
-                            13, 23, 29, 26, 6, 26, 31, 22, 19, 22, 32, 1, 32, 31, 1, 31,
-                            27, 5, 3, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10)),
-                info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
+                          c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4, 5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 29, 26, 6, 26, 31, 22, 19, 22, 32, 1, 32, 31, 1, 31, 27, 5, 3, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10, 0, 0)), info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
+
+    ## expect_true(identical(values(jab.reiterate$junctions$grl)$cn,
+    ##                       c(4, 4, 1, 3, 10, 11, 5, 3, 6, 10, 19, 1, 1, 5, 1, 1, 2, 3, 3,
+    ##                         3, 4, 3, 3, 4, 4, 4, 4, 4, 4, 3, 2, 2, 3, 4, 5, 4, 4, 5, 5,
+    ##                         4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31,
+    ##                         22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
+    ##             identical(values(jab.reiterate$junctions$grl)$cn,
+    ##                       c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4,
+    ##                         5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13,
+    ##                         13, 23, 29, 26, 6, 26, 31, 22, 19, 22, 32, 1, 32, 31, 1, 31,
+    ##                         27, 5, 3, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10, 0, 0)),
+    ##             info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 
     ## expect_true(abs(jab.reiterate$ploidy - 3.62)<0.01 |
     ##             abs(jab.reiterate$ploidy - 3.51)<0.01, info = print(jab.reiterate$ploidy))

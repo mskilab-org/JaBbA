@@ -33,11 +33,11 @@ Remotes:
   github::mskilab/gTrack,
   github::mskilab/gGnome,
   github::mskilab/Ppurple,
-  bitbucket:sequenza_tools/sequenza,
+  git::git@bitbucket.org:sequenzatools/sequenza.git,  
   r-lib/covr
 Suggests:  
   testthat (>= 2.0),
   covr
 License: GPL-2
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.1
