@@ -54,8 +54,8 @@ $ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt
 JaBbA 2018-02-13 21:29:50: Located junction file JaBbA/inst/extdata/junctions.vcf
 JaBbA 2018-02-13 21:29:50: Located coverage file JaBbA/inst/extdata/coverage.txt
 JaBbA 2018-02-13 21:29:50: Loading packages ...
-JaBbA 2018-02-13 21:30:00: Starting analysis in ./jbaout
-JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jbaout
+JaBbA 2018-02-13 21:30:00: Starting analysis in ./jba_out
+JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jba_out
 
 ```
 
@@ -96,7 +96,7 @@ Options:
 		Directory containing karyoMIP.R file (eg default GIT.HOME/isva)
 
 	-o OUTDIR, --outdir=OUTDIR
-		Directory to dump output into
+		Directory to dump output into (default jba_out)
 
 	-n NAME, --name=NAME
 		Sample / Individual name
@@ -197,6 +197,7 @@ Attributions
 
 > Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
 > Genome Center.
+
 
 Funding sources
 ------------
