@@ -148,13 +148,14 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  strict = FALSE,
                  max.threads = Inf,
                  max.mem = 16,
-                 max.na = 0.1,
+                 max.na = -1,
                  blacklist = NULL,
                  epgap = 1e-4, ## default to 1e-2
                  indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
                  verbose = TRUE, ## whether to provide verbose output
-                 dyn.tuning = TRUE)
+                 dyn.tuning = TRUE,
+                 geno = FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', normalizePath(outdir))
@@ -169,12 +170,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         {
             stop(paste('Junction path', ra, 'does not exist'))
         }
-
-        if (grepl("rds$", ra)){
-            ra.all = readRDS(ra)
-        } else {
-            ra.all = read.junctions(ra)
-        }
+        ra.all = read.junctions(ra, geno = geno)
     } else if (is.null(ra)) {
         ra.all = GRangesList()
     } else {
@@ -222,11 +218,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ra.uf = NULL
     if (!is.null(juncs.uf)){
         if (inherits(juncs.uf, "character") & file.exists(juncs.uf)){
-            if (grepl(".rds$", juncs.uf)){
-                ra.uf = readRDS(juncs.uf)
-            } else {
-                ra.uf = read.junctions(juncs.uf)
-            }
+                ra.uf = read.junctions(juncs.uf, geno=FALSE)
         } else if (inherits(juncs.uf, "GRangesList")){
             ra.uf = juncs.uf
         }
@@ -356,7 +348,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 indel = as.logical(indel),
                 overwrite = as.logical(overwrite),
                 verbose = as.numeric(verbose),
-                dyn.tuning = dyn.tuning)
+                dyn.tuning = dyn.tuning,
+                geno = geno)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -487,7 +480,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
             verbose = as.numeric(verbose),
-            dyn.tuning = dyn.tuning)
+            dyn.tuning = dyn.tuning,
+            geno = geno)
     }
     return(jab)
 }
@@ -558,7 +552,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       mc.cores = 1, # default 1
                       max.threads = Inf,
                       max.mem = 16,
-                      max.na = 0.1,
+                      max.na = -1,
                       purity = NA,
                       ploidy = NA,
                       pp.method = "sequenza",
@@ -577,7 +571,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       indel = TRUE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
-                      dyn.tuning = TRUE)
+                      dyn.tuning = TRUE,
+                      geno = FALSE)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -687,6 +682,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 jmessage('No segmentation provided, so performing segmentation using CBS')
             }
             set.seed(42)
+            binw = median(sample(width(coverage), 30), na.rm=T)
             vals = values(coverage)[, field]
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
@@ -702,14 +698,14 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = gaps(seg) %Q% (strand == "*") %Q% (width>1000)
+            gap.seg = gaps(seg) %Q% (strand == "*") %Q% (width> (5 * binw))
             if (length(gap.seg)>0){
                 bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
             } else {
                 bps = gr.start(seg)[, c()]
             }
             
-            ## keep the breakpoints of the big enough gaps (>1E3), they may contain bad regions
+            ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
             new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
             names(new.segs) = NULL
             seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
@@ -761,11 +757,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     ra = junctions
     if (inherits(ra, "character")){
-        if (grepl(".rds$", junctions)){
-            ra = readRDS(junctions)
-        } else {
-            ra = read.junctions(junctions)
-        }
+        ra = read.junctions(junctions, geno = geno)
     } else if (!inherits(ra, "GRangesList")){
         stop("`ra` must be GRangesList here")
     }
@@ -1196,7 +1188,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            field = 'ratio',
                            mc.cores = 1,
                            max.chunk = 1e8,
-                           max.na = 0.1,
+                           max.na = -1,
                            subsample = NULL,
                            ab.exclude = NULL,
                            ab.force = NULL){
@@ -1226,7 +1218,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         }
         else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
         {
-            tmp.ra = read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T)
+            tmp.ra = read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T, geno = geno)
             if (length(tmp.ra)==0){
                 this.ra = gr.fix(GRangesList(), hg_seqlengths())
                 loose.ends = GRanges(seqlengths = hg_seqlengths())
@@ -2030,7 +2022,7 @@ segstats = function(target,
                     prior_beta = NA,
                     max.chunk = 1e8,
                     max.slice = 2e4,
-                    max.na = 0.1,
+                    max.na = -1,
                     na.thresh = 0.2,
                     verbose = FALSE,
                     subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
@@ -2181,17 +2173,40 @@ segstats = function(target,
 
         ## target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-        ## if (length(bad.nodes <- which(target$good.prop < 0.9))>0)
-        ## if (length(bad.nodes <- which(target$nbins.nafrac > 0.2))>0)
-        if (length(bad.nodes <- which(target$nbins.nafrac > max.na))>0)
+
+        ## if the user didn't give the max.na, we infer it
+        if (!is.numeric(max.na) || !between(max.na, 0, 1)){
+            ## gather the values of nafrac
+            colnames(values(target))
+            nafrac = gr2dt(target %Q% (strand=="+"))[, .(seqnames, start, end, tile.id, nbins.nafrac)]
+            dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
+            rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
+            km2 = stats::kmeans(dat, center=2)
+            ## telll which part is good/bad
+            good = which.min(km2$centers)
+            max.na = mean(max(dat[which(km2$cluster==good)]),
+                          min(dat[which(km2$cluster!=good)]))
+            if (verbose){
+                jmessage("No `max.na` argument found, inferring it for you now...")
+                jmessage("The suggested `max.na` is at ", max.na)
+            }
+        }
+
+        if (length(bad.nodes <- which((target$nbins.nafrac > max.na) | (is.na(target$nbins.nafrac))))>0)
         {
+            target$max.na = max.na
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
             if (verbose)
             {
-                jmessage("Definining coverage good quality nodes as 90% bases covered by non-NA and non-Inf values in +/-100KB region")
-                jmessage("Hard setting ", sum(width(target[bad.nodes]))/1e6, " Mb of the genome to NA that didn't pass our quality threshold")
+                na.wid = sum(width(target[bad.nodes]))/1e6/2
+                jmessage("Definining coverage good quality nodes as ", max.na*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
+                jmessage("Hard setting ", na.wid,
+                         " Mb of the genome to NA that didn't pass our quality threshold")
+                if (na.wid > (sum(as.double(seqlengths(signal)/1e6))/2)){
+                    jmessage("WARNING: more than half of the whole genome is set to NA, and ignored by JaBbA!!")
+                }
             }
         }
 
@@ -5170,7 +5185,7 @@ read.junctions = function(rafile,
                           keep.features = T,
                           seqlengths = hg_seqlengths(),
                           chr.convert = T,
-                          geno=NULL,
+                          geno=FALSE,
                           flipstrand = FALSE,
                           swap.header = NULL,
                           breakpointer = FALSE,
@@ -5474,8 +5489,6 @@ read.junctions = function(rafile,
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
                 ## add extra genotype fields to vgr
-                geno(vcf)
-                values(vgr)
                 if (all(is.na(vgr$mateid)))
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
                         warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
@@ -5608,27 +5621,27 @@ read.junctions = function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            ## expand into a list of GRLs, named by the sample name in the VCF
-            geno.dt = data.table(
-                data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
-            )
-            ##
-
-            if (ncol(geno.dt)>1) {
-                cnms = colnames(geno.dt)
-                single.ra = ra
-                ra = lapply(setNames(cnms, cnms),
-                            function(cnm){
-                                this.ra = copy(single.ra)
-                                this.dt = data.table(as.data.frame(values(this.ra)))
-                                this.geno = geno.dt[[cnm]]
-                                this.dt[
-                                  , tier := ifelse(
-                                        tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
-                                values(this.ra) = this.dt
-                                return(this.ra)
-                            })
-                loose=FALSE ## TODO: temporary until we figure out how
+            if (geno==TRUE){
+                ## expand into a list of GRLs, named by the sample name in the VCF
+                geno.dt = data.table(
+                    data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
+                )
+                if (ncol(geno.dt)>1) {
+                    cnms = colnames(geno.dt)
+                    single.ra = ra
+                    ra = lapply(setNames(cnms, cnms),
+                                function(cnm){
+                                    this.ra = copy(single.ra)
+                                    this.dt = data.table(as.data.frame(values(this.ra)))
+                                    this.geno = geno.dt[[cnm]]
+                                    this.dt[
+                                      , tier := ifelse(
+                                            tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
+                                    values(this.ra) = this.dt
+                                    return(this.ra)
+                                })
+                    loose=FALSE ## TODO: temporary until we figure out how
+                }
             }
 
             if (!get.loose | is.null(vgr$mix)){
@@ -5808,8 +5821,7 @@ read.junctions = function(rafile,
 ############################################
 karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of read.junctions(dranger.df) where dranger is df of dranger output)
                       tile = NULL, # pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
-                      label.edges = FALSE
-                      )
+                      label.edges = FALSE)
 {
     if (length(junctions)>0)
     {
@@ -5842,7 +5854,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 
         pgrid = sgn1 = c('-'=-1, '+'=1)[as.character(strand(bp1))]
         sgn2 = c('-'=-1, '+'=1)[as.character(strand(bp2))]
-
 ### HACK HACK to force seqlengths to play with each other if malformedo
         tmp.sl = GenomeInfoDb::seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
