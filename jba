@@ -179,6 +179,7 @@ suppressPackageStartupMessages(
     jmessage('Located junction file ', opt$junctions)
     jmessage('Located coverage file ', opt$coverage)
     jmessage('Loading packages ...')
+    system(paste('mkdir -p', opt$outdir))
     writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
     saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
     jab = JaBbA(coverage = opt$coverage,
@@ -191,7 +192,6 @@ suppressPackageStartupMessages(
                 nseg = opt$nseg,
                 hets = opt$hets,
                 outdir = opt$outdir,
-                subsample = opt$subsample,
                 name = opt$name,
                 field = opt$field,
                 slack = opt$slack,
@@ -213,3 +213,6 @@ suppressPackageStartupMessages(
                 epgap = opt$epgap,
                 max.na = opt$maxna)
 })
+
+
+

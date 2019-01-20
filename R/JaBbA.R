@@ -599,7 +599,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     {
         if (!file.exists(coverage))
         {
-            stop(paste('Coveraeg path ', coverage, 'does not exist'))
+            stop(paste('Coverage path ', coverage, 'does not exist'))
         }
 
         if (grepl('\\.rds$', coverage))
@@ -5251,15 +5251,20 @@ read.junctions = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            ## vcf = VariantAnnotation::readVcf(
-            ##     rafile, genome = Seqinfo(
-            ##                 seqnames = names(seqlengths),
-            ##                 seqlengths = as.vector(seqlengths)))
+
+          if (!is.null(seqlengths) && all(!is.na(seqlengths)))
+            {
+              vcf = VariantAnnotation::readVcf(
+                                         rafile, genome = Seqinfo(
+                                                   seqnames = names(seqlengths),
+                                                   seqlengths = as.vector(seqlengths)))
+            }
+          else ## get seqlengths from vcf
+          {
             vcf = VariantAnnotation::readVcf(
-                rafile, genome = Seqinfo(
-                            seqnames = names(seqlengths),
-                            seqlengths = as.vector(seqlengths)))
-            ## vgr = rowData(vcf) ## parse BND format
+                                         rafile)
+          }
+              ## vgr = rowData(vcf) ## parse BND format
             vgr = DelayedArray::rowRanges(vcf) ## this range is identical to using read_vcf
             ## old.vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
             mc = data.table(as.data.frame(mcols(vgr)))
