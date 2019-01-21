@@ -1832,7 +1832,7 @@ ramip_stub = function(kag.file,
             ndt = gr2dt(this.kag$segstats)[, ":="(cnmle = cn)][, id := seq_along(this.kag$segstats)]
             setkey(ndt, "id")
             adj = this.kag$ab.adj ## logical mat
-            es = data.table(which(adj!=0, arr.ind=T))
+            es = data.table(Matrix::which(adj!=0, arr.ind=T))
             if (nrow(es)>0){
                 es[, ":="(elb = adj.lb[cbind(row, col)],
                           eub = adj.ub[cbind(row, col)])]
@@ -2491,7 +2491,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             tmp.ix = Matrix::which(adj.ub != 0, arr.ind=TRUE)
             tmp.adj[tmp.ix] = 0
         }
-        G = graph(as.numeric(t(which(tmp.adj != 0, arr.ind=T))), n = length(segstats), directed = T)
+        G = graph(as.numeric(t(Matrix::which(tmp.adj != 0, arr.ind=T))), n = length(segstats), directed = T)
         V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
 
         if (length(fix)>0)
