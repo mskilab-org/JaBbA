@@ -675,7 +675,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         seg = readRDS(seg.fn)
     } else {
-        if (is.null(seg))
+        if (is.null(seg) || !file.exists(seg))
         {
             if (verbose)
             {
@@ -718,12 +718,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         else
         {
             if (is.character(seg))
-            {
-                if (!file.exists(seg))
-                {
-                    stop(paste('Seg path ', seg, 'does not exist'))
-                }
-
+            {                
                 if (grepl('\\.rds$', seg))
                 {
                     seg = readRDS(seg)
