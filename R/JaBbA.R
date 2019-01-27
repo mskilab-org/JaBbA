@@ -218,7 +218,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     ra.uf = NULL
     if (!is.null(juncs.uf)){
         if (inherits(juncs.uf, "character") & file.exists(juncs.uf)){
-                ra.uf = read.junctions(juncs.uf, geno=FALSE)
+            ra.uf = read.junctions(juncs.uf, geno=FALSE)
         } else if (inherits(juncs.uf, "GRangesList")){
             ra.uf = juncs.uf
         }
@@ -675,7 +675,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         seg = readRDS(seg.fn)
     } else {
-        if (is.null(seg) || !file.exists(seg))
+        if (is.null(seg) || (is.character(seg) && !file.exists(seg)))
         {
             if (verbose)
             {
