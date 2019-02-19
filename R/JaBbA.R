@@ -137,7 +137,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
                  ## mem = 32, ## max memory for MIP portion
                  reiterate = 0, ## how many (additional) times to iterate beyond the first iteration
-                 rescue.window = 1e5, ## new 1e5 ## window around loose ends at which to rescue low tier junctions
+                 rescue.window = 1e3, # window around loose ends at which to rescue low tier junctions
                  init = NULL, ## previous JaBbA object to use as a solution
                  edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
                  use.gurobi = FALSE, ## use gurobi instead of CPLEX
@@ -238,13 +238,19 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
+        ## junctions from ra.uf will always have tier 3
+        ## at this point
         ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
         ## those match a record in junction, will be assigned to the tier in junction
         values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
             values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
         ## the rest will be tier 3
         values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
-        ra.all = ra.all.uf
+        ## FIXME: ra.merge still gives duplicates
+        ## FIXME: substitute these ra.xx fuctions to Junction class in gGnome
+        ## extra dedup
+        ndup = which(!ra.duplicated(ra.all.uf))
+        ra.all = ra.all.uf[ndup]
     }
 
     if (length(ra.all)>0){
@@ -354,7 +360,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
             jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
-            le = jab$segstats[jab$segstats$loose]
+            le = jab$segstats %Q% (loose==TRUE & passed==TRUE)
 
             ## Annotate ra.all
             all.input = readRDS(paste0(outdir, "/junctions.all.rds"))
@@ -407,14 +413,14 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 last.ra = new.ra
                 this.iter = this.iter + 1
             }
+            ## ## keep using the initial purity ploidy values
+            ## pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
+            ## purity = pp1$purity[1]
+            ## ploidy = pp1$ploidy[1]
 
-            pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
-            purity = pp1$purity[1]
-            ploidy = pp1$ploidy[1]
+            seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## read from the first iteration
 
-            seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## why read from the first iteration??
-            ## seg = jabr$segstats %Q% (strand=="+")
-
+            
             if (verbose)
             {
                 jmessage("Setting mipstart to previous iteration's jabba graph")
@@ -590,9 +596,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
     jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
     jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
-    seg.tab.file = paste(outdir, 'jabba.seg.txt', sep = '/')
+    seg.tab.file = paste(outdir, 'jabba.seg', sep = '/')
     seg.gr.file = paste(outdir, 'jabba.seg.rds', sep = '/')
     seg.adj.file = paste(outdir, 'jabba.adj.txt', sep = '/')
+    le.class.file.rds = paste(outdir, 'loose.end.stats.rds', sep = '/')
     nozzle.file = paste(outdir, 'nozzle', sep = '/')
 
     if (is.character(coverage))
@@ -925,16 +932,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
     saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
 
-    ## HOLDON
-    ## ab.force = kag$ab.force
-    ## saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
-    ## saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
-    ## if (verbose){
-    ##     jmessage("In sum, we are forcing ", length(ab.force),
-    ##              ## " junctions, excluding ", length(ab.exclude),
-    ##              " junctions, and nudging ", sum(edgenudge>0), " junctions")
-    ## }
-
     if (!is.null(init))
     {
         if (is.character(init))
@@ -1005,14 +1002,19 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     jabd.simple$junctions = jabd$junctions = jab$junctions = junctions
 
     jab$ab.edges = kag$ab.edges
-    seg.out = cbind(sample = name, as.data.frame(jabd$segstats))
+    seg.out = cbind(
+        sample = name,
+        gr2dt(jabd$segstats)[
+            loose==FALSE & strand=="+",
+            .(chr = seqnames,
+              start, end, width, cn)])
     names(seg.out)[1:4] = c('track.name', 'chrom', 'start', 'end')
-    seg.out$seg.id = 1:nrow(seg.out)
-    cols = c('track.name', 'chrom', 'start', 'end', 'cn', 'seg.id')
-    seg.out = seg.out[, c(cols, setdiff(names(seg.out), cols))]
+    ## seg.out$seg.id = 1:nrow(seg.out)
+    ## cols = c('track.name', 'chrom', 'start', 'end', 'cn', 'seg.id')
+    ## seg.out = seg.out[, c(cols, setdiff(names(seg.out), cols))]
     write.tab(seg.out, seg.tab.file)
     jabd$segstats$seg.id = 1:length(jabd$segstats)
-
+    
     if (verbose)
     {
         jmessage('Checking for hets')
@@ -1028,16 +1030,235 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 jabd = c(jabd, jabba.alleles(jabd, hets.gr, verbose = TRUE, uncoupled=TRUE)[c('asegstats', 'aadj', 'agtrack')])
                 jmessage('Computing alleles for jabd simple ')
                 jabd.simple = c(jabd.simple, jabba.alleles(jabd.simple, hets.gr, verbose = TRUE, uncoupled=TRUE)[c('asegstats', 'aadj', 'agtrack')])
-                jmessage('Done computing alleles')
+                jmessage('Done computing alleles'); file.remove(hets.gr.rds.file)
             },
             error = function(e) print("Jabba allelic generation failed"))
 
+    ## annotate convergence status
+    ## jabd.simple$segstats = jabd.simple$segstats %$% jab$segstats[, c("cl")]
+    ## jabd.simple$segstats = gr.val(jabd.simple$segstats, jab$segstats[, c("epgap")], mean = FALSE, FUN = max, na.rm = TRUE, verbose = TRUE)
+    jabd.simple$segstats = jabd.simple$segstats %$% jab$segstats[, c("cl", "epgap")]
+    ## opti = readRDS(paste0(outdir, "/opt.report.rds"))
+    ## sapply(strsplit(head(jabd.simple$segstats$cl), ","), as.numeric)
+
     jab$segstats = gr.fix(jab$segstats)
     jabd$segstats = gr.fix(jabd$segstats)
-    jabd.simple$segstats = gr.fix(jabd.simple$segstats)
+    jabd.simple$segstats = gr.fix(jabd.simple$segstats)    
 
+    ## dependency function: dflm
+    .dflm = function(x, last = FALSE, nm = '')
+    {
+        if (is.null(x))
+            out = data.frame(name = nm, method = as.character(NA), p = as.numeric(NA), estimate = as.numeric(NA), ci.lower = as.numeric(NA),  ci.upper = as.numeric(NA), effect = as.character(NA))
+        else if (any(c('lm', 'betareg') %in% class(x)))
+        {
+
+            coef = as.data.frame(summary(x)$coefficients)
+            colnames(coef) = c('estimate', 'se', 'stat', 'p')
+            if (last)
+                coef = coef[nrow(coef), ]
+            coef$ci.lower = coef$estimate - 1.96*coef$se
+            coef$ci.upper = coef$estimate + 1.96*coef$se
+            if (!is.null(summary(x)$family))
+            {
+                fam = summary(x)$family$family
+                if (summary(x)$family$link %in% c('log', 'logit'))
+                {
+                    coef$estimate = exp(coef$estimate)
+                    coef$ci.upper= exp(coef$ci.upper)
+                    coef$ci.lower= exp(coef$ci.lower)
+                }
+            }
+            else
+                fam = 'Unknown'
+
+            if (!last)
+                nm = paste(nm, rownames(coef))
+            out = data.frame(name = nm, method = fam, p = signif(coef$p, 3), estimate = coef$estimate, ci.lower = coef$ci.lower, ci.upper = coef$ci.upper, effect = paste(signif(coef$estimate, 3), ' [',  signif(coef$ci.lower,3),'-', signif(coef$ci.upper, 3), ']', sep = ''))
+        }
+        else
+        {
+            ci.lower = ifelse(is.null(x$conf.int[1]), NA, x$conf.int[1])
+            ci.upper = ifelse(is.null(x$conf.int[2]), NA, x$conf.int[2])
+            out = data.table(name = nm,
+                             method = x$method,
+                             p = signif(x$p.value, 3),
+                             estimate = ifelse(is.null(x$estimate), NA, x$estimate),
+                             ci.lower,
+                             ci.upper)
+            ## FIXME: some model doesn't have `estimate` field
+            if (!is.null(x$estimate)){
+                out[, effect := paste0(signif(x$estimate, 3), 
+                                       ' [',  signif(x$conf.int[1],3),
+                                       '-', signif(x$conf.int[2], 3), ']')]
+            } else {
+                out[, effect := "error"]
+            }
+        }
+        out$effect = as.character(out$effect)
+        out$name = as.character(out$name)
+        out$method = as.character(out$method)
+        rownames(out) = NULL
+        return(as.data.table(out))
+    }
+
+    PTHRESH = 0.01
+
+    .waviness = function(x, y, min.thresh = 5e3, max.thresh = 10e4, spar = 0.5, smooth = TRUE, filter = rep(FALSE, length(x)), trim = 10) {
+        if(length(x)==0) return(NA)
+        dat = data.table(x, y)[order(x), ]
+        dat[, lag := x-min(x)]
+        fdat = dat[!is.na(y), ][!is.infinite(y), ]
+        ## autocorrelation
+        if(nrow(fdat)==0) return(NA)
+        fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
+        if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
+            fdat = fdat[!is.na(lag) & !is.na(ac),]
+            if (nrow(fdat[!is.na(lag) & !is.na(ac),])<4)
+                return(NA)
+            fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
+        }
+        return(fdat[lag>min.thresh & lag<max.thresh, sum(ac^2)])
+    }
+
+    .mod = function(dt){
+        mod = dt[, glm(counts ~ tumor + fused + ix, family='gaussian')]
+        res = dt$counts - predict(mod, dt, type='response')
+        return(res)
+    }
+
+
+#######################
+    ## start building the model
+    ## gather loose ends from sample
+    gg = tryCatch(gG(jabba=jabd), error=function(e) readRDS(fi))
+    ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
+    lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
+    if ((nrow(ll)+nrow(lr))>0){
+        l = rbind(ll, lr)[, ":="(sample = opt$name)]
+        l[, leix := 1:.N]
+        l = dt2gr(l)
+
+        ## load coverage and beta (coverage CN fit)
+        cov = readRDS(opt$coverage)
+        kary = readRDS(paste0(outdir, "/karyograph.rds"))
+        purity = as.numeric(kary$purity)
+        ploidy = as.numeric(kary$ploidy)
+        ratios = values(cov)[, field]
+        beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
+        segs = gg$nodes$gr
+
+        ## identify nodes flanking each loose end, extending up to 100kb away
+        o = gr.findoverlaps(segs, l+1)
+        segs = segs[o$query.id]; segs$leix = l[o$subject.id]$leix
+        sides = gr.findoverlaps(segs, l+1e5, by="leix")
+        values(sides) = cbind(values(sides), values(l[sides$subject.id]))
+        sides$fused = !is.na(gr.match(sides, l, by="leix"))
+        sides$wid = width(sides)
+
+        .QQ = 0.05
+        ## gather coverage bins corresponding to fused & unfused sides of loose ends
+        rel = gr.findoverlaps(cov, sides)
+        values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
+        rel = gr2dt(rel)[, ":="(
+                       in.quant.r = ratio >= quantile(ratio, .QQ, na.rm=T) & ratio <= quantile(ratio, 1-.QQ, na.rm=T),
+                       good.cov=sum(is.na(tum.counts))/.N < 0.1 & sum(is.na(norm.counts))/.N < 0.1 & sum(is.na(ratio))/.N < 0.1 & wid > 5e4
+                   ), by=.(subject.id, fused)]
+        rel[, ":="(
+            tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
+            tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
+            normal.mean.fused = mean(norm.counts[fused], na.rm=T),
+            normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
+        ), by=leix]
+
+        ## evaluate waviness across bins per loose end
+        rel[, good.cov := all(good.cov), by=subject.id]
+        rel[, waviness := max(.waviness(start[fused], ratio[fused]), .waviness(start[!fused], ratio[!fused]), na.rm=T), by=subject.id]
+
+        ## prep glm input matrix
+        glm.in = melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+        glm.in[, ix := 1:.N, by=leix]
+        rel2 = copy(glm.in)
+        setnames(glm.in, "leix", "leix2")
+
+        ## calculate residuals from glm 
+        rel2[, residual := .mod(glm.in[leix2==leix[1],]), by=leix]
+
+
+        ## evaluate KS-test on residuals and calculate effect size
+        res = rel2[
+            tumor==TRUE,
+            .(p = tryCatch(.dflm(ks.test(residual[fused], residual[!fused]))$p,
+                     error=function(e) return(NULL))),
+            by=leix]
+        
+        est = rel2[
+          , mean(counts),
+            keyby=.(fused, tumor, leix)][
+          , V1[tumor] / V1[!tumor], keyby=.(leix, fused)][
+          , V1[fused]-V1[!fused], keyby=leix]
+        res$leix = as.character(res$leix); setkey(res, leix)
+        res[as.character(est$leix), estimate := est$V1] ## 
+        
+        ## also compare the significance on tumor versus normal
+        test = rel2[(tumor), mean(counts), keyby=.(fused, leix)][, V1[fused]-V1[!fused], keyby=leix]; setnames(test, "V1", "testimate")
+        test$leix = as.character(test$leix); setkey(test, leix)
+        nest = rel2[!(tumor), mean(counts), keyby=.(fused, leix)][, V1[fused]-V1[!fused], keyby=leix]; setnames(nest, "V1", "nestimate")
+        nest$leix = as.character(nest$leix); setkey(nest, leix)
+
+        ## don't call the loose ends around NA regions
+        .BADWIN = 1e5
+        bad.win = streduce(kag$segstats %Q% which(is.na(mean)), .BADWIN)
+        l$bad.l = l %^% bad.win
+
+        ## combine relevant fields from each test
+        cnl = rev(rev(colnames(rel))[1:6])
+        ## we got rid of the columns from .dflm except `p` and `estimate`
+        cns = colnames(res)[c(2:3)]
+        
+        ## combine all metrics
+        le.class = cbind(
+            gr2dt(l[rel[!duplicated(subject.id), leix]]),
+            rel[!duplicated(subject.id), cnl, with=F],
+            res[rel[!duplicated(subject.id), as.character(leix)], cns, with=F],
+            nest[rel[!duplicated(subject.id), as.character(leix)], "nestimate"],
+            test[rel[!duplicated(subject.id), as.character(leix)], "testimate"])[
+          , effect.thresh := beta]
+
+        ## final call
+        le.class[, passed := !is.na(p) &
+                       p < PTHRESH &
+                       estimate > (0.6*effect.thresh) &
+                       testimate > (0.6*effect.thresh) &
+                       waviness < 2 &
+                       nestimate < (0.6*effect.thresh) &
+                       !bad.l]
+        saveRDS(le.class, le.class.file.rds)
+        n.le = dt2gr(le.class)
+        jabd.simple$segstats =
+            grbind(
+            jabd.simple$segstats %Q% (loose==FALSE),
+            jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, "passed"])
+
+        ## values(l)$passed=le.class[order(leix), passed]
+        ## l$col = ifelse(l$passed, "green", "red")
+        ## l.gt = gTrack(l, circl = T)
+        ## bad.gt = gTrack(bad.win %Q% (seqnames %in% c(1:22, "X", "Y")), name = "NA")
+        ## win = streduce(l, 2e6)
+        ## cov.gt = gTrack(cov, y.field = "ratio",
+        ##                 circl = T, lwd.bo = 0.1,
+        ##                 max.ra = 1e3, name = "cov")
+        ## ppdf(plot(c(cov.gt, bad.gt, gg$gt, l.gt), head(win, 10)), width = 20)
+        ## ppdf(plot(c(cov.gt, bad.gt, gg$gt, l.gt), win[2]), width = 20)
+        
+        jmessage("Loose end quality annotated")
+    }   
+
+
+    
     if (overwrite | !file.exists(jabba.simple.rds.file))
     {
+        jmessage("Saving results")
         saveRDS(jabd$segstats, seg.gr.file)
         saveRDS(jab, jabba.raw.rds.file)
         saveRDS(jabd, jabba.rds.file)
@@ -1051,6 +1272,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         saveRDS(jab.simple.gg, jabba.simple.gg.rds.file)
         saveRDS(jab.gg, jabba.gg.rds.file)
     }
+
+
+    
 
     tryCatch(
     {
@@ -1152,6 +1376,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
         dev.off()
     }
+
+    ## annotate loose ends
+    
 
     jmessage('Done .. job output in: ', normalizePath(outdir))
 
@@ -1453,7 +1680,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ## this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
     ## #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
     ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
-    pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
 
     purity = as.numeric(purity)
     ploidy = as.numeric(ploidy)
@@ -1603,6 +1829,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             purity = confint$max.cellularity)
         } else if (use.ppgrid) {
             jmessage("Using ppgrid to estimate purity ploidy")
+            pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
             if (!is.null(het.file))
             {
                 pp = ppgrid(ss.tmp,
@@ -2024,7 +2251,7 @@ segstats = function(target,
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
                     ksamp_prior = 100  ## size of data samples to estimate alpha / beta prior values
-                    )
+)
 {
     if (!is.null(asignal))
     {
@@ -4222,11 +4449,6 @@ jabba.alleles = function(
 
     if (verbose)
         jmessage('Starting phasing ')
-    ##
-
-
-    ##
-
 
     for (k in 1:nrow(ref.jun))
     {
@@ -5846,8 +6068,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         if (length(bp1) != length(bp2))
             stop('bp1 and bp2 inputs must have identical lengths')
 
-                                        #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
-                                        #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
+        ## #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
+        ## #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
 
         values(bp1)$bp.id = 1:length(bp1);
         values(bp2)$bp.id = 1:length(bp1)+length(bp1);
@@ -6121,11 +6343,12 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     tile$ab.source = 1:length(tile) %in% E(G)$from[ab.ix]
     tile$ab.target = 1:length(tile) %in% E(G)$to[ab.ix]
 
-                                        # important: map input ra to aberrant graph edges, i.e. ab.edges matrix with $from $to and $edge.ix columns
-                                        # and one row for each aberrant edge
+    ## # important: map input ra to aberrant graph edges, i.e. ab.edges matrix with $from $to and $edge.ix columns
+    ## # and one row for each aberrant edge
     ab.edges = array(NA, dim = c(length(junctions), 3, 2), dimnames = list(NULL, c('from', 'to', 'edge.ix'), c('+', '-')))
-    dupped = duplicated(ab.pairs.bpid)
-    ab.edges[,1:2,1] = cbind(match(ab.pairs[!dupped,1], names(tile)), match(ab.pairs[!dupped,2], names(tile)))
+    dupped = duplicated(ab.pairs.bpid) ## but there are still duplicated ones
+    ab.edges[,1:2,1] = cbind(match(ab.pairs[!dupped,1], names(tile)),
+                             match(ab.pairs[!dupped,2], names(tile)))
     ab.edges[,1:2,2] = cbind(match(ab.pairs[dupped,1], names(tile)), match(ab.pairs[dupped,2], names(tile)))
     ab.edges[,3, 1] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to)) ## must be easier way to perform this taks
     ab.edges[,3, 2] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to))

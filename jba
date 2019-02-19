@@ -86,7 +86,7 @@ if (!exists("opt"))
                     help = "How many times to iterate through tiers"),
         make_option(c("-w", "--window"),
                     type = "numeric",
-                    default = 1e4,
+                    default = 1e3,
                     help = "Window to dumpster dive for junctions around loose ends"),
         make_option(c("-e", "--edgenudge"),
                     type = "numeric",
