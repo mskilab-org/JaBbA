@@ -6,9 +6,9 @@ r: 3.5.1
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-tests --no-examples"
 before_install:
 - sudo apt-get update
-- wget --no-check-certificate $URL
+- curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-- echo $JAB | gpg --no-check-certificate --passphrase-fd 0 jabba.tar.gz.gpg
+- echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
