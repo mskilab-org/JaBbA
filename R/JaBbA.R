@@ -170,7 +170,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         {
             stop(paste('Junction path', ra, 'does not exist'))
         }
-        ra.all = read.junctions(ra, geno = geno)
+        ra.all = read.junctions(ra, geno = geno) ## GRL
     } else if (is.null(ra)) {
         ra.all = GRangesList()
     } else {
@@ -197,6 +197,15 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     
     if (!inherits(ra.all, "GRangesList")){
         stop("The given input `ra` is not valid.")
+    }
+
+    ## temporary filter for any negative coords
+    bad.bp = grl.unlist(ra.all) %Q% (start<0)
+    if (length(bad.bp)>0){
+        jmessage("Warning!! ", length(bad.bp), " breakpoints in ",
+                 length(bad.ix <- unique(bad.bp$grl.ix)), " junctions ",
+                 "have negative coordinates, discard.")
+        ra.all = ra.all[setdiff(seq_along(ra.all), bad.ix)]
     }
     
     if (verbose)
