@@ -369,7 +369,17 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
             jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
-            le = jab$segstats %Q% (loose==TRUE & passed==TRUE)
+            le = gr.stripstrand(jab$segstats %Q% (loose==TRUE) %Q% which(passed==TRUE) %Q% (strand=="+"))
+            if (length(le)==0){
+                jmessage("No more loose ends to resolve, terminating.")
+                break
+            }
+            ## determine orientation of loose ends
+            le.right = le %&% gr.start(jab$segstats %Q% (loose==FALSE))
+            strand(le.right) = "+"
+            le.left = le %&% gr.end(jab$segstats %Q% (loose==FALSE))
+            strand(le.left) = "-"
+            le = grbind(le.right, le.left)
 
             ## Annotate ra.all
             all.input = readRDS(paste0(outdir, "/junctions.all.rds"))
@@ -387,7 +397,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             ## junction rescue
             ## rescues junctions that are within rescue.window bp of a loose end
             new.ra.id = union(values(jab$junctions)$id[which(values(jab$junctions)$cn>0)],## got used, stay there
-                              values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T))]) ## near a loose ends, got another chance
+                              values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T, ignore.strand = FALSE))]) ## near a loose ends, got another chance
             if (tfield %in% colnames(ra.all)){
                 high.tier.id = values(ra.all)$id[which(as.numeric(values(ra.all)[, tfield])<3)]
                 new.ra.id = union(new.ra.id, high.tier.id)
@@ -1181,13 +1191,13 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         rel[, ":="(in.quant.r = between(field.val, lb, ub)),
             by=.(subject.id, fused)]
         if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-            rel[, ":="(in.quant.r = ratio >= quantile(field, .QQ, na.rm=T) &
-                           field <= quantile(field, 1-.QQ, na.rm=T),
-                       good.cov = sum(is.na("tum.counts"))/.N < 0.1 &
-                           sum(is.na("norm.counts"))/.N < 0.1 &
-                           sum(is.na(field))/.N < 0.1 &
+            rel[, ":="(in.quant.r = field.val >= quantile(field.val, .QQ, na.rm=T) &
+                           field.val <= quantile(field.val, 1-.QQ, na.rm=T),
+                       good.cov = sum(is.na(tum.counts))/.N < 0.1 &
+                           sum(is.na(norm.counts))/.N < 0.1 &
+                           sum(is.na(field.val))/.N < 0.1 &
                            wid > 5e4),
-                by=.(subject.id, fused), with = FALSE]
+                by=.(subject.id, fused)]
             rel[, ":="(
                 tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
                 tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
@@ -1216,7 +1226,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
               , V1[tumor] / V1[!tumor], keyby=.(leix, fused)][
               , V1[fused]-V1[!fused], keyby=leix]
             res$leix = as.character(res$leix); setkey(res, leix)
-            res[as.character(est$leix), estimate := est$V1] ## 
+            ## FIXME: sometimes estimate is NA!!
+            res[as.character(est$leix), estimate := est$V1]
             ## also compare the significance on tumor versus normal
             test = rel2[
             (tumor),
