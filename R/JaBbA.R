@@ -413,10 +413,12 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 last.ra = new.ra
                 this.iter = this.iter + 1
             }
-            ## ## keep using the initial purity ploidy values
-            ## pp1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
-            ## purity = pp1$purity[1]
-            ## ploidy = pp1$ploidy[1]
+            ## keep using the initial purity ploidy values
+            pp1 = readRDS(paste0(
+                outdir,
+                '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
+            purity = pp1$purity[1]
+            ploidy = pp1$ploidy[1]
 
             seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## read from the first iteration
 
