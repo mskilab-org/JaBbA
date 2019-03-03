@@ -29,9 +29,7 @@
 #' @import gTrack
 #' @import gGnome
 #' @import optparse
-#' @import data.table
-
-                                        # @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
+#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
 #' @importFrom gplots col2hex
 #' @importFrom Ppurple ppurple
 #' @importFrom graphics plot
@@ -44,7 +42,6 @@
 #' @importFrom rtracklayer import
 #' @importFrom GenomeInfoDb seqlengths
 #' @importFrom DNAcopy CNA segment smooth.CNA
-#' 
 #' @useDynLib JaBbA
 
 ## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
@@ -1190,6 +1187,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         rel[, field := field.val]
         rel[, ":="(in.quant.r = between(field.val, lb, ub)),
             by=.(subject.id, fused)]
+
         if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
             rel[, ":="(in.quant.r = field.val >= quantile(field.val, .QQ, na.rm=T) &
                            field.val <= quantile(field.val, 1-.QQ, na.rm=T),
@@ -1258,9 +1256,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 mean.unfused = mean(field.val[!fused], na.rm=T)),
                 by=leix]
             ## simple ks.test
-            res = rel[
-              , .(p = ks.test(field.val[fused], field.val[!fused])$`p.value`),
-                keyby=leix]
+            res = rel[, .(
+                p = tryCatch(ks.test(field.val[fused], field.val[!fused])$`p.value`,
+                             error = function(e){return(as.double(NA))})), keyby=leix]            
         }
 
         ## evaluate waviness across bins per loose end
