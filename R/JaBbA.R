@@ -371,7 +371,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 jmessage("No more loose ends to resolve, terminating.")
                 break
             } else {
-                le = le %Q% (passed==TRUE)
+                le = le %Q% which(passed==TRUE)
                 if (length(le)==0){
                     jmessage("No more plausible loose ends, terminating")
                     break
@@ -1151,7 +1151,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         return(res)
     }
 
-#######################
+
     ## start building the model
     ## gather loose ends from sample
     gg = tryCatch(gG(jabba=jabd), error=function(e) readRDS(fi))
