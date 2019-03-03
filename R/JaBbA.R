@@ -366,10 +366,16 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
             jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
-            le = gr.stripstrand(jab$segstats %Q% (loose==TRUE) %Q% which(passed==TRUE) %Q% (strand=="+"))
+            le = gr.stripstrand(jab$segstats %Q% (loose==TRUE & strand=="+"))
             if (length(le)==0){
                 jmessage("No more loose ends to resolve, terminating.")
                 break
+            } else {
+                le = le %Q% (passed==TRUE)
+                if (length(le)==0){
+                    jmessage("No more plausible loose ends, terminating")
+                    break
+                }
             }
             ## determine orientation of loose ends
             le.right = le %&% gr.start(jab$segstats %Q% (loose==FALSE))
@@ -1144,7 +1150,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         res = dt$counts - predict(mod, dt, type='response')
         return(res)
     }
-
 
 #######################
     ## start building the model
