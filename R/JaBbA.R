@@ -1223,7 +1223,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             res = rel2[
                 tumor==TRUE,
                 .(p = tryCatch(.dflm(ks.test(residual[fused], residual[!fused]))$p,
-                               error=function(e) return(NULL))),
+                               error=function(e) return(as.double(NA)))),
                 by=leix]
             est = rel2[
               , mean(counts),
