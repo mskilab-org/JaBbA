@@ -1211,12 +1211,14 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 rel[(in.quant.r),], id.vars=c("leix", "fused"),
                 measure.vars=c("tum.counts", "norm.counts"),
                 value.name="counts")[, tumor := variable=="tum.counts"]
+            ## some points are NA, remove
+            glm.in = glm.in[!is.na(counts)]
             ## prep glm input matrix
             glm.in[, ix := 1:.N, by=leix]
             rel2 = copy(glm.in)
             setnames(glm.in, "leix", "leix2")
             ## calculate residuals from glm 
-            rel2[, residual := .mod(glm.in[leix2==leix[1],]), by=leix]
+            rel2[, residual := tryCatch(.mod(glm.in[leix2==leix[1],]), error = function(e){return(as.double(NA))}), by=leix]
             ## evaluate KS-test on residuals and calculate effect size
             res = rel2[
                 tumor==TRUE,
