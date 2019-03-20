@@ -1328,7 +1328,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             grbind(
                 jabd.simple$segstats %Q% (loose==FALSE),
                 jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, "passed"])
+        jabd$segstats =
+            grbind(
+                jabd$segstats %Q% (loose==FALSE),
+                jabd$segstats %Q% (loose==TRUE) %$% n.le[, "passed"])
 
+        ## message("legacy code for plotting the loose end quality in gTrack")
         ## values(l)$passed=le.class[order(leix), passed]
         ## l$col = ifelse(l$passed, "green", "red")
         ## l.gt = gTrack(l, circl = T)
@@ -1362,7 +1367,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     }
 
 
-    
+    browser()
 
     tryCatch(
     {
@@ -6455,7 +6460,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 }
 
 
-
+## FIXME: problem too large
 
 ########################################
 #' @name jabba2vcf
@@ -6492,7 +6497,9 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
         adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
         adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
 
-        if (any(jab$segstatsloose))
+        ## #' xtYao #' Wednesday, Mar 20, 2019 11:09:46 AM
+        # Fix missing $
+        if (any(jab$segstats$loose))
         {
             adj.ref[jab$segstats$loose, ] = 0
             adj.ref[,jab$segstats$loose] = 0
@@ -6530,7 +6537,6 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
                       ifelse(as.logical(strand(gr1)=='+') & as.logical(strand(gr2)=='-'), paste(gr2$REF, ']', seqnames(gr1), ':', start(gr1), ']', sep = ''),
                              paste(gr2$REF, '[', seqnames(gr1), ':', start(gr1), '[', sep = '')))) ## last one is B- --> A-
 
-
             gr1$FILTER = gr2$FILTER = ifelse(gr2$acn != 0, "PASS", "NINC")
             gr2$FORMAT = gr1$FORMAT = "GT:CN:RCN:SCN"
             gr1$GENO = paste(ifelse(gr1$rcn>0, '0/1', '1'), gr1$acn, gr1$rcn, gr1$cn, sep = ":")
@@ -6561,7 +6567,17 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
         lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
         if (length(lix)>0)
         {
-            gr.loose = gr.start(jab$segstats[lix, 'cn']) ## loose ends should be width 1, but just in case
+            ## loose ends should be width 1, but just in case
+            if (is.element("passed", colnames(values(jab$segstats)))){
+                ## with le quality
+                gr.loose = gr.start(jab$segstats[lix, c('passed', 'cn')]) 
+                gr.loose$QUAL = ifelse(gr.loose$passed, "PASSED", "FAILED")
+            } else {
+                ## without
+                gr.loose = gr.start(jab$segstats[lix, c('cn')]) 
+                gr.loose$QUAL = '.'
+            }
+
             gr.loose$jid = NA
             gr.loose$nid = lix
             gr.loose$acn = gr.loose$cn
@@ -6591,14 +6607,14 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
             gr.loose$CHROM = as.character(seqnames(gr.loose))
             gr.loose$POS = start(gr.loose)
             gr.loose$FILTER = "LOOSEEND"
-            gr.loose$QUAL = '.'
+            
             gr.loose$INFO = paste("SVTYPE=BND", ";CNADJ=", gr.loose$acn, ";CNRADJ=", gr.loose$rcn, ";CN=", gr.loose$cn, ";JABID=", lix, ";RJABID=", rcix[lix], sep = '')
             gr.loose = gr.loose[, vcffields]
         }
         else
             gr.loose = GRanges()
 
-                                        # make header
+        ## make header
         sl = GenomeInfoDb::seqlengths(jab$segstats)
         header = '##fileformat=VCFv4.2'
         header = c(header, sprintf('##fileDate=%s', format(Sys.Date(), '%Y%m%d')))
