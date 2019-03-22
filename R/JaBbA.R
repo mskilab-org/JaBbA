@@ -1158,12 +1158,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
     lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
     if ((nrow(ll)+nrow(lr))>0){
-        l = rbind(ll, lr)[, ":="(sample = opt$name)]
+        l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
         l[, leix := 1:.N]
         l = dt2gr(l)
 
         ## load coverage and beta (coverage CN fit)
-        cov = readRDS(opt$coverage)
+        cov = readRDS(coverage) ## FIXME
         kary = readRDS(paste0(outdir, "/karyograph.rds"))
         purity = as.numeric(kary$purity)
         ploidy = as.numeric(kary$ploidy)
