@@ -1367,7 +1367,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     }
 
 
-    browser()
 
     tryCatch(
     {
