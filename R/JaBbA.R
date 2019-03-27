@@ -240,23 +240,24 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
         warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
         values(ra.all)[, tfield] = 2
     }
-
     if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
         ## junctions from ra.uf will always have tier 3
         ## at this point
-        ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
+        ## ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
+        ra.all.uf = ra.merge(ra.all, ra.uf, pad=1000, ind=TRUE) ## soft merge
         ## those match a record in junction, will be assigned to the tier in junction
         values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
             values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
         ## the rest will be tier 3
         values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
+        ra.all = ra.all.uf
         ## FIXME: ra.merge still gives duplicates
         ## FIXME: substitute these ra.xx fuctions to Junction class in gGnome
         ## extra dedup
-        ndup = which(!ra.duplicated(ra.all.uf))
-        ra.all = ra.all.uf[ndup]
+        ## ndup = which(!ra.duplicated(ra.all.uf))
+        ## ra.all = ra.all.uf[ndup]
     }
 
     if (length(ra.all)>0){
@@ -5746,7 +5747,6 @@ read.junctions = function(rafile,
             if (!all(vgr$svtype == 'BND')){
                 warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
                                 sum(vgr$svtype != 'BND')))
-
             }
 
             bix = which(vgr$svtype == "BND")
