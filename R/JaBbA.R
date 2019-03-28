@@ -900,7 +900,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
         if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
             bps.cov = gr.val(bpss, coverage, val = 'ratio')
-                                        #        bps.cov = bpss %$% coverage
             na.jix = unique(bps.cov$grl.ix[is.na(bps.cov$ratio)])
             if (length(na.jix)>0){
                 ## if (verbose)
@@ -1044,7 +1043,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     {
         jmessage('Checking for hets')
     }
-
+    
     if (!is.null(hets))
         if (file.exists(hets.gr.rds.file))
             tryCatch(
@@ -1152,7 +1151,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         return(res)
     }
 
-
     ## start building the model
     ## gather loose ends from sample
     gg = tryCatch(gG(jabba=jabd), error=function(e) readRDS(fi))
@@ -1164,7 +1162,16 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         l = dt2gr(l)
 
         ## load coverage and beta (coverage CN fit)
-        cov = readRDS(coverage) ## FIXME
+        if (is.character(coverage)){
+            if (grepl("rds$", coverage)){
+                cov = readRDS(coverage)
+            } else {
+                cov = dt2gr(fread(coverage))
+            }
+        } else if (inherits(coverage, "GRanges")){
+            cov = coverage
+        }
+        
         kary = readRDS(paste0(outdir, "/karyograph.rds"))
         purity = as.numeric(kary$purity)
         ploidy = as.numeric(kary$ploidy)
