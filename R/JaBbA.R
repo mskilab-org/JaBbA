@@ -1043,7 +1043,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     {
         jmessage('Checking for hets')
     }
-    
+
     if (!is.null(hets))
         if (file.exists(hets.gr.rds.file))
             tryCatch(
@@ -1153,7 +1153,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     ## start building the model
     ## gather loose ends from sample
-    gg = tryCatch(gG(jabba=jabd), error=function(e) readRDS(fi))
+    gg = tryCatch(gG(jabba = jabd), error=function(e) readRDS(jabba.rds.file))
     ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
     lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
     if ((nrow(ll)+nrow(lr))>0){
@@ -1201,13 +1201,15 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         rel[, ":="(in.quant.r = between(field.val, lb, ub)),
             by=.(subject.id, fused)]
 
+        
         if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-            rel[, ":="(in.quant.r = field.val >= quantile(field.val, .QQ, na.rm=T) &
-                           field.val <= quantile(field.val, 1-.QQ, na.rm=T),
-                       good.cov = sum(is.na(tum.counts))/.N < 0.1 &
-                           sum(is.na(norm.counts))/.N < 0.1 &
-                           sum(is.na(field.val))/.N < 0.1 &
-                           wid > 5e4),
+            rel[, ":="(in.quant.r = rep(field.val >= quantile(field.val, .QQ, na.rm=T) &
+                                        field.val <= quantile(field.val, 1-.QQ, na.rm=T),
+                                        length.out = .N),
+                       good.cov = rep(sum(is.na(tum.counts))/.N < 0.1 &
+                                      sum(is.na(norm.counts))/.N < 0.1 &
+                                      sum(is.na(field.val))/.N < 0.1 &
+                                      wid > 5e4, length.out = .N)),
                 by=.(subject.id, fused)]
             rel[, ":="(
                 tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
@@ -2910,7 +2912,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             }
         }
 
-        sols = mclapply(1:length(cll), function(k, args)
+        sols = mclapply(seq_along(cll), function(k, args)
         {
             ix = node.map[cll[[k]]] ## indices in the original graph
             uix = unique(ix)
