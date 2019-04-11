@@ -1194,17 +1194,16 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
         ## the difference of coverage
         field.val = values(rel)[, field]
-        ## lb = quantile(field.val, .QQ, na.rm=T)
-        ## ub = quantile(values(rel)[, field], 1-.QQ, na.rm=T)
+        lb = quantile(field.val, .QQ, na.rm=T)
+        ub = quantile(field.val, 1-.QQ, na.rm=T)
         rel = gr2dt(rel)
         rel[, field := field.val]
-        rel[, ":="(in.quant.r = between(field.val, lb, ub)),
+        rel[, ":="(in.quant.r = between(field, lb, ub)),
             by=.(subject.id, fused)]
 
-        
         if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-            rel[, ":="(in.quant.r = rep(field.val >= quantile(field.val, .QQ, na.rm=T) &
-                                        field.val <= quantile(field.val, 1-.QQ, na.rm=T),
+            rel[, ":="(in.quant.r = rep(field >= quantile(field, .QQ, na.rm=T) &
+                                        field <= quantile(field, 1-.QQ, na.rm=T),
                                         length.out = .N),
                        good.cov = rep(sum(is.na(tum.counts))/.N < 0.1 &
                                       sum(is.na(norm.counts))/.N < 0.1 &
@@ -1218,13 +1217,14 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
             ), by=leix]
             glm.in = melt(
-                rel[(in.quant.r),], id.vars=c("leix", "fused"),
+                rel[(in.quant.r),],
+                id.vars=c("leix", "fused"),
                 measure.vars=c("tum.counts", "norm.counts"),
                 value.name="counts")[, tumor := variable=="tum.counts"]
             ## some points are NA, remove
             glm.in = glm.in[!is.na(counts)]
             ## prep glm input matrix
-            glm.in[, ix := 1:.N, by=leix]
+            glm.in[, ix := seq_len(.N), by=leix]
             rel2 = copy(glm.in)
             setnames(glm.in, "leix", "leix2")
             ## calculate residuals from glm 
