@@ -846,8 +846,30 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    ## if (!is.character(ra))
-    ## {
+    ## clean up the seqlevels before moving on
+    seg.sl = seqlengths(seg)
+    cov.sl = seqlengths(coverage)
+    ra.sl = seqlengths(ra)
+    common.sn = intersect(intersect(names(seg.sl), names(cov.sl)), names(ra.sl))
+    common.sl = data.table(seqnames = common.sn,
+                           seg.sl = seg.sl[common.sn],
+                           cov.sl = cov.sl[common.sn],
+                           ra.sl = ra.sl[common.sn])
+    ## keep the largest length so we don't lose any data
+    ## it is more common for a certain data type to have shorter genome length than having longer
+    common.sl = common.sl[, sl := pmax(seg.sl, cov.sl, ra.sl)][, setNames(sl, seqnames)]
+    seg = seg %Q% (seqnames %in% names(common.sl))
+    seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(common.sl)))]
+    coverage = coverage %Q% (seqnames %in% names(common.sl))
+    seqlevels(coverage) = seqlevels(coverage)[which(is.element(seqlevels(coverage), names(common.sl)))]
+    ra = split(tmp <- (grl.unlist(ra) %Q% (seqnames %in% names(common.sl))), tmp$grl.ix)
+    ## in case some junction lost one breakpoint
+    intact.ix = which(elementNROWS(ra)==2)
+    ra = ra[intact.ix]
+    seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(common.sl)))]
+    jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
+             paste0(names(common.sl), ":", common.sl, collapse = "\n"))
+    
     if (overwrite | !file.exists(kag.file)){
         karyograph_stub(seg,
                         coverage,
@@ -6597,7 +6619,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
             isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
             pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
 
-            ##                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            ## gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
             gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
