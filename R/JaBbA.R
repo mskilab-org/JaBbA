@@ -197,7 +197,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     }
 
     ## temporary filter for any negative coords
-    bad.bp = grl.unlist(ra.all) %Q% (start<0)
+    bad.bp = unname(grl.unlist(ra.all)) %Q% (start<0)
     if (length(bad.bp)>0){
         jmessage("Warning!! ", length(bad.bp), " breakpoints in ",
                  length(bad.ix <- unique(bad.bp$grl.ix)), " junctions ",
@@ -858,14 +858,30 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## keep the largest length so we don't lose any data
     ## it is more common for a certain data type to have shorter genome length than having longer
     common.sl = common.sl[, sl := pmax(seg.sl, cov.sl, ra.sl)][, setNames(sl, seqnames)]
-    seg = seg %Q% (seqnames %in% names(common.sl))
+    new.seg = seg %Q% (seqnames %in% names(common.sl))
+    if (length(new.seg)<length(seg)){
+        jmessage(length(seg)-length(new.seg), " segments are discarded because they fall out of the ref genome.")
+    }
+    seg = new.seg
     seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(common.sl)))]
-    coverage = coverage %Q% (seqnames %in% names(common.sl))
+    new.coverage = coverage %Q% (seqnames %in% names(common.sl))
     seqlevels(coverage) = seqlevels(coverage)[which(is.element(seqlevels(coverage), names(common.sl)))]
+    if (length(new.coverage)<length(coverage)){
+        jmessage(length(coverage)-length(new.coverage), " coverage points are discarded because they fall out of the ref genome.")
+    }
+    coverage = new.coverage
     ra = split(tmp <- (grl.unlist(ra) %Q% (seqnames %in% names(common.sl))), tmp$grl.ix)
     ## in case some junction lost one breakpoint
     intact.ix = which(elementNROWS(ra)==2)
-    ra = ra[intact.ix]
+    new.ra = ra[intact.ix]
+    if (length(new.ra)<length(ra)){
+        jmessage(length(ra)-length(new.ra), " rearrangements are discarded because they fall out of the ref genome.")
+        ## at this point, there's got to be at least 1 coverage point to start the program
+        if (length(coverage)==0){
+            stop("Empty coverage data. Please check if their reference chromsome name match the other inputs.")
+        }
+    }
+    ra = new.ra
     seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(common.sl)))]
     jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
              paste0(names(common.sl), ":", common.sl, collapse = "\n"))
@@ -6508,7 +6524,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @return returns character string or writes to file if specified
 #' @noRd
 #########################################
-jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE)
+jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, include.loose = TRUE, include.cn0 = TRUE, cnv = FALSE)
 {
     if (is.null(hg))
         hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
@@ -6518,24 +6534,30 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
     ## convert all aberrant connections into pairs of VCF rows
     if (!cnv)
     {
-        jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
-        abs = rbind(jab$ab.edges[jix,1:2,1])
-        rabs = rbind(jab$ab.edges[jix,1:2,2])
-        rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
-
-        adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
-        adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
-        adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
-
-        ## #' xtYao #' Wednesday, Mar 20, 2019 11:09:46 AM
-        # Fix missing $
-        if (any(jab$segstats$loose))
-        {
-            adj.ref[jab$segstats$loose, ] = 0
-            adj.ref[,jab$segstats$loose] = 0
-        }
-
-        if (length(jix)>0)
+      jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
+      if (!include.cn0) ## remove from jix
+      {
+        jcn = jab$adj[jab$ab.edges[jix, 1:2, 1]]
+        jix = jix[jcn>0]
+        message('Removing cn=0')
+      }
+      abs = rbind(jab$ab.edges[jix,1:2,1])
+      rabs = rbind(jab$ab.edges[jix,1:2,2])
+      rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
+      
+      adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
+      adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
+      adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
+      
+      ## #' xtYao #' Wednesday, Mar 20, 2019 11:09:46 AM
+      ## Fix missing $
+      if (any(jab$segstats$loose))
+      {
+        adj.ref[jab$segstats$loose, ] = 0
+        adj.ref[,jab$segstats$loose] = 0
+      }
+      
+      if (length(jix)>0)
         {
             jcn = jab$adj[abs]
             gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
@@ -6595,7 +6617,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 
         ## now loose ends
         lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
-        if (length(lix)>0)
+        if (length(lix)>0 & include.loose)
         {
             ## loose ends should be width 1, but just in case
             if (is.element("passed", colnames(values(jab$segstats)))){
@@ -6619,7 +6641,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
             isp = apply(cbind(tmp1, tmp2), 1, function(x) which(is.na(x))[1])==2 ## is the loose end a parent or child of a seg?
             pcid = pmax(tmp1, tmp2, na.rm = T) ## which seg is the parent / child of the loose end
 
-            ## gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
+            ##                        gr.loose$rcn = ifelse(isp, colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
             gr.loose$rcn = ifelse(isp, Matrix::colSums(adj.ref[,pcid, drop = FALSE]), Matrix::rowSums(adj.ref[pcid,, drop = FALSE])) ## if loose end is parent of seg, we want num copies of that segs reference parent,
 
@@ -6838,7 +6860,6 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
         return(out)
     }
 }
-
 
 #' @name read_vcf
 #' @rdname internal
