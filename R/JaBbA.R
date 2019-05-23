@@ -715,7 +715,15 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
             set.seed(42)
             binw = median(sample(width(coverage), 30), na.rm=T)
-            vals = values(coverage)[, field]
+            vals = as.double(values(coverage)[, field])
+            ## if `vals` contain minute values that are basically deemed as zero in R
+            ## we add a tiny little bit of non-zero value to all of them before segmenting
+            if (length(zero.ix <- which(vals==0))>0){
+                tiny.val = .Machine$double.eps
+                vals = vals + tiny.val
+                jmessage(length(zero.ix), " coverage data points have zero value, adding a tiny value ",
+                       tiny.val, " to prevent log error.")
+            }
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
             cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
@@ -4437,8 +4445,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 #' $ab.ix = indices of aberrant edges in $aadj
 #' $ref.ix = indices of reference edges in $aadj
 ############################################
-jabba.alleles = function(
-                         jab,
+jabba.alleles = function(jab,
                          het.sites, ## granges with meta data fields for alt.count and
                          alt.count.field = 'alt',
                          ref.count.field = 'ref',
