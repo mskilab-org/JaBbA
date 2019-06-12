@@ -599,7 +599,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
                       loose.penalty.mode = "boolean",
-                      indel = TRUE,
+                      indel = FALSE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
                       dyn.tuning = TRUE,
@@ -878,7 +878,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         jmessage(length(coverage)-length(new.coverage), " coverage points are discarded because they fall out of the ref genome.")
     }
     coverage = new.coverage
-    ra = split(tmp <- (grl.unlist(ra) %Q% (seqnames %in% names(common.sl))), tmp$grl.ix)
+    tmp = grl.unlist(ra)
+    tmp.md = values(ra)
+    ra = split(tmp[, c()], tmp$grl.ix)
+    values(ra) = tmp.md[as.numeric(names(ra)),]
     ## in case some junction lost one breakpoint
     intact.ix = which(elementNROWS(ra)==2)
     new.ra = ra[intact.ix]
