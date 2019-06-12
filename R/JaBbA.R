@@ -878,8 +878,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         jmessage(length(coverage)-length(new.coverage), " coverage points are discarded because they fall out of the ref genome.")
     }
     coverage = new.coverage
-    tmp = grl.unlist(ra)
+    tmp = grl.unlist(ra) 
     tmp.md = values(ra)
+    tmp = tmp %Q% (seqnames %in% names(common.sl))
     ra = split(tmp[, c()], tmp$grl.ix)
     values(ra) = tmp.md[as.numeric(names(ra)),]
     ## in case some junction lost one breakpoint
