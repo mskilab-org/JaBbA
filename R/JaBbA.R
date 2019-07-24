@@ -878,7 +878,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     coverage = new.coverage
     tmp = grl.unlist(ra) 
     tmp.md = values(ra)
-    tmp = tmp %Q% (seqnames %in% names(union.sl))
+    nms = names(tmp)
+    names(tmp) = NULL
+    good.tmp = which(as.character(seqnames(tmp)) %in% names(union.sl))
+    tmp = tmp[good.tmp]
+    names(tmp) = nms[good.tmp]
     ra = split(tmp[, c()], tmp$grl.ix)
     values(ra) = tmp.md[as.numeric(names(ra)),]
     ## in case some junction lost one breakpoint
