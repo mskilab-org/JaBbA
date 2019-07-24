@@ -197,7 +197,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     }
 
     ## temporary filter for any negative coords
-    bad.bp = grl.unlist(ra.all) %Q% (start<0)
+    bad.bp = unname(grl.unlist(ra.all)) %Q% (start<0)
     if (length(bad.bp)>0){
         jmessage("Warning!! ", length(bad.bp), " breakpoints in ",
                  length(bad.ix <- unique(bad.bp$grl.ix)), " junctions ",
@@ -599,7 +599,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
                       loose.penalty.mode = "boolean",
-                      indel = TRUE,
+                      indel = FALSE,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
                       dyn.tuning = TRUE,
@@ -715,7 +715,15 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
             set.seed(42)
             binw = median(sample(width(coverage), 30), na.rm=T)
-            vals = values(coverage)[, field]
+            vals = as.double(values(coverage)[, field])
+            ## if `vals` contain minute values that are basically deemed as zero in R
+            ## we add a tiny little bit of non-zero value to all of them before segmenting
+            if (length(zero.ix <- which(vals==0))>0){
+                tiny.val = .Machine$double.eps
+                vals = vals + tiny.val
+                jmessage(length(zero.ix), " coverage data points have zero value, adding a tiny value ",
+                       tiny.val, " to prevent log error.")
+            }
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
             cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
@@ -846,8 +854,50 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    ## if (!is.character(ra))
-    ## {
+    ## clean up the seqlevels before moving on
+    seg.sl = seqlengths(seg)
+    cov.sl = seqlengths(coverage)
+    ra.sl = seqlengths(ra)
+    common.sn = intersect(intersect(names(seg.sl), names(cov.sl)), names(ra.sl))
+    common.sl = data.table(seqnames = common.sn,
+                           seg.sl = seg.sl[common.sn],
+                           cov.sl = cov.sl[common.sn],
+                           ra.sl = ra.sl[common.sn])
+    ## keep the largest length so we don't lose any data
+    ## it is more common for a certain data type to have shorter genome length than having longer
+    common.sl = common.sl[, sl := pmax(seg.sl, cov.sl, ra.sl)][, setNames(sl, seqnames)]
+    new.seg = seg %Q% (seqnames %in% names(common.sl))
+    if (length(new.seg)<length(seg)){
+        jmessage(length(seg)-length(new.seg), " segments are discarded because they fall out of the ref genome.")
+    }
+    seg = new.seg
+    seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(common.sl)))]
+    new.coverage = coverage %Q% (seqnames %in% names(common.sl))
+    seqlevels(coverage) = seqlevels(coverage)[which(is.element(seqlevels(coverage), names(common.sl)))]
+    if (length(new.coverage)<length(coverage)){
+        jmessage(length(coverage)-length(new.coverage), " coverage points are discarded because they fall out of the ref genome.")
+    }
+    coverage = new.coverage
+    tmp = grl.unlist(ra) 
+    tmp.md = values(ra)
+    tmp = tmp %Q% (seqnames %in% names(common.sl))
+    ra = split(tmp[, c()], tmp$grl.ix)
+    values(ra) = tmp.md[as.numeric(names(ra)),]
+    ## in case some junction lost one breakpoint
+    intact.ix = which(elementNROWS(ra)==2)
+    new.ra = ra[intact.ix]
+    if (length(new.ra)<length(ra)){
+        jmessage(length(ra)-length(new.ra), " rearrangements are discarded because they fall out of the ref genome.")
+        ## at this point, there's got to be at least 1 coverage point to start the program
+        if (length(coverage)==0){
+            stop("Empty coverage data. Please check if their reference chromsome name match the other inputs.")
+        }
+    }
+    ra = new.ra
+    seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(common.sl)))]
+    jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
+             paste0(names(common.sl), ":", common.sl, collapse = "\n"))
+    
     if (overwrite | !file.exists(kag.file)){
         karyograph_stub(seg,
                         coverage,
@@ -4399,8 +4449,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 #' $ab.ix = indices of aberrant edges in $aadj
 #' $ref.ix = indices of reference edges in $aadj
 ############################################
-jabba.alleles = function(
-                         jab,
+jabba.alleles = function(jab,
                          het.sites, ## granges with meta data fields for alt.count and
                          alt.count.field = 'alt',
                          ref.count.field = 'ref',
@@ -6822,7 +6871,6 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, include.loo
         return(out)
     }
 }
-
 
 #' @name read_vcf
 #' @rdname internal
