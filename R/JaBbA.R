@@ -261,10 +261,10 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
     }
 
     if (length(ra.all)>0){
-        if (length(unique(values(ra.all)[, tfield]))==1) {
-            jmessage("Only one tier of junctions found, cancel iteration if requested")
-            reiterate = 1
-        }
+        ## if (length(unique(values(ra.all)[, tfield]))==1) {
+        ##     jmessage("Only one tier of junctions found, cancel iteration if requested")
+        ##     reiterate = 1
+        ## }
 
         ## final sanity check before running
         if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
@@ -299,15 +299,9 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
         last.ra = ra.all[values(ra.all)[, tfield]<3]
 
-        ## #    if (verbose)
-        ## #    {
-        ## jmessage('Starting JaBbA iterative with ', length(last.ra), ' upper tier (tier 1 and 2) junctions')
         jmessage('Starting JaBbA iterative with ', length(last.ra), ' junctions')
-        ## jmessage('Will progressively add tier 3 junctions within ', rescue.window, 'bp of a loose end in prev iter')
         jmessage('Will progressively add junctions within ', rescue.window, 'bp of a loose end in prev iter')
         jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
-        ## jmessage('(note: adjust iterations and rescue window via reiterate= and rescue.window= parameters)')
-        ##   }
 
         while (continue) {
             gc()
@@ -858,29 +852,33 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     seg.sl = seqlengths(seg)
     cov.sl = seqlengths(coverage)
     ra.sl = seqlengths(ra)
-    common.sn = intersect(intersect(names(seg.sl), names(cov.sl)), names(ra.sl))
-    common.sl = data.table(seqnames = common.sn,
-                           seg.sl = seg.sl[common.sn],
-                           cov.sl = cov.sl[common.sn],
-                           ra.sl = ra.sl[common.sn])
+    union.sn = union(union(names(seg.sl), names(cov.sl)), names(ra.sl))
+    union.sl = data.table(
+        seqnames = union.sn,
+        seg.sl = seg.sl[union.sn],
+        cov.sl = cov.sl[union.sn],
+        ra.sl = ra.sl[union.sn])
     ## keep the largest length so we don't lose any data
-    ## it is more common for a certain data type to have shorter genome length than having longer
-    common.sl = common.sl[, sl := pmax(seg.sl, cov.sl, ra.sl)][, setNames(sl, seqnames)]
-    new.seg = seg %Q% (seqnames %in% names(common.sl))
+    ## it is more union for a certain data type to have shorter genome length than having longer
+    union.sl = union.sl[
+      , sl := pmax(seg.sl, cov.sl, ra.sl, na.rm = T)][
+      , setNames(sl, seqnames)]
+    new.seg = seg %Q% (seqnames %in% names(union.sl))
     if (length(new.seg)<length(seg)){
         jmessage(length(seg)-length(new.seg), " segments are discarded because they fall out of the ref genome.")
     }
     seg = new.seg
-    seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(common.sl)))]
-    new.coverage = coverage %Q% (seqnames %in% names(common.sl))
-    seqlevels(coverage) = seqlevels(coverage)[which(is.element(seqlevels(coverage), names(common.sl)))]
+    seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(union.sl)))]
+    new.coverage = coverage %Q% (seqnames %in% names(union.sl))
+    seqlevels(coverage) = seqlevels(coverage)[
+        which(is.element(seqlevels(coverage), names(union.sl)))]
     if (length(new.coverage)<length(coverage)){
         jmessage(length(coverage)-length(new.coverage), " coverage points are discarded because they fall out of the ref genome.")
     }
     coverage = new.coverage
     tmp = grl.unlist(ra) 
     tmp.md = values(ra)
-    tmp = tmp %Q% (seqnames %in% names(common.sl))
+    tmp = tmp %Q% (seqnames %in% names(union.sl))
     ra = split(tmp[, c()], tmp$grl.ix)
     values(ra) = tmp.md[as.numeric(names(ra)),]
     ## in case some junction lost one breakpoint
@@ -894,9 +892,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
     ra = new.ra
-    seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(common.sl)))]
+    seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(union.sl)))]
     jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
-             paste0(names(common.sl), ":", common.sl, collapse = "\n"))
+             paste0(names(union.sl), ":", union.sl, collapse = "\n"))
     
     if (overwrite | !file.exists(kag.file)){
         karyograph_stub(seg,
@@ -1752,9 +1750,17 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 hets.gr = dt2gr(hets[pmin(ref.frac.n, 1-ref.frac.n) > 0.2 & (ref.count.n + alt.count.n)>=2, ])
                 hets.gr$alt = hets.gr$alt.count.t
                 hets.gr$ref = hets.gr$ref.count.t
-            }
-            else ## new, standard format, with $alt and $ref field
-            {
+            } else if (grepl("chrom", colnames(hets)[1], ignore.case = T) &
+                       grepl("(pos)?|(start)?", colnames(hets)[2], ignore.case = T) &
+                       any(grepl("af$", colnames(hets), ignore.case = T))){
+                ## PCAWG BAF format: Chromosome Pos BAF
+                colnames(hets)[1:2] = c("chr", "pos")
+                baf.col = grep("af$", colnames(hets),
+                value= TRUE, ignore.case = T)[1]
+                baf = hets[, baf.col, with = FALSE][[1]]
+                hets[, ":="(ref = 1 - baf, alt = baf)]
+                hets.gr = dt2gr(hets)
+            } else {## new, standard format, with $alt and $ref field
                 hets.gr = dt2gr(hets)
                 if (all(c("alt", "ref") %in% colnames(hets))){
                     jmessage("Valid hets already")
@@ -2551,7 +2557,7 @@ segstats = function(target,
         ## if the user didn't give the max.na, we infer it
         if (!is.numeric(max.na) || !between(max.na, 0, 1)){
             ## gather the values of nafrac
-            colnames(values(target))
+            ## colnames(values(target))
             nafrac = gr2dt(target %Q% (strand=="+"))[, .(seqnames, start, end, tile.id, nbins.nafrac)]
             dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
             rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
@@ -2590,9 +2596,9 @@ segstats = function(target,
         ## loess var estimation
         ## i.e. we fit loess function to map segment mean to variance across the sample
         ## the assumption is that such a function exists
-        ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        MINBIN = 20
-        tmp = data.table(var = target$var,
+        ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]        
+        MINBIN = 5 ## enough data so variance can be estimated
+        tmp = data.table(var = target$raw.var,
                          mean = target$mean,
                          nbins = target$nbins,
                          bad = target$bad)[var>0 & nbins>MINBIN & !bad, ]
@@ -2607,69 +2613,9 @@ segstats = function(target,
             warning(sprintf('Could not find enough (>=10) segments with more than %s bins for modeling mean to variance relationship in data.  Data might be hypersegmented.', MINBIN))
         }
 
-        ## tmp[, sample.sd := sqrt(var)]
-        ## tmp[, log.nbins := log10(nbins)]
-        ## tmp[, sd2mean := sample.sd/mean]
-        ## tmp[, high.mean := mean>5]
-
-        ## lr = tmp[sd2mean<1, lm(sd2mean ~ log.nbins)]
-
-        ## ppng(print(
-        ##     tmp %>%
-        ##     ggplot(aes(x = nbins, y=sample.sd/mean, color=high.mean)) +
-        ##     geom_point() +
-        ##     geom_abline(slope=0.0077, intercept = 0.1303, color="red") +
-        ##     theme_bw() +
-        ##     scale_x_log10() +
-        ##     theme(
-        ##         axis.line = element_line(colour = "black", size=1.25),
-        ##         axis.text.x = element_text(angle = 90, hjust = 1),
-        ##         panel.grid.major = element_blank(),
-        ##         panel.grid.minor = element_blank(),
-        ##         panel.border = element_rect(color = "grey50", size=0.5),
-        ##         panel.background = element_blank(),
-        ##         text = element_text(size=20)
-        ##     )
-        ## ))
-
-
-        ## lr = tmp[mean<mean(mean)+3*sd(mean), lm(sample.sd ~ 0 + mean, weights=nbins)]
-
-        ## loe.sem.2.mean = tmp[, loess(sample.sem ~ mean)]
-        ## tmp[, predict.sem := predict(loe.sem.2.mean)]
-
-
-
+        ## overdispersion correction
         loe = tmp[, loess(var ~ mean, weights = nbins)]
-        ## loe.robust = tmp[mean<mean(mean)+3*sd(mean) & mean>mean(mean)-3*sd(mean),
-        ##                  loess(var ~ mean, weights = nbins,
-        ##                        control=loess.control(surface="direct"))]
-
-        ## loe.robust.2 = tmp[mean<median(mean)+3*sd(mean) & mean>median(mean)-3*sd(mean) &
-        ##                    var<median(var)+ 3 * sd(var) & var>median(var)- 3 * sd(var),
-        ##                    loess(var ~ mean, weights = nbins,
-        ##                          control=loess.control(surface="direct"))]
-
-        ## diagnostic plot of variance correction
         tmp[, predict.var := predict(loe, newdata = mean)]
-
-        ## ppng(print(
-        ##     tmp.debug %>%
-        ##     ## subset(mean<5) %>%
-        ##     ggplot(aes(x = mean, y=value, group=variable, col=variable)) +
-        ##     geom_point() +
-        ##     theme_bw() +
-        ##     theme(
-        ##         axis.line = element_line(colour = "black", size=1.25),
-        ##         axis.text.x = element_text(angle = 90, hjust = 1),
-        ##         panel.grid.major = element_blank(),
-        ##         panel.grid.minor = element_blank(),
-        ##         panel.border = element_rect(color = "grey50", size=0.5),
-        ##         panel.background = element_blank(),
-        ##         text = element_text(size=20)
-        ##     ) +
-        ##     ylab("var")
-        ## ))
 
         ## inferring segment specific variance using loess fit of mean to variance per node
         ## using loess fit as the prior sample var
@@ -2680,7 +2626,6 @@ segstats = function(target,
         target$loess.var = predict(loe, target$mean)
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
-
         ## neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
         neu = target$nbins
         ## neu = 434 ## let's start with this
@@ -2688,6 +2633,24 @@ segstats = function(target,
         target$tau.sq.post = (neu * target$loess.var + (target$nbins - 1) * target$raw.var)/ (neu + target$nbins)
         target$post.var = try(neu.post * target$tau.sq.post / (neu.post - 2))
         target$var = target$post.var
+
+        ## plot the prediction
+        ## tdt = gr2dt(target)
+        ## tdt[, more_than_20bins := ifelse(nbins>20, ">20bins", "<=20bins")]
+        ## tdt[, more_than_5bins := ifelse(nbins>5, ">5bins", "<=5bins")]
+
+        ## ppdf(print(
+        ##     tdt[order(mean)] %>%
+        ##     ggplot() +
+        ##     geom_point(aes(x = mean, y = raw.var, size = nbins), color = "grey75", alpha = 0.5) +
+        ##     geom_line(aes(x = mean, y = loess.var), color = "salmon", lwd = 2) +
+        ##     geom_hline(yintercept = 0, lty = "dashed") +
+        ##     theme_pub(20) +
+        ##     facet_wrap(~ more_than_5bins, nrow = 1, scales = "free")
+        ## ), width = 12)
+
+        ## wtf = target %Q% which(strand=="+" & raw.var>8000)       
+        
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
         ## basically assign all means below the left domain bnound of the function the variance of the left domain bound
         ## and analogously for all means above the right domain bound
@@ -5574,7 +5537,7 @@ read.junctions = function(rafile,
             ra = readRDS(rafile)
             ## validity check written for "junctions" class
             return(ra)
-        } else if (grepl('(.bedpe$)', rafile)){
+        } else if (grepl('bedpe(\\.gz)?$', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
