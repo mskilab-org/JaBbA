@@ -4284,7 +4284,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         keep[nnab] = (out$segstats$end.ix[collapsed$map[kag$ab.edges[nnab,1,2]]] == kag$ab.edges[nnab,1,2]) & (out$segstats$start.ix[collapsed$map[kag$ab.edges[nnab,2,2]]] == kag$ab.edges[nnab,2,2])
         tmp.ix[!keep, ] = NA ## not really needed, but let's keep it
         if (any(keep))
-            out$ab.edges[keep,,2] = cbind(tmp.ix[keep, , drop = F], adj.new.ix[tmp.ix[keep, , drop = F]])
+          out$ab.edges[keep,,2] = cbind(tmp.ix[keep, , drop = F], adj.new.ix[tmp.ix[keep, , drop = F]])
     }
 
     ## convert to "simplified form"
@@ -6486,7 +6486,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @return returns character string or writes to file if specified
 #' @noRd
 #########################################
-jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE)
+jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, include.loose = TRUE, include.cn0 = TRUE, cnv = FALSE)
 {
     if (is.null(hg))
         hg = tryCatch(skidb::read_hg(), error = function(e) NULL)
@@ -6496,24 +6496,30 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
     ## convert all aberrant connections into pairs of VCF rows
     if (!cnv)
     {
-        jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
-        abs = rbind(jab$ab.edges[jix,1:2,1])
-        rabs = rbind(jab$ab.edges[jix,1:2,2])
-        rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
-
-        adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
-        adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
-        adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
-
-        ## #' xtYao #' Wednesday, Mar 20, 2019 11:09:46 AM
-        # Fix missing $
-        if (any(jab$segstats$loose))
-        {
-            adj.ref[jab$segstats$loose, ] = 0
-            adj.ref[,jab$segstats$loose] = 0
-        }
-
-        if (length(jix)>0)
+      jix = which(!is.na(jab$ab.edges[,3,1])) ## these are the only junctions with breaks in the reconstruction
+      if (!include.cn0) ## remove from jix
+      {
+        jcn = jab$adj[jab$ab.edges[jix, 1:2, 1]]
+        jix = jix[jcn>0]
+        message('Removing cn=0')
+      }
+      abs = rbind(jab$ab.edges[jix,1:2,1])
+      rabs = rbind(jab$ab.edges[jix,1:2,2])
+      rcix = match(jab$segstats, gr.flipstrand(jab$segstats)) ## map of seg to its reverse complement
+      
+      adj.ref = jab$adj ## reference graph has reference copy numbers, we obtain by zeroing out all ab.edges and loose end edges
+      adj.ref[rbind(jab$ab.edges[jix,1:2,1])] = 0
+      adj.ref[rbind(jab$ab.edges[jix,1:2,2])] = 0
+      
+      ## #' xtYao #' Wednesday, Mar 20, 2019 11:09:46 AM
+      ## Fix missing $
+      if (any(jab$segstats$loose))
+      {
+        adj.ref[jab$segstats$loose, ] = 0
+        adj.ref[,jab$segstats$loose] = 0
+      }
+      
+      if (length(jix)>0)
         {
             jcn = jab$adj[abs]
             gr1 = gr.end(jab$segstats[abs[,1]], ignore.strand = F)[, 'cn']
@@ -6521,14 +6527,14 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
             gr1$nid = abs[,1]
             gr1$acn = jcn
             gr1$rcn = Matrix::rowSums(adj.ref[gr1$nid, , drop = FALSE])
-            gr1$ID = paste(sampleid, '_seg', abs[,1], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
+            gr1$ID = paste(sampleid, '_seg', jab$segstats$tile.id[abs[,1]], ifelse(as.logical(strand(gr1)=='+'), '_R', '_L'), sep = '')
 
             gr2 = gr.start(jab$segstats[abs[,2]], ignore.strand = F)[, 'cn']
             gr2$jid = jix
             gr2$nid = abs[,2]
             gr2$acn = jcn
             gr2$rcn = Matrix::colSums(adj.ref[,gr2$nid, drop = FALSE])
-            gr2$ID = paste(sampleid, '_seg', abs[,2], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
+            gr2$ID = paste(sampleid, '_seg', jab$segstats$tile.id[abs[,2]], ifelse(as.logical(strand(gr2)=='+'), '_L', '_R'), sep = '')
 
             gr1$mid = gr2$ID
             gr2$mid = gr1$ID
@@ -6573,7 +6579,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 
         ## now loose ends
         lix = which(jab$segstats$loose & as.logical(strand(jab$segstats)=="+"))
-        if (length(lix)>0)
+        if (length(lix)>0 & include.loose)
         {
             ## loose ends should be width 1, but just in case
             if (is.element("passed", colnames(values(jab$segstats)))){
@@ -6604,7 +6610,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, cnv = FALSE
 
             gr.loose$cn = jab$segstats$cn[pcid]
             ## if loose end is the parent of a seg, then it is a "left" loose end (since + strand) otherwise "right"
-            gr.loose$ID = paste(sampleid, '_looseend', pcid, ifelse(isp, '_L', '_R'), sep = '')
+            gr.loose$ID = paste(sampleid, '_looseend', jab$segstats$tile.id[pcid], ifelse(isp, '_L', '_R'), sep = '')
             gr.loose$mid = NA
             gr.loose$REF = tryCatch(as.character(ffTrack::get_seq(hg, gr.stripstrand(gr.loose))), error = function(e) 'N')
 
