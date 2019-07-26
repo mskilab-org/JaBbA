@@ -359,6 +359,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 geno = geno)
             gc()
 
+            ## browser()
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
             jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
             le = gr.stripstrand(jab$segstats %Q% (loose==TRUE & strand=="+"))
@@ -394,8 +395,14 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 
             ## junction rescue
             ## rescues junctions that are within rescue.window bp of a loose end
-            new.ra.id = union(values(jab$junctions)$id[which(values(jab$junctions)$cn>0)],## got used, stay there
-                              values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T, ignore.strand = FALSE))]) ## near a loose ends, got another chance
+            ## got used, stay there
+            tokeep = which(values(jab$junctions)$cn>0) 
+            new.ra.id = union(
+                values(jab$junctions)$id[tokeep],
+                ## near a loose ends, got another chance
+                values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T, ignore.strand = FALSE))],
+                ## tier 2 or higher must stay for all iterations
+                values(ra.all)$id[which(values(ra.all)$tier==2)]) 
             if (tfield %in% colnames(ra.all)){
                 high.tier.id = values(ra.all)$id[which(as.numeric(values(ra.all)[, tfield])<3)]
                 new.ra.id = union(new.ra.id, high.tier.id)
@@ -716,7 +723,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 tiny.val = .Machine$double.eps
                 vals = vals + tiny.val
                 jmessage(length(zero.ix), " coverage data points have zero value, adding a tiny value ",
-                       tiny.val, " to prevent log error.")
+                         tiny.val, " to prevent log error.")
             }
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
@@ -1760,7 +1767,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 ## PCAWG BAF format: Chromosome Pos BAF
                 colnames(hets)[1:2] = c("chr", "pos")
                 baf.col = grep("af$", colnames(hets),
-                value= TRUE, ignore.case = T)[1]
+                               value= TRUE, ignore.case = T)[1]
                 baf = hets[, baf.col, with = FALSE][[1]]
                 hets[, ":="(ref = 1 - baf, alt = baf)]
                 hets.gr = dt2gr(hets)
@@ -2413,7 +2420,7 @@ segstats = function(target,
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
                     ksamp_prior = 100  ## size of data samples to estimate alpha / beta prior values
-)
+                    )
 {
     if (!is.null(asignal))
     {
@@ -2558,6 +2565,7 @@ segstats = function(target,
         ## target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
 
+
         ## if the user didn't give the max.na, we infer it
         if (!is.numeric(max.na) || !between(max.na, 0, 1)){
             ## gather the values of nafrac
@@ -2576,9 +2584,10 @@ segstats = function(target,
             }
         }
 
+        ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
         if (length(bad.nodes <- which((target$nbins.nafrac > max.na) | (is.na(target$nbins.nafrac))))>0)
         {
-            target$max.na = max.na
+            target$max.na = max.na ## what about really small segs in a good "environment"
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
             ## target$sd[bad.nodes] = NA
