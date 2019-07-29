@@ -359,7 +359,6 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 geno = geno)
             gc()
 
-            ## browser()
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
             jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
             le = gr.stripstrand(jab$segstats %Q% (loose==TRUE & strand=="+"))
@@ -397,12 +396,16 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             ## rescues junctions that are within rescue.window bp of a loose end
             ## got used, stay there
             tokeep = which(values(jab$junctions)$cn>0) 
-            new.ra.id = union(
+            new.ra.id = unique(c(
                 values(jab$junctions)$id[tokeep],
                 ## near a loose ends, got another chance
-                values(ra.all)$id[which(grl.in(ra.all, le + rescue.window, some = T, ignore.strand = FALSE))],
+                values(ra.all)$id[which(grl.in(ra.all,
+                                               le + rescue.window,
+                                               some = T,
+                                               ignore.strand = FALSE))],
                 ## tier 2 or higher must stay for all iterations
-                values(ra.all)$id[which(values(ra.all)$tier==2)]) 
+                values(ra.all)$id[which(values(ra.all)$tier==2)]
+            )) 
             if (tfield %in% colnames(ra.all)){
                 high.tier.id = values(ra.all)$id[which(as.numeric(values(ra.all)[, tfield])<3)]
                 new.ra.id = union(new.ra.id, high.tier.id)
