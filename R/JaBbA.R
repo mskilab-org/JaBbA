@@ -4862,7 +4862,8 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
-    param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
+    param_lines = c(param_lines, paste("CPX_PARAM_Threads", numthreads, sep = '\t'))
+    ## param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
 
     if (!is.na(nodefileind))
         param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
@@ -4870,8 +4871,8 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
     if (!is.na(treememlim))
     {
         ## #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
-        ## param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
-        param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
+        param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+        ## param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
     }
 
     writeLines(param_lines, out.file)
