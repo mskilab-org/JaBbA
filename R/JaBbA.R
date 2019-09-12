@@ -1,4 +1,4 @@
-## Marcin Imielinski
+ ## Marcin Imielinski
 ##
 ## Weill-Cornell Medical College
 ## mai9037@med.cornell.edu
@@ -115,8 +115,8 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #'
 #' @export
 JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
-                 juncs.uf = NULL,
                  coverage, # path to cov file, rds of GRanges
+                 juncs.uf = NULL,
                  seg = NULL, # path to seg file, rds of GRanges
                  outdir = './JaBbA', # out directory to dump into
                  cfield = NULL, # character, junction confidence meta data field in ra
@@ -132,7 +132,6 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
                  subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                  tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
-                 ## mem = 32, ## max memory for MIP portion
                  reiterate = 0, ## how many (additional) times to iterate beyond the first iteration
                  rescue.window = 1e3, # window around loose ends at which to rescue low tier junctions
                  init = NULL, ## previous JaBbA object to use as a solution
@@ -148,7 +147,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                  max.na = -1,
                  blacklist = NULL,
                  epgap = 1e-4, ## default to 1e-2
-                 indel = TRUE, ## default TRUE ## whether to force the small isolated tier 2 events into the model
+                 indel = "exclude", ## default TRUE ## whether to force the small isolated tier 2 events into the model
+                 min.nbins = 5, ## minimum number of bins a segment should have to participate in variance correction
                  all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
                  verbose = TRUE, ## whether to provide verbose output
                  dyn.tuning = TRUE,
@@ -352,7 +352,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 ploidy = as.numeric(ploidy),
                 purity = as.numeric(purity),
                 pp.method = pp.method,
-                indel = as.logical(indel),
+                indel = indel,
+                min.nbins = min.nbins,
                 overwrite = as.logical(overwrite),
                 verbose = as.numeric(verbose),
                 dyn.tuning = dyn.tuning,
@@ -511,7 +512,8 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             ploidy = as.numeric(ploidy),
             purity = as.numeric(purity),
             pp.method = pp.method,
-            indel = as.logical(indel),
+            indel = indel,
+            min.nbins = min.nbins,
             loose.penalty.mode = loose.penalty.mode,
             overwrite = as.logical(overwrite),
             verbose = as.numeric(verbose),
@@ -603,7 +605,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
                       loose.penalty.mode = "boolean",
-                      indel = FALSE,
+                      indel = "exclude",
+                      min.nbins = 5,
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
                       dyn.tuning = TRUE,
@@ -661,10 +664,16 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!inherits(coverage, 'GRanges'))
         coverage = dt2gr(coverage)
 
-
+    ## the most frequent width in a sample of coverage points
+    binwidth = as.numeric(names(sort(table(width(sample(coverage, 1000, replace=TRUE))), decreasing = TRUE)[1]))
+    
     if (verbose)
     {
-        jmessage("Read in coverage data across ", prettyNum(length(coverage), big.mark = ','), " bins and ", length(unique(seqnames(coverage))), ' chromosomes')
+        jmessage(paste(
+            "Read in",
+            prettyNum(length(coverage), big.mark = ','),
+            paste0(binwidth, "bp bins of coverage data across"),
+            length(unique(seqnames(coverage))), 'chromosomes'))
     }
 
     if (!(field %in% names(values(coverage))))
@@ -811,6 +820,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         jmessage('Leaving ', length(ra), ' junctions from an initial set of ', nog)
     }
 
+    ## determine binwidth
+    ## times the factor of minimum number of bins for a segment to be considered
+    max.indel.size = min.nbins * binwidth
     ## know what junctions to include and exclude before karyogrpah_stub
     ab.force = NULL
     ab.exclude = NULL
@@ -823,26 +835,17 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
             ## when the switch is on:
             ## small DUP/DEL junctions in tier 2, bump them up to tier 1
-            if (indel){
-                tier2.ix = which(
-                    gsub('tier', '', as.character(values(ra)[, tfield]))=='2')
-                if (length(tier2.ix)>0){
-                    ## max size hardcoded for now
-                    which.like.indel = tier2.ix[
-                        which.indel(ra[tier2.ix], max.size = 1e4)
-                    ]
-                } else {
-                    which.like.indel = numeric(0)
-                }
-                ab.force = union(ab.force, which.like.indel)
+            tier2.ix = which(gsub('tier', '', as.character(values(ra)[, tfield]))=='2')
+            if (length(tier2.ix)>0){
+                ## max size hardcoded for now
+                which.like.indel = tier2.ix[which.indel(ra[tier2.ix], max.size = max.indel.size)]
+            } else {
+                which.like.indel = numeric(0)
             }
 
             if (verbose)
             {
-                jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')
-                if (exists("which.like.indel")){
-                    jmessage(length(which.like.indel), ' of them are INDEL like isolated events')
-                }
+                jmessage('Found tier field enforcing >=1 CN at ', length(ab.force), ' junctions')                
             }
 
             ab.exclude = which(gsub('tier', '', as.character(values(ra)[, tfield]))=='3')
@@ -852,12 +855,29 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
         }
     } else { ## no tfield given, assume everything is tier 2
-        if (indel){
-            which.like.indel = which.indel(ra, max.size = 1e4)
-            ab.force = union(ab.force, which.like.indel)
-        }
+        ## if (indel){
+        which.like.indel = which.indel(ra, max.size = max.indel.size)
+        ##     ab.force = union(ab.force, which.like.indel)
+        ## }
     }
 
+    if (exists("which.like.indel")){
+        values(ra)$like.indel = is.element(seq_along(ra), which.like.indel)
+        jmessage(length(which.like.indel), ' INDEL like isolated events')
+    }
+    ## depending on the value of "indel", include or exclude indels or do nothing
+    if (indel=="include"){
+        ab.force = union(ab.force, which.like.indel)
+        if (verbose){
+            jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily INCLUDED in the final model')
+        }
+    } else if (indel=="exclude"){
+        ab.exclude = union(ab.exclude, which.like.indel)
+        if (verbose){
+            jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily EXCLUDED in the final model')
+        }
+    }
+    
     ## clean up the seqlevels before moving on
     seg.sl = seqlengths(seg)
     cov.sl = seqlengths(coverage)
@@ -4842,15 +4862,16 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
-    param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t'))
+    param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
 
     if (!is.na(nodefileind))
         param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
 
     if (!is.na(treememlim))
     {
-                                        #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
-        param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+        ## #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+        ## param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+        param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
     }
 
     writeLines(param_lines, out.file)
