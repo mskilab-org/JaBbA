@@ -237,8 +237,8 @@ test_that("JaBbA", {
           values(jab.reiterate$junctions$grl)$cn,
             c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 4, 2, 2, 4, 5, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 1, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 9, 5, 6, 0, 0)) |
         identical(
-          values(jab.reiterate$junctions$grl)$cn,
-            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 1, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)),
+            values(jab.reiterate$junctions$grl)$cn,
+            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 21, 3, 3, 20, 16, 10, 16, 31, 2, 31, 33, 26, 12, 26, 23, 9, 6, 16, 4, 4, 3, 3, 3, 3, 17, 6)),
       info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 
     ## expect_true(identical(values(jab.reiterate$junctions$grl)$cn,
