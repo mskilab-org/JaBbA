@@ -863,7 +863,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     if (exists("which.like.indel")){
         values(ra)$like.indel = is.element(seq_along(ra), which.like.indel)
-        jmessage(length(which.like.indel), ' INDEL like isolated events')
+        jmessage(length(which.like.indel), ' INDEL-like isolated events')
     }
     ## depending on the value of "indel", include or exclude indels or do nothing
     if (indel=="include"){
@@ -952,6 +952,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     kag = readRDS(kag.file)
     ab.force = kag$ab.force
+    ab.exclude = integer(0)
 
     if (!is.null(cfield))
     {
@@ -1034,6 +1035,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     }
 
 
+    ## save the final indices of selected edges
     saveRDS(ab.exclude, paste0(outdir, "/ab.exclude.rds"))
     saveRDS(ab.force, paste0(outdir, "/ab.force.rds"))
     saveRDS(edgenudge, paste0(outdir, "/edge.nudge.rds"))
@@ -1054,7 +1056,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    edge.nudge = edgenudge,
                    use.gurobi = use.gurobi,
                    ab.force = ab.force,
-                   ab.exclude = ab.exclude, ## we now exclude things during karyograph_stub
+                   ## ab.exclude = ab.exclude, 
+                   ab.exclude = integer(0), ## we now exclude things during karyograph_stub
                    init = init,
                    verbose = verbose,
                    purity.min = purity,
