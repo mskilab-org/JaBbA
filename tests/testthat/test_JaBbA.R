@@ -207,20 +207,8 @@ test_that("JaBbA", {
     expect_true(identical(values(jab$junctions$grl)$cn,
                           c(3, 3, 3, 29, 3, 29, 28, 1, 28, 5, 28, 16, 12, 16, 16, 16, 16, 8, 16, 4, 3, 3, 0, 0)) |
                 identical(values(jab$junctions$grl)$cn,
-                          c(3, 3, 3, 29, 3, 29, 28, 1, 28, 5, 28, 16, 12, 16, 16, 16, 16, 8, 16, 4, 3, 3, 0, 0)),
+                          c(3, 1, 3, 2, 2, 2, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 28, 26, 6, 26, 1, 26, 26, 2, 26, 26, 31, 2, 31, 31, 22, 19, 22, 31, 1, 31, 27, 5, 4, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10, 0, 0)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
-
-    ## expect_true(identical(values(jab$junctions$grl)$cn, c(3, 3, 1, 6, 12, 17, 8, 3, 3, 29, 29, 28, 28, 28, 16, 16, 16, 16, 16, 4, 3, 3)) |
-    ##             identical(values(jab$junctions$grl)$cn, c(3, 3, 3, 14, 20, 23, 28, 29, 30, 31, 28, 4, 28, 30, 31, 3, 31, 29, 2, 29, 4,
-    ##                                                       29, 28, 7, 4, 3, 3, 4, 7, 5, 4, 3, 3, 2, 3, 3, 3)),
-    ##             info = print(list.expr(values(jab$junctions$grl)$cn)))
-
-    ## expect_true(abs(jab$ploidy - 3.50)<0.2,
-    ##             info = print(jab$ploidy))
-
-    ## expect_true(abs(jab$purity - .98)<0.02 |
-    ##             abs(jab$purity -  1.000000)<0.01,
-    ##             info = print(jab$purity))
 
     print("Comparing results from linear mode with iteration:")
     expect_true((jab.reiterate.cn.cor <<- pmax(
@@ -238,26 +226,8 @@ test_that("JaBbA", {
             c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 4, 2, 2, 4, 5, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 9, 5, 6, 0, 0)) |
         identical(
           values(jab.reiterate$junctions$grl)$cn,
-            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 1, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)),
-      info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
+        ##     c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 1, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)),
+            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 12, 12, 12, 12, 20, 26, 27, 7, 26, 31, 1, 31, 32, 25, 13, 25, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 6, 6)),
 
-    ## expect_true(identical(values(jab.reiterate$junctions$grl)$cn,
-    ##                       c(4, 4, 1, 3, 10, 11, 5, 3, 6, 10, 19, 1, 1, 5, 1, 1, 2, 3, 3,
-    ##                         3, 4, 3, 3, 4, 4, 4, 4, 4, 4, 3, 2, 2, 3, 4, 5, 4, 4, 5, 5,
-    ##                         4, 4, 4, 4, 4, 3, 2, 2, 3, 13, 13, 13, 23, 29, 26, 26, 31,
-    ##                         22, 22, 32, 32, 31, 31, 27, 23, 23, 23, 4, 3, 3, 4, 3, 3)) |
-    ##             identical(values(jab.reiterate$junctions$grl)$cn,
-    ##                       c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4,
-    ##                         5, 4, 4, 5, 5, 4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13,
-    ##                         13, 23, 29, 26, 6, 26, 31, 22, 19, 22, 32, 1, 32, 31, 1, 31,
-    ##                         27, 5, 3, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10, 0, 0)),
-    ##             info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
-
-    ## expect_true(abs(jab.reiterate$ploidy - 3.62)<0.01 |
-    ##             abs(jab.reiterate$ploidy - 3.51)<0.01, info = print(jab.reiterate$ploidy))
-
-    ## expect_true(abs(jab.reiterate$purity - .99)<0.01 |
-    ##             abs(jab.reiterate$purity - .99)<0.01,
-    ##             info = print(jab.reiterate$purity))
-
+        info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 })
