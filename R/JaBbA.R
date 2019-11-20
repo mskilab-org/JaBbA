@@ -1,25 +1,3 @@
- ## Marcin Imielinski
-##
-## Weill-Cornell Medical College
-## mai9037@med.cornell.edu
-##
-## New York Genome Center
-## mimielinski@nygenome.org
-##
-## This program is free software: you can redistribute it and/or modify it
-## under the terms of the GNU Lesser General Public License as published by
-## the Free Software Foundation, either version 3 of the License, or
-## (at your option) any later version.
-
-## This program is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-## GNU General Public License for more details.
-
-## You should have received a copy of the GNU Lesser General Public License
-## along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
 #' @import igraph
 #' @import Matrix
 #' @import GenomicRanges
@@ -47,112 +25,99 @@
 ## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
 low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=predict.var=dup=psid=.N=es=res=esid=pid=ub=lb=esid=dup=lb=ub=dup=y=dup=pid=lb=es.s.ix=km=es.t.ix=adjusted.ratio=ref.count.t=alt.count.t=depth.normal=depth.tumor=good.reads=zygosity.normal=Bf=ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
 
-
 #' @name JaBbA
 #' @title JaBbA
 #' @description
-#' Module to run jbaMIP + preprocessing from text file or rds input and dump files out to text.
+#' Main function to invoke junction balance analysis (JaBbA). Two input arguments are required: junctions and coverage. One output contains all information of the results, the gGraph saved in "jabba.simple.gg.rds".
 #'
-#' Generates the following files in the output directory:
-#'
-#' karyograph.rds --- file of unpopulated karyograph as an RDS file of a list object storing the output of karyograph
-#'
-#'
-#' jabba.rds --- file storing JaBbA object
-#'
-#' jabba.simple.rds --- file storing JaBbA object simplified so that segments containing all unpopulated aberrant junctions are merged
-#'
-#' jabba.raw.rds --- storing raw jbaMIP solution, this may be useful for debugging and QC
-#'
-#' jabba.png, jabba.simple.png --- gTrack images of the above reconstructions
-#'
-#' jabba.seg.txt --- tsv file with jabba.simple solution segments
-#'
-#' jabba.seg.rds --- GRanges rds with jabba.simple solution segments
-#'
-#' jabba.adj.txt --- tsv file with edges (i.e. node pairs) of adjacency matrix populated with inferred copy numbers and node ids indexing segments in jabba.seg.txt
-#'
-#' jabba.vcf, jabba.simple.vcf --- BND-style vcf output of junctions in JaBbA output populated with rearrangement and interval copy numbers
-#'
-#' jabba.cnv.vcf, jabba.simple.cnv.vcf --- cfopy number style VCF showing jabba copy number output
-#'
-#'
-#' @param junctions  GRangesList of junctions  (i.e. bp pairs with strands oriented AWAY from break) OR path to junction VCF file (BND format), dRanger txt file or rds of GRangesList
+#' @param junctions rearrangement junctions  (i.e. breakpoint pairs with orientations). Supports BEDPE, BND VCF formats, Junction objects defined in gGnome, and GRangesList object. If providing GRangesList, the orientation must be "+" for a junction that fuses the 
+#' @param coverage  high-density read coverage data of constant-width genomic bins. Supports BED, BigWig, delimited text formats, and GRanges object.
+#' 
 #' @param juncs.uf supplement junctions in the same format as \code{junctions}
-#' @param coverage  GRanges of coverage OR path to tsv of cov file w GRanges style columns, rds of GRanges or .wig / .bed file of (+/- normalized, GC corrected) fragment density
-#' @param field  field of coverage GRanges to use as fragment density signal (only relevant if coverage is GRanges rds file)
-#' @param seg  optional path to existing segmentation, if missing then will segment coverage using DNACopy with standard settings
+#' @param blacklist.junctions rearrangement junctions to be excluded from consideration
+#' @param geno logical whether the input junctions have GENO field in the metadata. If so, will match the name argument to the corresponding sample and make positive junctions tier 2, the others tier 3.
+#' @param indel character of the decision to "exclude" or "include" small(< min.nbins * coverage bin width) isolated INDEL-like events into the model. Default NULL, do nothing.
 #' @param cfield  character, junction confidence meta data field in ra
-#' @param tfield  character, tier confidence meta data field in ra
-#' @param nudge.balanced attempt to identify balanced reciprocal junctions and nudge them to be incorporated
-#' @param thresh.balanced when \code{nudge.balanced} is \code{TRUE}, the threshold distance between reciprocal junction pairs
-#' @param outdir  out directory to dump into, default ./
+#' @param tfield  character, tier confidence meta data field in ra. tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end. Default "tier".
+#' @param reiterate integer scalar specifying how many extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield.
+#' @param rescue.window integer window size in bp within which to look for lower confidence junctions. Default 1000.
+#' @param nudge.balanced logical whether to attempt to add a small incentive for chains of quasi-reciprocal junctions
+#' @param thresh.balanced numeric maximum distance between a pair of reciprocal junctions. Default 500.
+#' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation. Default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
+#' @param strict logical flag specifying whether to only include junctions that exactly overlap segs
+#' @param all.in whether to use all of the junctions but the tier 3 INDELs all at once
+#' 
+#' @param field name of the metadata column of coverage that contains the data. Default "ratio" (coverage ratio between tumor and normal). If using dryclean, usually it is "foreground".
+#' @param seg  optional path to existing segmentation, if missing then will segment coverage using DNACopy with standard settings
 #' @param nseg  optional path to normal seg file with $cn meta data field
 #' @param hets  optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
-#' @param name  prefix for sample name to be output to seg file
 #' @param purity cellularity value of the sample
 #' @param ploidy ploidy value of the sample (segment length weighted copy number)
-#' @param cores  number of cores to use (default 1)
-#' @param subsample  numeric between 0 and 1 specifying fraction with which to  sub-sample high confidence coverage data
-#' @param tilim  integer scalar timeout in seconds for jbaMIP computation (default 1200 seconds)
-#' @param mem  numeric scalar max memory in GB for MIP portion of algorithm (default 16)
-#' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
-#' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
-#' @param loose.penalty.mode either \code{"linear"} or \code{"boolean"}, for penalizing each copy or each of loose end
-#' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
-#' @param use.gurobi  logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE) .. up to user to make sure the respective package is already installed
-#' @param reiterate  integer scalar specifying how many (re-)iterations of jabba to do, rescuing lower tier junctions that are near loose ends (requires junctions to be tiered via a grangeslist or VCF metadata field $tfield), tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end
-#' @param indel if TRUE, force the small isolated tier 2 events into the model
-#' @param all.in whether to use all of the junctions but the tier 3 INDELs all at once
-#' @param rescue.window integer scalar bp window around which to rescue lower tier junctions
-#' @param strict logical flag specifying whether to only include junctions that exactly overlap segs
+#' @param pp.method character select from "ppgrid", "ppurple", and "sequenza" to infer purity and ploidy if not both given. Default, "sequenza".
+#' @param min.nbins integer minimum number of bins of coverage of a segment
+#' @param max.na
+#' @param blacklist.coverage
+#' 
+#' @param slack.penalty numeric penalty to put on every loose end (or copy number if loose.penalty.mode is "linear"). Default 100.
+#' @param loose.penalty.mode either \code{"linear"} or \code{"boolean"}, for penalizing each copy or each count of a loose end
+#' @param tilim integer time limit MIP solver on each subgraph. Default 2400 (seconds).
 #' @param max.threads maximum thread number CPLEX/Gurobi is allowed to use
 #' @param max.mem maximum memory CPLEX/Gurobi is allowed to use
 #' @param epgap relative optimality gap tolerated by the solver
-#' @param mc.cores integer how many cores to use to fork subgraphs generation (default = 1)
-#' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
-#' @return gGraph (gGnome package) of balanced rearrangement graph
+#' @param use.gurobi logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE). Default FALSE.
 #'
+#' @param outdir  out directory to dump into, default `./`
+#' @param name  sample name
+#' @param mc.cores integer how many cores to use to fork subgraphs generation. Default 1. CAUTION as more cores will multiply the number of max threads used by CPLEX.
+#' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param verbose logical whether to print out the most verbose version of progress log
+#' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
+#' @param dyn.tuning logical whether to enter debugging mode in 
 #' @export
-JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
-                 coverage, # path to cov file, rds of GRanges
+JaBbA = function(## Two required inputs
+                 junctions,
+                 coverage,
+                 ## options about junctions
                  juncs.uf = NULL,
-                 seg = NULL, # path to seg file, rds of GRanges
-                 outdir = './JaBbA', # out directory to dump into
-                 cfield = NULL, # character, junction confidence meta data field in ra
-                 tfield = "tier", # character, tier confidence meta data field in ra
-                 nudge.balanced = FALSE,  ## if TRUE nudge chains of balanced (or quasi balanced junctions)
-                 thresh.balanced = 500, ## threshold for balanced junctions
-                 nseg = NULL, # path to normal seg file with $cn meta data field
-                 hets = NULL, # path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
-                 name = 'tumor', ## prefix for sample name to be output to seg file
+                 blacklist.junctions = NULL,                 
+                 geno = FALSE,
+                 indel = NULL,
+                 cfield = NULL, 
+                 tfield = "tier",
+                 reiterate = 0,
+                 rescue.window = 1e3,
+                 nudge.balanced = FALSE,
+                 thresh.balanced = 500,
+                 edgenudge = 0.1,
+                 strict = FALSE,
+                 all.in = FALSE,
+                 ## options about coverage
+                 field = 'ratio',
+                 seg = NULL,
+                 max.na = -1,
+                 blacklist.coverage = NULL,
+                 nseg = NULL,
+                 hets = NULL,
                  purity = NA,
                  ploidy = NA,
                  pp.method = "sequenza",
-                 field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
-                 subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
-                 tilim = 2400, ## timeout for MIP portion: 40 min per subgraph
-                 reiterate = 0, ## how many (additional) times to iterate beyond the first iteration
-                 rescue.window = 1e3, # window around loose ends at which to rescue low tier junctions
-                 init = NULL, ## previous JaBbA object to use as a solution
-                 edgenudge = 0.1, ## hyper-parameter of how much to "nudge" or reward edge use, will be combined with cfield information if provided
-                 use.gurobi = FALSE, ## use gurobi instead of CPLEX
-                 slack.penalty = 1e2, ## nll penalty for each loose end copy
+                 min.nbins = 5,
+                 ## options about optimization
+                 slack.penalty = 1e2,
                  loose.penalty.mode = "boolean",
-                 overwrite = FALSE, ## whether to overwrite existing output in outdir
-                 mc.cores = 1,
-                 strict = FALSE,
+                 tilim = 2400,
                  max.threads = Inf,
                  max.mem = 16,
-                 max.na = -1,
-                 blacklist = NULL,
-                 epgap = 1e-4, ## default to 1e-2
-                 indel = "exclude", ## default TRUE ## whether to force the small isolated tier 2 events into the model
-                 min.nbins = 5, ## minimum number of bins a segment should have to participate in variance correction
-                 all.in = FALSE, ## default FALSE ## whether to use all available junctions in the first interation
-                 verbose = TRUE, ## whether to provide verbose output
-                 dyn.tuning = TRUE,
-                 geno = FALSE)
+                 epgap = 1e-4,
+                 use.gurobi = FALSE,
+                 ## options about general pipeline
+                 outdir = './',
+                 name = 'tumor',
+                 mc.cores = 1,
+                 overwrite = FALSE,
+                 verbose = TRUE,
+                 init = NULL,
+                 dyn.tuning = TRUE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', normalizePath(outdir))
@@ -327,7 +292,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 junctions = this.ra.file,
                 seg = seg,
                 coverage = coverage,
-                blacklist = blacklist,
+                blacklist.coverage = blacklist.coverage,
                 hets = hets,
                 nseg = nseg,
                 cfield = cfield,
@@ -345,7 +310,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
                 use.gurobi = as.logical(use.gurobi),
                 field = field,
                 epgap = epgap,
-                subsample = subsample,
+                ## subsample = subsample,
                 slack.penalty = as.numeric(slack.penalty),
                 loose.penalty.mode = loose.penalty.mode,
                 mipstart = init,
@@ -488,7 +453,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             junctions = ra.all,
             seg = seg,
             coverage = coverage,
-            blacklist = blacklist,
+            blacklist.coverage = blacklist.coverage,
             hets = hets,
             nseg = nseg,
             cfield = cfield,
@@ -506,7 +471,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
             name = name,
             use.gurobi = as.logical(use.gurobi),
             field = field,
-            subsample = subsample,
+            ## subsample = subsample,
             slack.penalty = as.numeric(slack.penalty),
             mipstart = init,
             ploidy = as.numeric(ploidy),
@@ -567,7 +532,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @param mc.cores  number of cores to use (default 1)
 #' @param use.gurobi  logical flag whether to use gurobi vs CPLEX
 #' @param nseg  path to data.frame or GRanges rds of normal seg file with coordinates and $cn data field specifying germline integer copy number
-#' @param subsample  numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
+#' ## @param subsample  numeric between 0 and 1 specifying how much to sub-sample high confidence coverage data
 #' @param tilim  timeout for jbaMIP computation (default 1200 seconds)
 #' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation, default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
 #' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
@@ -576,7 +541,7 @@ JaBbA = function(junctions, # path to junction VCF file, dRanger txt file or rds
 #' @import DNAcopy
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
-                      blacklist = NULL,
+                      blacklist.coverage = NULL,
                       seg = NULL, # path to seg file, rds of GRanges
                       cfield = NULL, # character, junction confidence meta data field in ra
                       tfield = NULL, # character, tier confidence meta data field in ra
@@ -597,7 +562,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       epgap = 1e-4,
                       mipstart = NULL,
                       field = 'ratio', ## character, meta data field to use from coverage object to indicate numeric coveragendance, coverage,
-                      subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
+                      ## subsample = NULL, ## numeric scalar between 0 and 1, how much to subsample coverage per segment
                       tilim = 1200, ## timeout for MIP portion
                       ## mem = 16, ## max memory for MIP portion
                       init = NULL, ## previous JaBbA object to use as a solution
@@ -605,8 +570,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       slack.penalty = 1e2, ## nll penalty for each loose end cop
                       use.gurobi = FALSE,
                       loose.penalty.mode = "boolean",
-                      indel = "exclude",
-                      min.nbins = 5,
+                      indel = "exclude", ## default should be nothing
+                      min.nbins = 5, ## default to 5, if larger bin can reduce
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
                       dyn.tuning = TRUE,
@@ -687,24 +652,24 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         field = new.field
     }
 
-    ## filter out the data in blacklist if any
-    if (!is.null(blacklist)){
-        if (is.character(blacklist)){
-            if (file.exists(blacklist)){
-                if (grepl("[(txt)|(tsv)|(csv)]$", blacklist)){
-                    blacklist = try(gUtils::dt2gr(fread(blacklist)))                    
-                } else if (grepl("bed$", blacklist)){
-                    blacklist = rtracklayer::import.bed(blacklist)
-                } else if (grepl("rds$", blacklist)){
-                    blacklist = readRDS(blacklist)
+    ## filter out the data in blacklist.coverage if any
+    if (!is.null(blacklist.coverage)){
+        if (is.character(blacklist.coverage)){
+            if (file.exists(blacklist.coverage)){
+                if (grepl("[(txt)|(tsv)|(csv)]$", blacklist.coverage)){
+                    blacklist.coverage = try(gUtils::dt2gr(fread(blacklist.coverage)))                    
+                } else if (grepl("bed$", blacklist.coverage)){
+                    blacklist.coverage = rtracklayer::import.bed(blacklist.coverage)
+                } else if (grepl("rds$", blacklist.coverage)){
+                    blacklist.coverage = readRDS(blacklist.coverage)
                 }                
             }
-        } else if (inherits(blacklist, "data.frame")){
-            blacklist = try(gUtils::dt2gr(data.table(blacklist)))
+        } else if (inherits(blacklist.coverage, "data.frame")){
+            blacklist.coverage = try(gUtils::dt2gr(data.table(blacklist.coverage)))
         }
         ## if at this point we have a GRanges, then proceed
-        if (inherits(blacklist, "GRanges")){
-            bad.ix = which(coverage %^% blacklist)
+        if (inherits(blacklist.coverage, "GRanges")){
+            bad.ix = which(coverage %^% blacklist.coverage)
             if (length(bad.ix)>0){
                 values(coverage)[bad.ix, field] = NA
             }
@@ -734,14 +699,22 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             if (length(zero.ix <- which(vals==0))>0){
                 tiny.val = .Machine$double.eps
                 vals = vals + tiny.val
-                jmessage(length(zero.ix), " coverage data points have zero value, adding a tiny value ",
-                         tiny.val, " to prevent log error.")
+                jmessage(
+                    length(zero.ix),
+                    " coverage data points have zero value, adding a tiny value ",
+                    tiny.val, " to prevent log error.")
             }
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
-            cna = DNAcopy::CNA(log(vals[ix]), as.character(seqnames(coverage))[ix], start(coverage)[ix], data.type = 'logratio')
-            seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna), alpha = 1e-5, verbose = FALSE)
-
+            ## browser()
+            cna = DNAcopy::CNA(
+                log(vals[ix]),
+                as.character(seqnames(coverage))[ix], start(coverage)[ix],
+                data.type = 'logratio')
+            ## Addy at some point suggested 1e-5 to prevent way too many unnecessary segmentations at 200bp resolution
+            seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna),
+                                   alpha = 1e-5, 
+                                   verbose = FALSE)
             if (verbose)
             {
                 jmessage('Segmentation finished')
@@ -809,6 +782,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     } else if (!inherits(ra, "GRangesList")){
         stop("`ra` must be GRangesList here")
     }
+    jmessage(paste("Loaded", length(ra), "junctions from the input."))
 
     if (strict)
     {
@@ -838,7 +812,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             tier2.ix = which(gsub('tier', '', as.character(values(ra)[, tfield]))=='2')
             if (length(tier2.ix)>0){
                 ## max size hardcoded for now
-                which.like.indel = tier2.ix[which.indel(ra[tier2.ix], max.size = max.indel.size)]
+                which.like.indel = tier2.ix[
+                    which.indel(ra[tier2.ix], max.size = max.indel.size)]
             } else {
                 which.like.indel = numeric(0)
             }
@@ -866,16 +841,20 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         jmessage(length(which.like.indel), ' INDEL-like isolated events')
     }
     ## depending on the value of "indel", include or exclude indels or do nothing
-    if (indel=="include"){
-        ab.force = union(ab.force, which.like.indel)
-        if (verbose){
-            jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily INCLUDED in the final model')
+    if (!is.null(indel)){
+        if (indel=="include"){
+            ab.force = union(ab.force, which.like.indel)
+            if (verbose){
+                jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily INCLUDED in the final model')
+            }
+        } else if (indel=="exclude"){
+            ab.exclude = union(ab.exclude, which.like.indel)
+            if (verbose){
+                jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily EXCLUDED in the final model')
+            }
         }
-    } else if (indel=="exclude"){
-        ab.exclude = union(ab.exclude, which.like.indel)
-        if (verbose){
-            jmessage(length(which.like.indel), ' INDEL-like isolated junctions mandatorily EXCLUDED in the final model')
-        }
+    } else {
+        jmessage("Warning: doing nothing special to the small INDEL-like isolated junctions")
     }
     
     ## clean up the seqlevels before moving on
@@ -928,7 +907,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ra = new.ra
     seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(union.sl)))]
     jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
-             paste0(names(union.sl), ":", union.sl, collapse = "\n"))
+             paste0("\t", names(union.sl), ":", union.sl, collapse = "\n"))
     
     if (overwrite | !file.exists(kag.file)){
         karyograph_stub(seg,
@@ -940,7 +919,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         purity = purity,
                         ploidy = ploidy,
                         pp.method = pp.method,
-                        subsample = subsample,
+                        ## subsample = subsample,
                         het.file = hets,
                         verbose = verbose,
                         ab.exclude = ab.exclude,
@@ -1056,8 +1035,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    edge.nudge = edgenudge,
                    use.gurobi = use.gurobi,
                    ab.force = ab.force,
-                   ## ab.exclude = ab.exclude, 
-                   ab.exclude = integer(0), ## we now exclude things during karyograph_stub
+                   ab.exclude = ab.exclude, ## we now exclude things during karyograph_stub
+                   ## ab.exclude = integer(0), 
                    init = init,
                    verbose = verbose,
                    purity.min = purity,
@@ -1598,7 +1577,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            mc.cores = 1,
                            max.chunk = 1e8,
                            max.na = -1,
-                           subsample = NULL,
+                           ## subsample = NULL,
                            ab.exclude = NULL,
                            ab.force = NULL){
     loose.ends = GRanges()
@@ -1836,7 +1815,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      field = field,
                                      prior_weight = 1,
                                      max.chunk = max.chunk,
-                                     subsample = subsample,
+                                     ## subsample = subsample,
                                      asignal = hets.gr,
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
@@ -1848,7 +1827,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      field = field,
                                      prior_weight = 1,
                                      max.chunk = max.chunk,
-                                     subsample = subsample,
+                                     ## subsample = subsample,
                                      mc.cores = mc.cores,
                                      verbose = verbose,
                                      max.na = max.na)
@@ -2425,7 +2404,7 @@ ramip_stub = function(kag.file,
 #' @param field  field of "signal" GRanges from which coverage signal will be pulled
 #' @param asignal optional GRanges corresponding width 1 bialellic snp allele counts across the genome,
 #' @param afields length 2 character vector meta data fields of asignal GRanges that will be used to get allele counts (default is ref.count, alt.count)
-#' @param subsample number between 0 and 1 with which to subsample per segment for coverage (useful for superdense coverage eg 50 bases to avoid correlations between samples due to read overlap)
+#' ## @param subsample number between 0 and 1 with which to subsample per segment for coverage (useful for superdense coverage eg 50 bases to avoid correlations between samples due to read overlap)
 #' @param mc.cores number of cores to run on (default 1)
 ###########################################
 segstats = function(target,
@@ -2442,7 +2421,7 @@ segstats = function(target,
                     max.na = -1,
                     na.thresh = 0.2,
                     verbose = FALSE,
-                    subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
+                    ## subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
                     ksamp_prior = 100  ## size of data samples to estimate alpha / beta prior values
@@ -4273,15 +4252,15 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     ## now we have augmented adjacency matrix with loose ends, let's simplify the structure
     ## by collapsing all simple paths
-
+    ## if (!keep.all){browser()}
     collapsed = collapse.paths(adj, verbose = verbose)
 
     ## new segstats formed by reducing "collapsed' sets
     segstats$set.id = collapsed$map
     out$segstats = gr.fix(
-        gr.simplify(segstats[unlist(lapply(collapsed$sets, sort))],
-                    val = rep(1:length(collapsed$sets),
-                              sapply(collapsed$sets, length))),
+        gr.simplify(
+            segstats[unlist(lapply(collapsed$sets, sort))],
+            val = rep(1:length(collapsed$sets), sapply(collapsed$sets, length))),
         segstats)
 
     tmp.ss = gr.string(gr.stripstrand(out$segstats), other.cols = 'loose')
@@ -4293,7 +4272,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     else
         out$segstats = out$segstats[match(1:length(collapsed$sets), out$segstats$set.id), c('cn')]
 
-                                        #    out$segstats$og.ix = sapply(collapsed$sets, function(x) paste(sort(x), collapse = ','))
+    ## out$segstats$og.ix = sapply(collapsed$sets, function(x) paste(sort(x), collapse = ','))
 
     tmp.start.ix = sapply(collapsed$sets, function(x) sort(x)[1])
     tmp.end.ix = sapply(collapsed$sets, function(x) -sort(-x)[1])
@@ -4865,7 +4844,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
-    param_lines = c(param_lines, paste("CPX_PARAM_Threads", numthreads, sep = '\t'))
+    param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t')) ## 12.6.0.0 version
     ## param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
 
     if (!is.na(nodefileind))
@@ -5177,14 +5156,14 @@ collapse.paths = function(G, verbose = T)
 
     out = G!=0
 
-                                        #  if (verbose)
-                                        #     cat('graph size:', nrow(out), 'nodes\n')
+    ## ##  if (verbose)
+    ## ##     cat('graph size:', nrow(out), 'nodes\n')
 
     ## first identify all nodes with exactly one parent and child to do initial collapsing of graph
     singletons = which(Matrix::rowSums(out)==1 & Matrix::colSums(out)==1)
 
-                                        #  if (verbose)
-                                        #      cat('Collapsing simple paths..\n')
+    ## #  if (verbose)
+    ## #      cat('Collapsing simple paths..\n')
 
     sets = split(1:nrow(G), 1:nrow(G))
     if (length(singletons)>0)
@@ -5223,7 +5202,7 @@ collapse.paths = function(G, verbose = T)
     }
 
     todo = rep(FALSE, nrow(G))
-    todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE
+    todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE ## could also be 1/0 or 0/1!!!
 
     while (sum(todo)>0)
     {
@@ -5237,6 +5216,10 @@ collapse.paths = function(G, verbose = T)
         i = which(todo)[1]
 
         todo[i] = F
+
+        ## if (i %in% c(10108, 10230, 10231, 10292, 10168, 10169)){
+        ##     browser()
+        ## }
 
         child = which(out[i, ])
         parent = which(out[,i])
@@ -7554,3 +7537,6 @@ arrstring = function(A, x = NULL, sep = ', ', sep2 = '_', signif = 3, dt = FALSE
 
   return(str)
 }
+
+
+
