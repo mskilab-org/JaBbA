@@ -12,6 +12,9 @@ bedpe = system.file("extdata", "junctions.bedpe", package = 'JaBbA')
 cov.fn = system.file("extdata", "coverage.txt", package = 'JaBbA')
 hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 segs = system.file("extdata", "segs.rds", package = 'JaBbA')
+blacklist.junctions = system.file("extdata", "blacklist.junctions.rds", package = 'JaBbA')
+whitelist.junctions = system.file("extdata", "whitelist.junctions.rds", package = 'JaBbA')
+blacklist.coverage = system.file("extdata", "blacklist.coverage.rds", package = 'JaBbA')
 
 Sys.setenv(DEFAULT_GENOME = paste0(system.file(
                "extdata",
@@ -28,6 +31,7 @@ test_that("read.junctions", {
     expect_equal(as.data.table(unlist(read.junctions(juncs.fn))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
     junc.tab = fread(bedpe)[, .(chr1 = V1, pos1 = V2, chr2 = V4, pos2 = V5, str1 = V9, str2 = V10)]
     expect_equal(as.data.table(unlist(read.junctions(junc.tab))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
+    
 })
 
 test_that("reciprocal.cycles", {
@@ -98,6 +102,8 @@ list.expr = function(x)
 ## default is boolean
 jab = JaBbA(junctions = junc,
             coverage = cov.fn,
+            whitelist.junctions = whitelist.junctions,
+            blacklist.coverage = blacklist.coverage,
             seg = segs,
             nseg = nsegs,
             strict = TRUE,
@@ -120,6 +126,7 @@ jab = JaBbA(junctions = junc,
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = juncs.fn,
                       coverage = cov.fn,
+                      blacklist.junctions = blacklist.junctions,
                       hets = hets.gr,
                       slack.penalty = 1e4,
                       tilim = TILIM,
@@ -223,11 +230,9 @@ test_that("JaBbA", {
     expect_true(
         identical(
             values(jab.reiterate$junctions$grl)$cn,
-            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 4, 2, 2, 4, 5, 4, 4, 4, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 9, 5, 6, 0, 0)) |
+            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 3, 3, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)) |
         identical(
           values(jab.reiterate$junctions$grl)$cn,
-        ##     c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 1, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)),
             c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 12, 12, 12, 12, 20, 26, 27, 7, 26, 31, 1, 31, 32, 25, 13, 25, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 6, 6)),
-
         info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
 })

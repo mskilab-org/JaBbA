@@ -79,7 +79,8 @@ JaBbA = function(## Two required inputs
                  coverage,
                  ## options about junctions
                  juncs.uf = NULL,
-                 blacklist.junctions = NULL,                 
+                 blacklist.junctions = NULL,
+                 whitelist.junctions = NULL,
                  geno = FALSE,
                  indel = NULL,
                  cfield = NULL, 
@@ -126,18 +127,18 @@ JaBbA = function(## Two required inputs
     ra = junctions
     reiterate = 1 + as.integer(reiterate)
 
-    if (is.character(ra))
-    {
-        if (!file.exists(ra))
-        {
-            stop(paste('Junction path', ra, 'does not exist'))
-        }
-        ra.all = read.junctions(ra, geno = geno) ## GRL
-    } else if (is.null(ra)) {
-        ra.all = GRangesList()
-    } else {
-        ra.all = ra
-    }
+    ## if (is.character(ra))
+    ## {
+    ##     if (!file.exists(ra))
+    ##     {
+    ##         stop(paste('Junction path', ra, 'does not exist'))
+    ##     }
+    ra.all = read.junctions(ra, geno = geno) ## GRL
+    ## } else if (is.null(ra)) {
+    ##     ra.all = GRangesList()
+    ## } else {
+    ##     ra.all = ra
+    ## }
 
     if (inherits(ra.all, "list") && all(sapply(ra.all, inherits, "GRangesList"))){
         ## this is a multisample junction input
@@ -172,15 +173,7 @@ JaBbA = function(## Two required inputs
     
     if (verbose)
     {
-        jmessage("Read in ", length(ra.all), " total junctions")
-    }
-
-    if (length(ra.all)==0){
-        if (verbose)
-        {
-            jmessage("Empty junction input. Will do just one round of optimization.")
-        }
-        reiterate = 0
+        jmessage("Read in ", length(ra.all), " total input junctions")
     }
 
     ## xtYao Tuesday, Jun 19, 2018 04:52:17 PM
@@ -188,11 +181,8 @@ JaBbA = function(## Two required inputs
     ## if unfiltered set is given first parse it
     ra.uf = NULL
     if (!is.null(juncs.uf)){
-        if (inherits(juncs.uf, "character") & file.exists(juncs.uf)){
-            ra.uf = read.junctions(juncs.uf, geno=FALSE)
-        } else if (inherits(juncs.uf, "GRangesList")){
-            ra.uf = juncs.uf
-        }
+        jmessage("Loading supplementary junctions")
+        ra.uf = read.junctions(juncs.uf, geno=FALSE)
     }
 
     if (is.null(tfield)){
@@ -205,6 +195,7 @@ JaBbA = function(## Two required inputs
         warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
         values(ra.all)[, tfield] = 2
     }
+    
     if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
@@ -225,16 +216,36 @@ JaBbA = function(## Two required inputs
         ## ra.all = ra.all.uf[ndup]
     }
 
-    if (length(ra.all)>0){
-        ## if (length(unique(values(ra.all)[, tfield]))==1) {
-        ##     jmessage("Only one tier of junctions found, cancel iteration if requested")
-        ##     reiterate = 1
-        ## }
+    if (!is.null(blacklist.junctions)){
+        blacklist.junctions = read.junctions(blacklist.junctions)
+        if (length(blacklist.junctions)>0){
+            black.ix = which(gUtils::grl.in(ra.all, blacklist.junctions))
+            if (length(black.ix)>0){
+                jmessage("Removing ", length(black.ix), " junctions matched the blacklist")
+                ra.all = ra.all[setdiff(seq_along(ra.all), black.ix)]
+            }
+        }
+    }
 
+    if (!is.null(whitelist.junctions)){
+        whitelist.junctions = read.junctions(whitelist.junctions)
+        if (length(whitelist.junctions)>0){
+            white.ix = which(gUtils::grl.in(ra.all, whitelist.junctions))
+            if (length(white.ix)>0){
+                jmessage("Forcing incorporation of ", length(white.ix), " junctions matched the whitelist")
+                values(ra.all)[white.ix, tfield] = 1
+            }
+        }
+    }
+
+    if (length(ra.all)>0){
         ## final sanity check before running
         if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
-            stop(sprintf('Tiers in tfield can only have values 1,2,or 3'))
+            stop('Tiers in tfield can only have values 1,2,or 3')
         }
+        jmessage("There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctinos; ",
+                 sum(values(ra.all)[, tfield]==2), " tier 2 junctinos; ",
+                 sum(values(ra.all)[, tfield]==3), " tier 3 junctinos.")
     }
 
     ## if we are iterating more than once
@@ -706,14 +717,14 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
             new.sl = GenomeInfoDb::seqlengths(coverage)
             ix = which(!is.na(vals))
-            ## browser()
+
             cna = DNAcopy::CNA(
                 log(vals[ix]),
                 as.character(seqnames(coverage))[ix], start(coverage)[ix],
                 data.type = 'logratio')
             ## Addy at some point suggested 1e-5 to prevent way too many unnecessary segmentations at 200bp resolution
             seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna),
-                                   alpha = 1e-5, 
+                                   ## alpha = 1e-5, 
                                    verbose = FALSE)
             if (verbose)
             {
@@ -5548,19 +5559,23 @@ read.junctions = function(rafile,
                           force.bnd = FALSE,
                           skip = NA,
                           get.loose = FALSE){
-    if (is.na(rafile)){
-        return(NULL)
-    }
-
-    ## if TRUE will return a list with fields $junctions and $loose.ends
-    if (is.character(rafile)){
+    if (is.null(rafile)){
+        return(GRangesList())
+    } else if (inherits(rafile, "GRangesList")){
+        return(verify.junctions(rafile))
+    } else if (inherits(rafile, "Junction")){
+        return(verify.junctions(rafile$grl))
+    } else if (is.character(rafile)){
         if (!file.exists(rafile)){
             return(NULL)
         }
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
             ## validity check written for "junctions" class
-            return(ra)
+            if (inherits(ra, "Junction")){
+                ra = ra$grl
+            }            
+            return(verify.junctions(ra))
         } else if (grepl('bedpe(\\.gz)?$', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
@@ -6022,8 +6037,10 @@ read.junctions = function(rafile,
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
         } else{
-            rafile = read.delim(rafile)
+            rafile = data.table::fread(rafile)
         }
+    } else if (is.na(rafile)){
+        return(GRangesList())
     }
 
     if (is.data.table(rafile)){
@@ -6033,7 +6050,7 @@ read.junctions = function(rafile,
     if (nrow(rafile)==0){
         out = GRangesList()
         values(out) = rafile
-        return(out)
+        return(verify.junctions(out))
     }
     
     ## flip breaks so that they are pointing away from junction
@@ -6101,7 +6118,7 @@ read.junctions = function(rafile,
         rafile = rafile[which(!bad.ix), ]
 
         if (nrow(rafile)==0){
-            return(GRanges())
+            return(GRangesList())
         }
 
         seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
@@ -6126,7 +6143,7 @@ read.junctions = function(rafile,
     ## if (!is.null(pad)){
     ##     out = ra.dedup(out, pad = pad)
     ## }
-
+    out = verify.junctions(out)
     if (!get.loose){
         return(out)
     } else{
@@ -6135,6 +6152,26 @@ read.junctions = function(rafile,
 
     return(out)
     ## return(new("junctions", out))
+}
+
+#' @name verify.junctions
+#' @rdname internal
+#' @details
+#' Produce error if the input does not meet any of the four following criteria
+#' 1) is a GRangesList
+#' 2) every element is length 2
+#' 3) all elements are strand-specific
+#' 4) all elements are width 1
+#' @param ra rearrangement junctions object to be verified
+#' @return the input if meets all four criteria
+verify.junctions = function(ra){
+    stopifnot(inherits(ra, "GRangesList"))
+    if (length(ra)>0){
+        stopifnot(all(elementNROWS(ra)==2))
+        stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
+        stopifnot(all(as.numeric(width(unlist(ra)))==1))
+    }
+    return(ra)
 }
 
 #' @name karyograph
