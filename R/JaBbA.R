@@ -30,8 +30,8 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @description
 #' Main function to invoke junction balance analysis (JaBbA). Two input arguments are required: junctions and coverage. One output contains all information of the results, the gGraph saved in "jabba.simple.gg.rds".
 #'
-#' @param junctions rearrangement junctions  (i.e. breakpoint pairs with orientations). Supports BEDPE, BND VCF formats, Junction objects defined in gGnome, and GRangesList object. If providing GRangesList, the orientation must be "+" for a junction that fuses the 
-#' @param coverage  high-density read coverage data of constant-width genomic bins. Supports BED, BigWig, delimited text formats, and GRanges object.
+#' @param junctions rearrangement junctions  (i.e. breakpoint pairs with orientations). Supports BEDPE, BND VCF formats, Junction objects defined in gGnome, and GRangesList object. If providing GRangesList, the orientation must be "+" for a junction that fuses the side with larger coordinates and vice versa
+#' @param coverage high-density read coverage data of constant-width genomic bins. Supports BED, BigWig, delimited text formats, and GRanges object
 #' 
 #' @param juncs.uf supplement junctions in the same format as \code{junctions}
 #' @param blacklist.junctions rearrangement junctions to be excluded from consideration
@@ -1985,6 +1985,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 ## only running w/ chr1-22 and X
                 sites = sites[which(chromosome %in% seqlevels(ss.tmp))]
             }
+            sites[, Af := 1-Bf] ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
 
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
             ## twalradt Thursday, Apr 26, 2018 02:58:23 PM They wrote '10e6' in their documentation
