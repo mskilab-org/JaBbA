@@ -55,8 +55,10 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param ploidy ploidy value of the sample (segment length weighted copy number)
 #' @param pp.method character select from "ppgrid", "ppurple", and "sequenza" to infer purity and ploidy if not both given. Default, "sequenza".
 #' @param min.nbins integer minimum number of bins of coverage of a segment
-#' @param max.na
-#' @param blacklist.coverage
+#' @param max.na numeric between (0, 1), any vertex with more than this proportion missing coverage data is ignored
+#' @param blacklist.coverage GRanges marking regions of the genome where coverage is unreliable
+#' @param cn.signif numeric (0, 1), significance level of CN change point when seg is not given (the larger the more sensitive),
+#' `alpha` parameter in DNAcopy::segment, default 1E-5
 #' 
 #' @param slack.penalty numeric penalty to put on every loose end (or copy number if loose.penalty.mode is "linear"). Default 100.
 #' @param loose.penalty.mode either \code{"linear"} or \code{"boolean"}, for penalizing each copy or each count of a loose end
@@ -103,6 +105,7 @@ JaBbA = function(## Two required inputs
                  ploidy = NA,
                  pp.method = "sequenza",
                  min.nbins = 5,
+                 cn.signif = 1e-5,
                  ## options about optimization
                  slack.penalty = 1e2,
                  loose.penalty.mode = "boolean",
@@ -333,7 +336,8 @@ JaBbA = function(## Two required inputs
                 overwrite = as.logical(overwrite),
                 verbose = as.numeric(verbose),
                 dyn.tuning = dyn.tuning,
-                geno = geno)
+                geno = geno,
+                cn.signif = cn.signif)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -494,7 +498,8 @@ JaBbA = function(## Two required inputs
             overwrite = as.logical(overwrite),
             verbose = as.numeric(verbose),
             dyn.tuning = dyn.tuning,
-            geno = geno)
+            geno = geno,
+            cn.signif = cn.signif)
     }
     return(jab)
 }
@@ -586,7 +591,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       overwrite = F, ## whether to overwrite existing output in outdir
                       verbose = TRUE,
                       dyn.tuning = TRUE,
-                      geno = FALSE)
+                      geno = FALSE,
+                      cn.signif = 1e-5)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -724,7 +730,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 data.type = 'logratio')
             ## Addy at some point suggested 1e-5 to prevent way too many unnecessary segmentations at 200bp resolution
             seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna),
-                                   ## alpha = 1e-5, 
+                                   alpha = cn.signif, ## old at 1e-5
                                    verbose = FALSE)
             if (verbose)
             {
@@ -2016,16 +2022,17 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         } else if (use.ppgrid) {
             jmessage("Using ppgrid to estimate purity ploidy")
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
+            browser()
             if (!is.null(het.file))
             {
                 pp = ppgrid(ss.tmp,
                             verbose = verbose,
                             plot = F,
                             mc.cores = mc.cores,
-                            purity.min = ifelse(is.na(purity), 0, purity),
-                            purity.max = ifelse(is.na(purity),1, purity),
-                            ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy),
-                            ploidy.max = ifelse(is.na(ploidy), 6, ploidy),
+                            purity.min = ifelse(is.na(purity[1]), 0, purity[1]),
+                            purity.max = ifelse(is.na(purity[length(purity)]), 1, purity[length(purity)]),
+                            ploidy.min = ifelse(is.na(ploidy[1]), 1.2, ploidy[1]),
+                            ploidy.max = ifelse(is.na(ploidy[length(ploidy)]), 6, ploidy[length(ploidy)]),
                             allelic = TRUE)
             }
             else {
@@ -2033,10 +2040,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             verbose = verbose,
                             plot = F,
                             mc.cores = mc.cores,
-                            purity.min = ifelse(is.na(purity), 0, purity),
-                            purity.max = ifelse(is.na(purity),1, purity),
-                            ploidy.min = ifelse(is.na(ploidy), 1.2, ploidy),
-                            ploidy.max = ifelse(is.na(ploidy), 6, ploidy),
+                            purity.min = ifelse(is.na(purity[1]), 0, purity[1]),
+                            purity.max = ifelse(is.na(purity[length(purity)]), 1, purity[length(purity)]),
+                            ploidy.min = ifelse(is.na(ploidy[1]), 1.2, ploidy[1]),
+                            ploidy.max = ifelse(is.na(ploidy[length(ploidy)]), 6, ploidy[length(ploidy)]),
                             allelic = FALSE)
             }
         } else {
@@ -2071,6 +2078,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     this.kag$ab.force = ab.force
     saveRDS(this.kag, out.file) ## DONE
 
+    ## TODO make these plots more helpful to the users
     if (is.character(tryCatch(png(paste(out.file, '.ppfit.png', sep = ''), height = 1000, width = 1000), error = function(e) 'bla')))
         pdf(paste(out.file, '.ppfit.pdf', sep = ''), height = 10, width = 10)
     tmp.kag = this.kag
@@ -2108,8 +2116,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (length(tmp)==0)
         return()
+
+    ## sampling random loci to plot not segments
     segsamp = pmin(sample(tmp$mean, 1e6, replace = T, prob = width(tmp)), xlim[2])
-    hist(pmax(xlim[1], pmin(xlim[2], segsamp)), 1000, xlab = 'Segment intensity', main = sprintf('Purity: %s Ploidy: %s Beta: %s Gamma: %s', kag$purity, kag$ploidy, round(kag$beta,2), round(kag$gamma,2)), xlim = c(pmax(0, xlim[1]), pmin(xlim[2], max(segsamp, na.rm = T))))
+    hist(
+        pmax(xlim[1], pmin(xlim[2], segsamp)),
+        1000, xlab = 'Segment intensity',
+        main = sprintf('Purity: %s Ploidy: %s Beta: %s Gamma: %s', kag$purity, kag$ploidy, round(kag$beta,2), round(kag$gamma,2)),
+        xlim = c(pmax(0, xlim[1]), pmin(xlim[2], max(segsamp, na.rm = T))))
     abline(v = 1/kag$beta*(0:1000) + kag$gamma/kag$beta, col = alpha('red', 0.3), lty = c(4, rep(2, 1000)))
 }
 
