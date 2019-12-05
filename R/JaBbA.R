@@ -2022,7 +2022,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         } else if (use.ppgrid) {
             jmessage("Using ppgrid to estimate purity ploidy")
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
-            browser()
             if (!is.null(het.file))
             {
                 pp = ppgrid(ss.tmp,

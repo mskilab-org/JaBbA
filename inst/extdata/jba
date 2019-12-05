@@ -60,7 +60,7 @@ if (!exists("opt"))
         make_option(c("--cnsignif"),
                     type = "numeric",
                     default = 1e-5,
-                    help = "Path to .rds file of GRanges object of intervals corresponding to initial segmentation (required)"),
+                    help = "alpha value for CBS"),
         make_option(c("-b", "--nseg"),
                     type = "character",
                     default = "",
