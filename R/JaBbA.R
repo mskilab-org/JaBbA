@@ -35,14 +35,16 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' 
 #' @param juncs.uf supplement junctions in the same format as \code{junctions}
 #' @param blacklist.junctions rearrangement junctions to be excluded from consideration
+#' @param whitelist.junctions rearrangement junctions to be forced to be incorporated
 #' @param geno logical whether the input junctions have GENO field in the metadata. If so, will match the name argument to the corresponding sample and make positive junctions tier 2, the others tier 3.
 #' @param indel character of the decision to "exclude" or "include" small(< min.nbins * coverage bin width) isolated INDEL-like events into the model. Default NULL, do nothing.
 #' @param cfield  character, junction confidence meta data field in ra
 #' @param tfield  character, tier confidence meta data field in ra. tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end. Default "tier".
 #' @param reiterate integer scalar specifying how many extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield.
 #' @param rescue.window integer window size in bp within which to look for lower confidence junctions. Default 1000.
-#' @param nudge.balanced logical whether to attempt to add a small incentive for chains of quasi-reciprocal junctions
+#' @param nudge.balanced logical whether to attempt to add a small incentive for chains of quasi-reciprocal junctions.
 #' @param thresh.balanced numeric maximum distance between a pair of reciprocal junctions. Default 500.
+#' ## TODO think whether this is the reason balanced junction pairs tend to have too many copies
 #' @param edgenudge  numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation. Default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
 #' @param strict logical flag specifying whether to only include junctions that exactly overlap segs
 #' @param all.in whether to use all of the junctions but the tier 3 INDELs all at once
@@ -74,7 +76,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param overwrite  logical flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param verbose logical whether to print out the most verbose version of progress log
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
-#' @param dyn.tuning logical whether to enter debugging mode in 
+#' @param dyn.tuning logical whether to let JaBbA dynamically tune the convergence criteria, default TRUE
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -109,7 +111,7 @@ JaBbA = function(## Two required inputs
                  ## options about optimization
                  slack.penalty = 1e2,
                  loose.penalty.mode = "boolean",
-                 tilim = 2400,
+                 tilim = 6000,
                  max.threads = Inf,
                  max.mem = 16,
                  epgap = 1e-4,
