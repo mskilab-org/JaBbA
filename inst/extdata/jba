@@ -17,7 +17,7 @@ if (!exists("opt"))
             c("--j.supp"),
             type = "character",
             default = NULL,
-            help = "supplement junctions in the same format as \code{junctions}"),
+            help = "supplement junctions in the same format as junctions"),
         make_option(
             c("--blacklist.junctions"),
             type = "character",
@@ -95,7 +95,7 @@ if (!exists("opt"))
             c("--blacklist.coverage"),
             type = "character",
             default = NULL,
-            help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome")
+            help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome"),
         make_option(
             c("--nseg"),
             type = "character",
@@ -107,12 +107,12 @@ if (!exists("opt"))
             default = "",
             help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),        
         make_option(
-            c("-p", "--ploidy"),
+            c("--ploidy"),
             type = "character",
             default = NA,
             help = "Ploidy guess, can be a length 2 range"),
         make_option(
-            c("-q", "--purity"),
+            c("--purity"),
             type = "character",
             default = NA,
             help = "Purity guess, can be a length 2 range"),

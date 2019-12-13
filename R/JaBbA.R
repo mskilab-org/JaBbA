@@ -168,13 +168,13 @@ JaBbA = function(## Two required inputs
     }
 
     ## temporary filter for any negative coords
-    bad.bp = unname(grl.unlist(ra.all)) %Q% (start<0)
-    if (length(bad.bp)>0){
-        jmessage("Warning!! ", length(bad.bp), " breakpoints in ",
-                 length(bad.ix <- unique(bad.bp$grl.ix)), " junctions ",
-                 "have negative coordinates, discard.")
-        ra.all = ra.all[setdiff(seq_along(ra.all), bad.ix)]
-    }
+    ## bad.bp = unname(grl.unlist(ra.all)) %Q% (start<0)
+    ## if (length(bad.bp)>0){
+    ##     jmessage("Warning!! ", length(bad.bp), " breakpoints in ",
+    ##              length(bad.ix <- unique(bad.bp$grl.ix)), " junctions ",
+    ##              "have negative coordinates, discard.")
+    ##     ra.all = ra.all[setdiff(seq_along(ra.all), bad.ix)]
+    ## }
     
     if (verbose)
     {
@@ -221,7 +221,8 @@ JaBbA = function(## Two required inputs
         ## ra.all = ra.all.uf[ndup]
     }
 
-    if (!is.null(blacklist.junctions)){
+    ## browser()
+    if (!is.null(blacklist.junctions)){2
         blacklist.junctions = read.junctions(blacklist.junctions)
         if (length(blacklist.junctions)>0){
             black.ix = which(gUtils::grl.in(ra.all, blacklist.junctions))
@@ -731,19 +732,19 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 as.character(seqnames(coverage))[ix], start(coverage)[ix],
                 data.type = 'logratio')
             ## Addy at some point suggested 1e-5 to prevent way too many unnecessary segmentations at 200bp resolution
-            seg = DNAcopy::segment(DNAcopy::smooth.CNA(cna),
-                                   alpha = cn.signif, ## old at 1e-5
-                                   verbose = FALSE)
+            segs = DNAcopy::segment(DNAcopy::smooth.CNA(cna),
+                                    alpha = cn.signif, ## old at 1e-5
+                                    verbose = FALSE)
             if (verbose)
             {
                 jmessage('Segmentation finished')
             }
-            seg = seg2gr(seg$out, new.sl) ## remove seqlengths that have not been segmented
+            seg = gUtils::seg2gr(segs$out, new.sl) ## remove seqlengths that have not been segmented
             seg = gr.fix(seg, GenomeInfoDb::seqlengths(coverage), drop = T)
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = gaps(seg) %Q% (strand == "*") %Q% (width> (5 * binw))
+            gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
             if (length(gap.seg)>0){
                 bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
             } else {
@@ -754,7 +755,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
             names(new.segs) = NULL
             seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
-            
+
             if (verbose)
             {
                 jmessage(length(seg), ' segments produced')
@@ -891,13 +892,13 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     union.sl = union.sl[
       , sl := pmax(seg.sl, cov.sl, ra.sl, na.rm = T)][
       , setNames(sl, seqnames)]
-    new.seg = seg %Q% (seqnames %in% names(union.sl))
+    new.seg = seg[which(is.element(as.character(seqnames(seg)), names(union.sl)))]
     if (length(new.seg)<length(seg)){
         jmessage(length(seg)-length(new.seg), " segments are discarded because they fall out of the ref genome.")
     }
     seg = new.seg
     seqlevels(seg) = seqlevels(seg)[which(is.element(seqlevels(seg), names(union.sl)))]
-    new.coverage = coverage %Q% (seqnames %in% names(union.sl))
+    new.coverage = coverage[which(is.element(as.character(seqnames(coverage)), names(union.sl)))]
     seqlevels(coverage) = seqlevels(coverage)[
         which(is.element(seqlevels(coverage), names(union.sl)))]
     if (length(new.coverage)<length(coverage)){
@@ -1367,8 +1368,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         
         ## don't call the loose ends around NA regions
         .BADWIN = 1e5
-        bad.win = streduce(kag$segstats %Q% which(is.na(mean)), .BADWIN)
-        l$bad.l = l %^% bad.win
+        bad.win = streduce(kag$segstats[which(is.na(kag$segstats$mean))], .BADWIN)
+        l$bad.l = gUtils::gr.in(l, bad.win)
 
         ## combine relevant fields from each test
         ## cnl = rev(rev(colnames(rel))[1:6])

@@ -39,7 +39,6 @@ $ jba ## to see the help message
 5. test run jba executable on provided data
 ```{bash}
 $ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt 
-
  _____         ___    _      _____ 
 (___  )       (  _`\ ( )    (  _  )
     | |   _ _ | (_) )| |_   | (_) |
@@ -49,48 +48,93 @@ $ jba JaBbA/inst/extdata/junctions.vcf JaBbA/inst/extdata/coverage.txt
 
 (Junction     Balance     Analysis)
 
-JaBbA 2018-02-13 21:29:50: Located junction file JaBbA/inst/extdata/junctions.vcf
-JaBbA 2018-02-13 21:29:50: Located coverage file JaBbA/inst/extdata/coverage.txt
-JaBbA 2018-02-13 21:29:50: Loading packages ...
-JaBbA 2018-02-13 21:30:00: Starting analysis in ./jba_out
-JaBbA 2018-02-13 21:32:13: Done .. job output in: ./jba_out
-
-```
-
-
-Usage (jba executable)
-------------
-
-```{bash}
-Usage: jba [options] JUNCTIONS COVERAGE
+Usage: jba JUNCTIONS COVERAGE [options]
 	JUNCTIONS can be BND style vcf, bedpe, rds of GrangesList
  	COVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges
 	use --field=FIELD argument so specify which column to use if specific meta field of a multi-column table
 
+
 Options:
+	--j.supp=J.SUPP
+		supplement junctions in the same format as junctions
+
+	--blacklist.junctions=BLACKLIST.JUNCTIONS
+		rearrangement junctions to be excluded from consideration
+
+	--whitelist.junctions=WHITELIST.JUNCTIONS
+		rearrangement junctions to be forced to be incorporated
+
+	--geno
+		whether the junction has genotype information
+
+	--indel=INDEL
+		character of the decision to 'exclude' or 'include' small(< min.nbins * coverage bin width) isolated INDEL-like events into the model. Default NULL, do nothing.
+
+	--cfield=CFIELD
+		junction confidence meta data field in ra
+
+	--tfield=TFIELD
+		tier confidence meta data field in ra. tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end. Default 'tier'.
+
+	--iterate=ITERATE
+		the number of extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield.
+
+	--window=WINDOW
+		window size in bp within which to look for lower confidence junctions. Default 1000.
+
+	--nudgebalanced=NUDGEBALANCED
+		whether to attempt to add a small incentive for chains of quasi-reciprocal junctions.
+
+	--edgenudge=EDGENUDGE
+		numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation. Default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies.
+
+	--strict
+		if used will only include junctions that exactly overlap segs
+
+	--allin
+		if TRUE will put all tiers in the first round of iteration
+
+	--field=FIELD
+		name of the metadata column of coverage that contains the data. Default 'ratio' (coverage ratio between tumor and normal). If using dryclean, it is 'foreground'.
+
 	-s SEG, --seg=SEG
 		Path to .rds file of GRanges object of intervals corresponding to initial segmentation (required)
 
-	-c COVERAGE, --coverage=COVERAGE
-		Path to .rds, file of GRanges object of fine scale genomic coverage / abundance as tiled intervals (100 - 5000 bp) along genome (required)
+	--maxna=MAXNA
+		Any node with more NA than this fraction will be ignored
 
-	-j JUNCTIONS, --junctions=JUNCTIONS
-		Path to rearrangement file, which can be VCF breakend format, dRanger tab delim output,  or an rds of GRangesList of signed locus pairs pointing AWAY from junction (required)
+	--blacklist.coverage=BLACKLIST.COVERAGE
+		Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome
 
-	--j.supp=J.SUPP
-		Supplementary junctions which will be used in subsequent iterations, same format as '--junctions'
-
-	-i TFIELD, --tfield=TFIELD
-		Name of meta data field of ra GRanges or data frame that specifies tiers of junctions, where tier 1 is forced to be included
-
-	-b NSEG, --nseg=NSEG
+	--nseg=NSEG
 		Path to .rds file of GRanges object of intervals corresponding to normal tissue copy number, needs to have $cn field
 
-	-d HETS, --hets=HETS
+	--hets=HETS
 		Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
 
-	-l LIBDIR, --libdir=LIBDIR
-		Directory containing karyoMIP.R file (eg default GIT.HOME/isva)
+	--ploidy=PLOIDY
+		Ploidy guess, can be a length 2 range
+
+	--purity=PURITY
+		Purity guess, can be a length 2 range
+
+	--ppmethod=PPMETHOD
+		select from 'ppgrid', 'ppurple', and 'sequenza' to infer purity and ploidy if not both given. Default, 'sequenza'.
+
+	--cnsignif=CNSIGNIF
+		alpha value for CBS
+
+	--slack=SLACK
+		Slack penalty to apply per loose end
+
+	--linear
+		if TRUE will use L1 loose end penalty
+
+	-t TILIM, --tilim=TILIM
+		Time limit for JaBbA MIP
+
+	--epgap=EPGAP
+		threshold for calling convergence
 
 	-o OUTDIR, --outdir=OUTDIR
 		Directory to dump output into
@@ -98,71 +142,11 @@ Options:
 	-n NAME, --name=NAME
 		Sample / Individual name
 
-	-f FIELD, --field=FIELD
-		Name of meta data field or column to use for abundance / coverage signal from abundance / coverage soignal file
-
-	-k SLACK, --slack=SLACK
-		Slack penalty to apply per loose end copy
-
-	-z SUBSAMPLE, --subsample=SUBSAMPLE
-		Numeric value between 0 and 1 specifying whether to subsample coverage for intra segment variance estimation
-
-	-t TILIM, --tilim=TILIM
-		Time limit for JaBbA MIP
-
-	-p PLOIDY, --ploidy=PLOIDY
-		Ploidy guess
-
-	-q PURITY, --purity=PURITY
-		Purity guess
-
 	--cores=CORES
 		Number of cores for JaBBa MIP
 
-	-m ITERATE, --iterate=ITERATE
-		How many times to iterate through tiers
-
-	-w WINDOW, --window=WINDOW
-		Window to dumpster dive for junctions around loose ends
-
-	-e EDGENUDGE, --edgenudge=EDGENUDGE
-		Edge nudge for optimization, to be multiplied by edge specific confidence score if provided
-
-	--ppmethod=PPMETHOD
-		choose from sequenza, ppurple, or ppgrid to estimate purity ploidy
-
-	--indel
-		if TRUE will force the small isolated junctions in tier 2 have non-zero copy numbers
-
-	--allin
-		if TRUE will put all tiers in the first round of iteration
-
-	--boolean
-		if TRUE will use Boolean loose end penalty
-
-	--epgap=EPGAP
-		threshold for calling convergence
-
-	-x STRICT, --strict=STRICT
-		if TRUE will restrict input junctions to only the subset overlapping seg
-
-	--gurobi=GUROBI
-		if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)
-
 	-v, --verbose
 		verbose output
-
-	-y, --nudgebalanced
-		Manually nudge balanced junctions into the model.
-
-	--maxna=MAXNA
-		Any node with more NA than this fraction will be ignored
-
-	--blacklist=BLACKLIST
-		Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome
-
-	--geno
-		Whether to consider the `GENO` field in the input junctions VCF, use this flag if your SV VCF is generated by SvABA multisample run
 
 	-h, --help
 		Show this help message and exit
