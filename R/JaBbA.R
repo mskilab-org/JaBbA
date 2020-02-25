@@ -2663,8 +2663,10 @@ segstats = function(target,
         }
 
         ## overdispersion correction
-        lmd = tmp[, lm(var ~ mean)] ## loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
-        tmp[, predict.var := predict.lm(lmd, newdata = mean)] ## tmp[, predict.var := predict(loe, newdata = mean)]
+        loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
+        ## lmd = tmp[, lm(var ~ mean)] ##
+        ## tmp[, predict.var := predict(loe, newdata = mean)]
+        ## tmp[, predict.var := predict.lm(lmd, newdata = mean)] ## 
 
         ## inferring segment specific variance using loess fit of mean to variance per node
         ## using loess fit as the prior sample var
