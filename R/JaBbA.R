@@ -1044,6 +1044,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         if (is.character(init))
             init = readRDS(init)
     }
+
+    browser()
     if (overwrite | !file.exists(jabba.raw.rds.file))
     {
         ramip_stub(kag.file,
@@ -2502,6 +2504,7 @@ segstats = function(target,
         if (!(field %in% names(values(signal))))
             stop('Field not found in signal GRanges')
 
+        browser()
         utarget = unique(gr.stripstrand(target))
         ## target$raw.sd = target$sd
         ## good.bin = signal[which(!is.na(values(signal)[, field]) &
@@ -2660,8 +2663,8 @@ segstats = function(target,
         }
 
         ## overdispersion correction
-        loe = tmp[, loess(var ~ mean, weights = nbins)]
-        tmp[, predict.var := predict(loe, newdata = mean)]
+        lmd = tmp[, lm(var ~ mean)] ## loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
+        tmp[, predict.var := predict.lm(lmd, newdata = mean)] ## tmp[, predict.var := predict(loe, newdata = mean)]
 
         ## inferring segment specific variance using loess fit of mean to variance per node
         ## using loess fit as the prior sample var
@@ -5637,6 +5640,8 @@ read.junctions = function(rafile,
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
+            rafile[, end1 := start1]
+            rafile[, end2 := start2]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
 
           if (!is.null(seqlengths) && all(!is.na(seqlengths)))
