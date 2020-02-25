@@ -1045,7 +1045,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             init = readRDS(init)
     }
 
-    browser()
+    ## browser()
     if (overwrite | !file.exists(jabba.raw.rds.file))
     {
         ramip_stub(kag.file,
@@ -2504,7 +2504,7 @@ segstats = function(target,
         if (!(field %in% names(values(signal))))
             stop('Field not found in signal GRanges')
 
-        browser()
+        ## browser()
         utarget = unique(gr.stripstrand(target))
         ## target$raw.sd = target$sd
         ## good.bin = signal[which(!is.na(values(signal)[, field]) &
