@@ -190,7 +190,9 @@ if (!exists("opt"))
         if (!file.exists(opt$junctions))
         {
             message('Did not find junction file ', opt$junctions)
-            print_help(parseobj); stop()
+            message('Warning: will be Running JaBbA without junctions')
+            ## print_help(parseobj); stop()
+            opt$junctions = ""
         }
         if (!file.exists(opt$coverage))
         {
