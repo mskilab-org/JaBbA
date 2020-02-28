@@ -139,6 +139,10 @@ JaBbA = function(## Two required inputs
     ##         stop(paste('Junction path', ra, 'does not exist'))
     ##     }
     ra.all = read.junctions(ra, geno = geno) ## GRL
+    if (is.null(ra.all)){
+        jmessage("Warning: no junction file is given, will be running JaBbA without junctions!")
+        ra.all = GRangesList()
+    }
     ## } else if (is.null(ra)) {
     ##     ra.all = GRangesList()
     ## } else {
@@ -195,12 +199,12 @@ JaBbA = function(## Two required inputs
     }
 
     ## if no tier field in junctions, set all of them to 2
-    if (!(tfield %in% names(values(ra.all))) & length(ra.all)>0)
+    if (!(tfield %in% names(values(ra.all))))
     {
         warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
-        values(ra.all)[, tfield] = 2
+        values(ra.all)[, tfield] = rep(2, length.out = length(ra.all))
     }
-    
+
     if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
@@ -259,7 +263,7 @@ JaBbA = function(## Two required inputs
         continue = TRUE
         this.iter = 1;
 
-        values(ra.all)$id = 1:length(ra.all)
+        values(ra.all)$id = seq_along(ra.all)
         saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
 
         ## big change tonight, I'm gonna start with all of the tiers in the first round
@@ -977,7 +981,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             balanced.jix = setdiff(balanced.jix, dp.jix)
         }
         ## only adds edge nudge to the balanced junctions
-        edgenudge = edgenudge * as.numeric(1:length(juncs) %in% balanced.jix) 
+        edgenudge = edgenudge * as.numeric(seq_along(juncs) %in% balanced.jix) 
     } else { ## nudge everything ..
         if (length(edgenudge)==1) edgenudge = rep(edgenudge, length(juncs))
         if (length(juncs)>0){   ## hot fix for preventing nudging of NA segments
@@ -1123,7 +1127,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## cols = c('track.name', 'chrom', 'start', 'end', 'cn', 'seg.id')
     ## seg.out = seg.out[, c(cols, setdiff(names(seg.out), cols))]
     write.tab(seg.out, seg.tab.file)
-    jabd$segstats$seg.id = 1:length(jabd$segstats)
+    jabd$segstats$seg.id = seq_along(jabd$segstats)
     
     if (verbose)
     {
@@ -1482,8 +1486,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (length(kag$junctions)>0)
     {
         tmp = grl.pivot(kag$junctions)
-        names(tmp[[1]]) = 1:length(kag$junctions)
-        names(tmp[[2]]) = 1:length(kag$junctions)
+        names(tmp[[1]]) = seq_along(kag$junctions)
+        names(tmp[[2]]) = seq_along(kag$junctions)
         ra1 = as.data.frame(tmp[[1]])
         ra2 = as.data.frame(tmp[[2]])
         names(ra1) = paste('bp1_', names(ra1), sep = '')
@@ -2475,10 +2479,10 @@ segstats = function(target,
                 aprior_beta + sum(!is.na(x))
 
             ## asignal.df = as.data.frame(asignal)
-            ## alpha_high = vaggregate(high.count ~ ix, asignal.df, .postalpha)[as.character(1:length(target))]
-            ## beta_high = vaggregate(high.count ~ ix, asignal.df, .postbeta)[as.character(1:length(target))]
-            ## alpha_low = vaggregate(low.count ~ ix, asignal.df, .postalpha)[as.character(1:length(target))]
-            ## beta_low = vaggregate(low.count ~ ix, asignal.df, .postbeta)[as.character(1:length(target))]
+            ## alpha_high = vaggregate(high.count ~ ix, asignal.df, .postalpha)[as.character(seq_along(target))]
+            ## beta_high = vaggregate(high.count ~ ix, asignal.df, .postbeta)[as.character(seq_along(target))]
+            ## alpha_low = vaggregate(low.count ~ ix, asignal.df, .postalpha)[as.character(seq_along(target))]
+            ## beta_low = vaggregate(low.count ~ ix, asignal.df, .postbeta)[as.character(seq_along(target))]
 
             asignal.dt = gr2dt(asignal)
             asignal.dt[,
@@ -2873,14 +2877,14 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## i.e. we split each fixed node to a node that is receiving edges
         ## and a node that is sending edges
         ##
-        unfix = as.numeric(setdiff(1:length(segstats), fix))
+        unfix = as.numeric(setdiff(seq_along(segstats), fix))
         tmp.adj = adj
         if (!is.null(adj.ub)){
             tmp.ix = Matrix::which(adj.ub != 0, arr.ind=TRUE)
             tmp.adj[tmp.ix] = 0
         }
         G = graph(as.numeric(t(Matrix::which(tmp.adj != 0, arr.ind=T))), n = length(segstats), directed = T)
-        V(G)$name = as.numeric(V(G)) ##  1:length(V(G)) ## igraph vertex naming is a mystery
+        V(G)$name = as.numeric(V(G)) ##  seq_along(V(G)) ## igraph vertex naming is a mystery
 
         if (length(fix)>0)
             G.unfix = induced.subgraph(G, unfix) + vertices(c(paste('from', fix), paste('to', fix)))
@@ -2945,12 +2949,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         neg.ix = which( as.logical( strand(segstats)=='-') )
 
         ## maps segments and reverse complements
-        seg.map = c(1:length(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
+        seg.map = c(seq_along(pos.ix), suppressWarnings(pos.ix[match(segstats[neg.ix], gr.flipstrand(segstats[pos.ix]))]))
 
         cll.m = sapply(cll, function(x) paste(sort(seg.map[node.map[x]]), collapse = ' '))
         dup.ix = match(cll.m, unique(cll.m))
-                                        #      cll = lapply(split(1:length(dup.ix), dup.ix), function(x) sort(unique(do.call('c', cll[x]))))
-        cll = lapply(split(1:length(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
+                                        #      cll = lapply(split(seq_along(dup.ix), dup.ix), function(x) sort(unique(do.call('c', cll[x]))))
+        cll = lapply(split(seq_along(dup.ix), dup.ix), function(x) c(cll[[x[1]]], cll[[x[2]]]))
 
         ord.ix = order(-sapply(cll, length))
         cll = cll[ord.ix]
@@ -2961,7 +2965,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                      paste(sapply(cll[1:min(10, length(cll))], length), collapse = ','), '')
         }
 
-        cn.fix = ifelse(1:length(segstats) %in% fix, cnmle, NA)
+        cn.fix = ifelse(seq_along(segstats) %in% fix, cnmle, NA)
 
         ## force "non lazy" evaluation of args in order to avoid weird R ghosts (WTF) downstream in do.call
         args = as.list(match.call())[-1]
@@ -3146,7 +3150,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
         ## adjacency matrix
         out$adj = 0 * adj
-        for (i in 1:length(sols))
+        for (i in seq_along(sols))
         {
             ix1 = as.numeric(rownames(sols[[i]]$adj))
             out$adj[ix1, ix1] = out$adj[ix1, ix1] + sols[[i]]$adj
@@ -3155,13 +3159,13 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## segstats
         sol.ix = lapply(sols, function(x) as.numeric(rownames(x$adj)))
 
-        out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(1:length(segstats), unlist(sol.ix))]
+        out$segstats = do.call('grbind', lapply(sols, function(x) x$segstats))[match(seq_along(segstats), unlist(sol.ix))]
 
         ## annotate segstats keep to keep track and "fixed nodes"
-        out$segstats$fixed = 1:length(out$segstats) %in% fix
+        out$segstats$fixed = seq_along(out$segstats) %in% fix
         out$segstats$cn.fix = cn.fix
         out$segstats$cl  = NA
-        out$segstats$id = 1:length(out$segstats)
+        out$segstats$id = seq_along(out$segstats)
 
         ## keep track of which clusters segments originated
         sol.ixul = munlist(sol.ix)
@@ -3186,9 +3190,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         out$segstats$ecn.out =  Matrix::rowSums(out$adj)
         out$segstats$ecn.in =  Matrix::colSums(out$adj)
 
-        out$segstats$edges.in = sapply(1:length(out$segstats),
+        out$segstats$edges.in = sapply(seq_along(out$segstats),
                                        function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-        out$segstats$edges.out = sapply(1:length(out$segstats),
+        out$segstats$edges.out = sapply(seq_along(out$segstats),
                                         function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
 
         ncn = rep(2, length(segstats))
@@ -3497,9 +3501,9 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         sol$segstats$cn = round(vcn)
         sol$segstats$ecn.in = round(Matrix::colSums(sol$adj))
         sol$segstats$ecn.out = round(Matrix::rowSums(sol$adj))
-        sol$segstats$edges.in = sapply(1:length(sol$segstats),
+        sol$segstats$edges.in = sapply(seq_along(sol$segstats),
                                        function(x) {ix = Matrix::which(adj[,x]!=0); paste(ix, '(', sol$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-        sol$segstats$edges.out = sapply(1:length(sol$segstats),
+        sol$segstats$edges.out = sapply(seq_along(sol$segstats),
                                         function(x) {ix = Matrix::which(adj[x, ]!=0); paste('->', ix, '(', sol$adj[x,ix], ')', sep = '', collapse = ',')})
 
         sol$segstats$eslack.in = round(sol$xopt[es.t.ix])
@@ -3544,7 +3548,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     rev.ix = match(segstats, gr.flipstrand(segstats))
 
     ## use rev.ix to label all reverse complement pairs
-    rcpairs = igraph::clusters(graph.edgelist(cbind(1:length(rev.ix), rev.ix)), 'weak')$membership
+    rcpairs = igraph::clusters(graph.edgelist(cbind(seq_along(rev.ix), rev.ix)), 'weak')$membership
     sid = ifelse(duplicated(rcpairs), -1, 1)*rcpairs
 
     if (any(is.na(rev.ix)))
@@ -3577,7 +3581,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     if (any(is.na(erev.ix)))
         stop('Input genome graph malformed, some edges missing their exact reverse complement')
 
-    rcepairs = igraph::clusters(graph.edgelist(cbind(1:length(erev.ix), erev.ix)), 'weak')$membership
+    rcepairs = igraph::clusters(graph.edgelist(cbind(seq_along(erev.ix), erev.ix)), 'weak')$membership
     edges.dt[, esid := ifelse(duplicated(rcepairs), -1, 1)*rcepairs]
     return(edges.dt$esid)
 }
@@ -3625,11 +3629,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     ## set copy number constraints
     Acn = Zero[rep(1, length(v.ix.c)+1), ]
-    Acn[cbind(1:length(v.ix.c), v.ix.c)] = 1;
-    Acn[cbind(1:length(v.ix.c), s.ix)] = 1
+    Acn[cbind(seq_along(v.ix.c), v.ix.c)] = 1;
+    Acn[cbind(seq_along(v.ix.c), s.ix)] = 1
     ## taking into account (normal) variable cn
-    Acn[cbind(1:length(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 
-    Acn[cbind(1:length(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
+    Acn[cbind(seq_along(v.ix.c), gamma.ix)] = ncn[v.ix.c]/2 
+    Acn[cbind(seq_along(v.ix.c), beta.ix)] = -segstats$mean[v.ix.c]
 
     ## ## final "conservation" constraint
     ## Acn[length(v.ix.c)+1, v.ix] = width(segstats)/sum(as.numeric(width(segstats)));
@@ -4023,12 +4027,12 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     sid = as.numeric(names(segstats)) ## assume that segstats has signed integer sid
 
     varmeta = data.table()
-    v.ix = nrow(varmeta) +  1:length(segstats)
+    v.ix = nrow(varmeta) +  seq_along(segstats)
 
     ## adding intervals
     varmeta = data.table(
         id = v.ix,
-        pid = 1:length(sid),
+        pid = seq_along(sid),
         psid = sid,
         label = paste0('interval', ifelse(sid>0, sid, paste0(-sid, 'r'))),
         type = 'interval',
@@ -4043,7 +4047,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     varmeta = rbind(varmeta,
                     data.table(
                         id = s.ix,
-                        pid = 1:length(sid),
+                        pid = seq_along(sid),
                         psid = sid,
                         label = paste0('residual', ifelse(sid>0, sid, paste0(-sid, 'r'))),
                         dup = sid<0,
@@ -4104,11 +4108,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                         stringsAsFactors = F))
 
     ## adding slacks
-    es.s.ix = nrow(varmeta)+(1:length(v.ix)) ## adding "source slack" variable
+    es.s.ix = nrow(varmeta)+(seq_along(v.ix)) ## adding "source slack" variable
     varmeta = rbind(varmeta,
                     data.table(
                         id = es.s.ix,
-                        pid = 1:length(sid),
+                        pid = seq_along(sid),
                         psid = sid,
                         label = paste0('source.slack', ifelse(sid>0, sid, paste0(-sid, 'r'))),
                         type = 'source.slack',
@@ -4118,11 +4122,11 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                         ub = Inf,
                         stringsAsFactors = F))
 
-    es.t.ix = nrow(varmeta)+(1:length(v.ix)) ## adding "target slack"
+    es.t.ix = nrow(varmeta)+(seq_along(v.ix)) ## adding "target slack"
     varmeta = rbind(varmeta,
                     data.table(
                         id = es.t.ix,
-                        pid = 1:length(sid),
+                        pid = seq_along(sid),
                         psid = sid,
                         label = paste0('target.slack', ifelse(sid>0, sid, paste0(-sid, 'r'))),
                         type = 'target.slack',
@@ -4136,7 +4140,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## add loose end binary indicator variables for all (non dup) loose end
         ## source and target slack variables
         lix = varmeta[type %in% c('source.slack') & !dup, id]
-        ilix = nrow(varmeta) + 1:length(lix)
+        ilix = nrow(varmeta) + seq_along(lix)
         varmeta = rbind(varmeta,
                         data.table(
                             id = ilix,
@@ -4154,7 +4158,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                             stringsAsFactors = FALSE))
 
         lix = varmeta[type %in% c('target.slack') & !dup, id]
-        ilix = nrow(varmeta) + 1:length(lix)
+        ilix = nrow(varmeta) + seq_along(lix)
         varmeta = rbind(varmeta,
                         data.table(
                             id = ilix,
@@ -4221,7 +4225,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         sinks = gr.end(jab$segstats[sink.ix],ignore.strand = FALSE)
         sinks$cn = jab$segstats$eslack.out[sink.ix]
         sinks$partner.id = sink.ix
-        sinks$id = nrow(adj) + 1:length(sinks)
+        sinks$id = nrow(adj) + seq_along(sinks)
         sinks$loose = TRUE
         sinks$right = as.logical(strand(sinks)=='+')
 
@@ -4229,7 +4233,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         sources = gr.start(jab$segstats[source.ix],ignore.strand = FALSE)
         sources$cn = jab$segstats$eslack.in[source.ix]
         sources$partner.id = source.ix
-        sources$id = nrow(adj) + length(sinks) + 1:length(sources)
+        sources$id = nrow(adj) + length(sinks) + seq_along(sources)
         sources$loose = TRUE
         sources$right = as.logical(strand(sources)=='+')
 
@@ -4263,7 +4267,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     ##     strand(lends) = '+'
     ##     lends = c(lends, gr.flipstrand(lends))
     ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
-    ##     lends$id = nrow(adj) + c(1:length(lends))
+    ##     lends$id = nrow(adj) + c(seq_along(lends))
     ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
     ##     adj.plus = rbind(cbind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
     ##       cbind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
@@ -4293,17 +4297,17 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
     out$segstats = gr.fix(
         gr.simplify(
             segstats[unlist(lapply(collapsed$sets, sort))],
-            val = rep(1:length(collapsed$sets), sapply(collapsed$sets, length))),
+            val = rep(seq_along(collapsed$sets), sapply(collapsed$sets, length))),
         segstats)
 
     tmp.ss = gr.string(gr.stripstrand(out$segstats), other.cols = 'loose')
     check1 = all(table(match(tmp.ss, tmp.ss)))
-    check2 = identical(1:length(collapsed$sets), sort(out$segstats$set.id))
+    check2 = identical(seq_along(collapsed$sets), sort(out$segstats$set.id))
 
     if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
         stop('collapse yielded funny / missing segments')
     else
-        out$segstats = out$segstats[match(1:length(collapsed$sets), out$segstats$set.id), c('cn')]
+        out$segstats = out$segstats[match(seq_along(collapsed$sets), out$segstats$set.id), c('cn')]
 
     ## out$segstats$og.ix = sapply(collapsed$sets, function(x) paste(sort(x), collapse = ','))
 
@@ -4377,7 +4381,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         ## maps edges to rev comp
         ed.map = match(paste(out$edges[, from], out$edges[, to]),
                        paste(seg.map[out$edges[, to]], seg.map[out$edges[, from]]))
-        temp.ix = which(ed.map>(1:length(ed.map)));
+        temp.ix = which(ed.map>(seq_along(ed.map)));
         ed.id = ed.map
         ed.id[temp.ix] = temp.ix
         ## edges whose rev comp has higher id we name with their index,
@@ -4405,9 +4409,9 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     out$G = graph.adjacency(adj.new.ix, weighted = 'edge.ix')
 
-    out$segstats$edges.in = sapply(1:length(out$segstats),
+    out$segstats$edges.in = sapply(seq_along(out$segstats),
                                    function(x) {ix = which(out$adj[,x]!=0); paste(ix, '(', out$adj[ix,x], ')', '->', sep = '', collapse = ',')})
-    out$segstats$edges.out = sapply(1:length(out$segstats),
+    out$segstats$edges.out = sapply(seq_along(out$segstats),
                                     function(x) {ix = which(out$adj[x, ]!=0); paste('->', ix, '(', out$adj[x,ix], ')', sep = '', collapse = ',')})
 
     pos.ix = which( as.logical( strand(out$segstats)=='+') )
@@ -4530,8 +4534,8 @@ jabba.alleles = function(jab,
         }
 
 
-        highs = split(het.sites$high.count, het.sites$ix)[as.character(1:length(re.seg))]
-        lows = split(het.sites$low.count, het.sites$ix)[as.character(1:length(re.seg))]
+        highs = split(het.sites$high.count, het.sites$ix)[as.character(seq_along(re.seg))]
+        lows = split(het.sites$low.count, het.sites$ix)[as.character(seq_along(re.seg))]
 
         het.sites$cn = re.seg$cn[het.sites$ix]
         purity = jab$purity
@@ -4555,7 +4559,7 @@ jabba.alleles = function(jab,
         ## now test deviation from each absolute copy combo using poisson model
         ## i.e. counts ~ poisson(expected mean)
         ##
-        re.seg$low = sapply(1:length(re.seg), function(i)
+        re.seg$low = sapply(seq_along(re.seg), function(i)
         {
             ##        if (verbose)
             ##          cat('.')
@@ -4593,11 +4597,11 @@ jabba.alleles = function(jab,
     high = low = jab$segstats[, c()]
     high$cn = jab$segstats$cn.high
     low$cn = jab$segstats$cn.low
-    high$parent = low$parent = 1:length(jab$segstats)
+    high$parent = low$parent = seq_along(jab$segstats)
     high$type = 'high'
     low$type = 'low'
-    high$id = 1:length(jab$segstats)
-    low$id = length(jab$segstats) + 1:length(jab$segstats)
+    high$id = seq_along(jab$segstats)
+    low$id = length(jab$segstats) + seq_along(jab$segstats)
     asegstats = c(high, low)
     amap = cbind(high$id, low$id) ## maps segstats id x allele combos to asegstats id
 
@@ -4731,9 +4735,9 @@ jabba.alleles = function(jab,
     asegstats$flip.ix = match(tmp.string, tmp.string2)
     asegstats$phased = !unphased
 
-    asegstats.final$edges.in = sapply(1:length(asegstats.final),
+    asegstats.final$edges.in = sapply(seq_along(asegstats.final),
                                       function(x) {ix = Matrix::which(aadj.final[,x]!=0); paste(ix, '(', aadj.final[ix,x], ')', '->', sep = '', collapse = ',')})
-    asegstats.final$edges.out = sapply(1:length(asegstats.final),
+    asegstats.final$edges.out = sapply(seq_along(asegstats.final),
                                        function(x) {ix = Matrix::which(aadj.final[x, ]!=0); paste('->', ix, '(', aadj.final[x,ix], ')', sep = '', collapse = ',')})
 
     asegstats.final$slack.in = asegstats.final$cn - Matrix::colSums(aadj.final)
@@ -4742,7 +4746,7 @@ jabba.alleles = function(jab,
     asegstats.final$new.ind = asegstats.final$phased.out = asegstats.final$phased.in = asegstats.final$id = NULL
     asegstats.final$tile.id = as.integer(factor(gr.string(gr.stripstrand(asegstats.final), mb = F, other.cols = 'type')))
 
-    m = sparseMatrix(1:length(asegstats.final), asegstats.final$parent, x = 1);
+    m = sparseMatrix(seq_along(asegstats.final), asegstats.final$parent, x = 1);
 
     hh = rep(het.sites[, c()], 2)
     hh$count = c(het.sites$high.count, het.sites$low.count)
@@ -4856,16 +4860,16 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
         force.list = T
 
     if (force.list)
-        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
-                     iix = unlist(lapply(1:length(x), function(y) 1:length(x[[y]]))),
+        return(cbind(ix = unlist(lapply(seq_along(x), function(y) rep(y, length(x[[y]])))),
+                     iix = unlist(lapply(seq_along(x), function(y) seq_along(x[[y]]))),
                      unlist(x)))
     else if (force.rbind)
-        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
-                     iix = unlist(lapply(1:length(x), function(y) 1:nrow(x[[y]]))),
+        return(cbind(ix = unlist(lapply(seq_along(x), function(y) rep(y, nrow(x[[y]])))),
+                     iix = unlist(lapply(seq_along(x), function(y) 1:nrow(x[[y]]))),
                      do.call('rbind', x)))
     else if (force.cbind)
-        return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
-                       iix = unlist(lapply(1:length(x), function(y) 1:ncol(x[[y]]))),
+        return(t(rbind(ix = unlist(lapply(seq_along(x), function(y) rep(y, ncol(x[[y]])))),
+                       iix = unlist(lapply(seq_along(x), function(y) 1:ncol(x[[y]]))),
                        do.call('cbind', x))))
 }
 
@@ -4937,7 +4941,7 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
             all.ix = all.ix[ord.ix]
             out = matrix(NA, nrow = length(all.pos), ncol = 2)
             last.x = last.y = NA
-            for (i in 1:length(all.pos))
+            for (i in seq_along(all.pos))
             {
                 if (is.q[i])
                 {
@@ -4965,8 +4969,8 @@ gr.tile.map = function(query, subject, mc.cores = 1, verbose = FALSE)
         }, ql, sl[names(ql)], mc.cores = mc.cores, SIMPLIFY = FALSE)
 
     m = munlist(tmp)[, -c(1:2), drop = FALSE]
-    out = split(m[,2], m[,1])[as.character(1:length(query))]
-    names(out) = as.character(1:length(query))
+    out = split(m[,2], m[,1])[as.character(seq_along(query))]
+    names(out) = as.character(seq_along(query))
     return(out)
 }
 
@@ -5153,13 +5157,13 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 
     if (length(out$cycles)>0)
     {
-        tmp.cix = cbind(unlist(lapply(1:length(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
+        tmp.cix = cbind(unlist(lapply(seq_along(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
         out$cycles = out$cycles[!duplicated(as.matrix(sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
     }
 
     if (length(out$paths)>0)
     {
-        tmp.pix = cbind(unlist(lapply(1:length(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
+        tmp.pix = cbind(unlist(lapply(seq_along(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
         out$paths = out$paths[!duplicated(as.matrix(sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
     }
 
@@ -5320,11 +5324,11 @@ collapse.paths = function(G, verbose = T)
     slen = sapply(sets, length)
     ix = which(slen>0)
     map = rep(NA, nrow(G))
-    map[unlist(sets)] = match(rep(1:length(sets), slen), ix)
+    map[unlist(sets)] = match(rep(seq_along(sets), slen), ix)
     out = out[ix, ix]
     colnames(out) = rownames(out) = NULL
 
-    return(list(adj = out, map = map, sets = split(1:length(map), map)))
+    return(list(adj = out, map = map, sets = split(seq_along(map), map)))
 }
 
 
@@ -5639,7 +5643,7 @@ read.junctions = function(rafile,
                 }
             }
             ## this is not robust enough! there might be mismatching colnames
-            setnames(rafile, 1:length(cols), cols)
+            setnames(rafile, seq_along(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
             rafile[, end1 := start1]
@@ -5923,7 +5927,7 @@ read.junctions = function(rafile,
 
                 vgr.pair$mix = match(vgr.pair$mix, pix)
 
-                vix = which(1:length(vgr.pair)<vgr.pair$mix)
+                vix = which(seq_along(vgr.pair)<vgr.pair$mix)
                 vgr.pair1 = vgr.pair[vix]
                 vgr.pair2 = vgr.pair[vgr.pair1$mix]
 
@@ -6269,8 +6273,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ## #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
         ## #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
 
-        values(bp1)$bp.id = 1:length(bp1);
-        values(bp2)$bp.id = 1:length(bp1)+length(bp1);
+        values(bp1)$bp.id = seq_along(bp1);
+        values(bp2)$bp.id = seq_along(bp1)+length(bp1);
 
         pgrid = sgn1 = c('-'=-1, '+'=1)[as.character(strand(bp1))]
         sgn2 = c('-'=-1, '+'=1)[as.character(strand(bp2))]
@@ -6361,7 +6365,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     strand(tile) = '+'
     tile = gr.fix(tile);
     tile$is.tel = start(tile)==1 | end(tile) == GenomeInfoDb::seqlengths(tile)[as.character(seqnames(tile))]
-    values(tile)$tile.id = 1:length(tile);
+    values(tile)$tile.id = seq_along(tile);
 
     ## find "breakpoint" i.e. bp associated intervals, i.e. width 1 intervals that end with a bp1 or bp2 location
     junc.bp = grbind(bp1, bp2)
@@ -6444,7 +6448,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         adj.ab = Matrix( 0,
                         nrow = 2*length(tile),
                         ncol = 2*length(tile),
-                        dimnames = rep( list( as.character(c(1:length(tile), -(1:length(tile))))), 2))
+                        dimnames = rep( list( as.character(c(seq_along(tile), -(seq_along(tile))))), 2))
         tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
                        match(as.character(ab.pairs[,2]), colnames(adj.ab)))
         adj.ab[tmp.ix[!duplicated(tmp.ix), , drop = F]] = ab.pairs.bpid[!duplicated(tmp.ix)]
@@ -6454,12 +6458,12 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ab.pairs.bpid = edge.id = c()
         ab.pairs = matrix(nrow = 0, ncol = 2);
         adj.ab = Matrix(FALSE, nrow = 2*length(tile), ncol = 2*length(tile),
-                        dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
+                        dimnames = rep(list(as.character(c(seq_along(tile), -(seq_along(tile))))), 2))
     }
 
     ## # build reference adjacency matrix (representing consecutive segments on the reference genome)
     ## # note: indices of matrix represent edge labels
-    seg.ix = 1:length(tile)
+    seg.ix = seq_along(tile)
     ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)],
                       seg.ix[2:(length(seg.ix))])
     ## # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
@@ -6474,19 +6478,19 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         edge.id = c(edge.id, max(edge.id) + rep(1:nrow(ref.pairs), 2))
         ref.pairs = rbind(ref.pairs, cbind(-ref.pairs[,2], -ref.pairs[,1])) # reverse ref pairs
         adj.ref = Matrix(0, nrow = 2*length(tile), ncol = 2*length(tile),
-                         dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
+                         dimnames = rep(list(as.character(c(seq_along(tile), -(seq_along(tile))))), 2))
         adj.ref[cbind(match(as.character(ref.pairs[,1]), rownames(adj.ref)),
                       match(as.character(ref.pairs[,2]), colnames(adj.ref)))] = nrow(ab.pairs)+1:nrow(ref.pairs)
     }
     else
     {
         adj.ref = Matrix(FALSE, nrow = 2*length(tile), ncol = 2*length(tile),
-                         dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
+                         dimnames = rep(list(as.character(c(seq_along(tile), -(seq_along(tile))))), 2))
     }
 
     ## current tile is partition of genome only in positive orientation + dummy intervals for breakpoints
     ## output tile is forward partition and followed by reverse partition
-    tmp.nm = as.character(c(1:length(tile), -(1:length(tile))))
+    tmp.nm = as.character(c(seq_along(tile), -(seq_along(tile))))
     tile = c(tile, gr.flipstrand(tile))
     names(tile) = tmp.nm
 
@@ -6538,8 +6542,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         E(G)$eid[!ab.ix] = edge.id[adj.ref[cbind(E(G)$from[!ab.ix], E(G)$to[!ab.ix])]]
       }
     values(tile) = values(tile)[, c('tile.id', 'is.tel')]
-    tile$ab.source = 1:length(tile) %in% E(G)$from[ab.ix]
-    tile$ab.target = 1:length(tile) %in% E(G)$to[ab.ix]
+    tile$ab.source = seq_along(tile) %in% E(G)$from[ab.ix]
+    tile$ab.target = seq_along(tile) %in% E(G)$to[ab.ix]
 
     ## # important: map input ra to aberrant graph edges, i.e. ab.edges matrix with $from $to and $edge.ix columns
     ## # and one row for each aberrant edge
@@ -6661,9 +6665,9 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, include.loo
 
             gr1$QUAL = gr2$QUAL = '.'
             gr1$INFO = paste("SVTYPE=BND", ";MATEID=", gr1$mid, ";CNADJ=", gr1$acn, ";CNRADJ=", gr1$rcn, ";CN=", gr1$cn,
-                             ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", 1:length(gr1), sep = '')
+                             ";JABID=", abs[,1], ";RJABID=", rcix[abs[,1]], ";JUNCID=", seq_along(gr1), sep = '')
             gr2$INFO = paste("SVTYPE=BND", ";MATEID=", gr2$mid, ";CNADJ=", gr2$acn, ";CNRADJ=", gr2$rcn, ";CN=", gr2$cn,
-                             ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", 1:length(gr2), sep = '')
+                             ";JABID=", abs[,2], ";RJABID=", rcix[abs[,2]], ";JUNCID=", seq_along(gr2), sep = '')
 
             gr1 = gr1[, vcffields]
             gr2 = gr2[, vcffields]
@@ -6778,7 +6782,7 @@ jabba2vcf = function(jab, fn = NULL, sampleid = 'sample', hg = NULL, include.loo
                 unames = unique(unlist(sapply(z, names)))
                 mfields = c("MATEID", "CNADJ", "JUNCID", "JABID", "RJABID")
                 mergeix = unames %in% mfields
-                out = sapply(1:length(unames), function(i) {
+                out = sapply(seq_along(unames), function(i) {
                     x = unames[i]
                     tmp = sapply(z, function(y) y[x])
                     if (mergeix[i])
@@ -7000,7 +7004,7 @@ levapply = function(x, by, FUN = 'order')
         by = list(by)
 
     f = factor(do.call('paste', c(list(sep = '|'), by)))
-    ixl = split(1:length(x), f);
+    ixl = split(seq_along(x), f);
     ixv = lapply(ixl, function(y) x[y])
     res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
     out = rep(NA, length(x))
@@ -7082,7 +7086,7 @@ sv.size = function(juncs,
 #' @name reciprocal.cycles
 #' @rdname internal
 #' @description
-#' Returns indices (subset of 1:length(junc) corresponding to cycles of (quasi) reciprocal cycles
+#' Returns indices (subset of seq_along(junc) corresponding to cycles of (quasi) reciprocal cycles
 #' @param juncs GRangesList of junctions
 #' @param mc.cores parallel
 #' @param ignore.strand usually TRUE
@@ -7092,10 +7096,10 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 {
     bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
 
-    ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+    ix = split(seq_along(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
     ixu = unlist(ix)
     eps = 1e-9
-    ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+    ij = do.call(rbind, split(seq_along(bp), bp$grl.ix))
     adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
 
     ## matrix of (strand aware) reference distances between breakpoint pairs
@@ -7143,7 +7147,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     adj2[junneg, junneg] = adj[bp1, bp2]
 
     ## strongly connected components consists of (possibly nested) cycles
-    cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+    cl = split(seq_along(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
 
     ## choose only clusters with length > 1
     cl = cl[S4Vectors::elementNROWS(cl)>1]
@@ -7163,7 +7167,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
         sinks = which(rowSums(adj3)==0)
         sources = which(colSums(adj3)==0)
 
-        cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+        cl2 = split(seq_along(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
         cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
 
         if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
@@ -7221,7 +7225,7 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
     ra = ra[which(!sapply(ra, is.null))]
     nm = names(ra)
     if (is.null(nm)){
-        nm = paste('ra', 1:length(ra), sep = '')
+        nm = paste('ra', seq_along(ra), sep = '')
     }
     nm = paste('seen.by', nm, sep = '.')
     if (length(nm)==0){
@@ -7233,7 +7237,7 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
     if (!ind){
         values(out)[, nm[1]] = TRUE
     } else{
-        values(out)[, nm[1]] = 1:length(out)
+        values(out)[, nm[1]] = seq_along(out)
     }
 
     if (length(ra)>1){
@@ -7246,7 +7250,7 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
                 if (!ind){
                     values(this.ra)[[nm[i]]] = TRUE
                 } else{
-                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
+                    values(this.ra)[[nm[i]]] = seq_along(this.ra)
                 }
 
                 if (!ind){
@@ -7261,9 +7265,9 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
                 }
                 ## which are new ranges not already present in out, we will add these
                 if (!all(is.na(ovix))){
-                    nix = setdiff(1:length(this.ra), ovix[,2])
+                    nix = setdiff(seq_along(this.ra), ovix[,2])
                 } else{
-                    nix = 1:length(this.ra)
+                    nix = seq_along(this.ra)
                 }
 
                 if (length(nix)>0){
@@ -7367,12 +7371,12 @@ ppgrid = function(segstats,
     if (verbose)
         cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
 
-    NLL = matrix(unlist(mclapply(1:length(purity.guesses), function(i)
+    NLL = matrix(unlist(mclapply(seq_along(purity.guesses), function(i)
     {
         if (verbose)
             cat('.')
         nll = rep(NA, length(ploidy.guesses))
-        for (j in 1:length(ploidy.guesses))
+        for (j in seq_along(ploidy.guesses))
         {
             alpha = purity.guesses[i]
             tau = ploidy.guesses[j]
@@ -7497,7 +7501,7 @@ ppgrid = function(segstats,
             vtot = round(out$beta[i]*segstats$mean-out$gamma[i])
             vlow.mle = rep(NA, length(vtot))
 
-            for (j in 1:length(vlow.mle))
+            for (j in seq_along(vlow.mle))
             {
                 if (vtot[j]==0)
                     vlow.mle[j] = 0
