@@ -1,0 +1,170 @@
+#!/usr/bin/env Rscript
+library(optparse)
+jbastr = "
+ _____         ___    _      _____ 
+(___  )       (  _`\\ ( )    (  _  )
+    | |   _ _ | (_) )| |_   | (_) |
+ _  | | /'_` )|  _ <'| '_`\\ |  _  |
+( )_| |( (_| || (_) )| |_) )| | | |
+`\\___/'`\\__,_)(____/'(_,__/'(_) (_)
+
+(Junction     Balance     Analysis)\n"
+
+if (!exists("opt"))
+{
+    option_list = list(
+        make_option(
+            c("--dtthreads"),
+            type = "numeric",
+            default = 1,
+            help = "Number of threads")        
+    )
+
+    parseobj = OptionParser(
+        usage = paste(c("jba_qc jabba.simple.rds [options]"),
+                      collapse="\n")## ,
+        ## option_list=option_list
+    )
+
+    args = tryCatch(parse_args(parseobj, positional_arguments = 1, print_help_and_exit = FALSE),
+                    error = function(e) {message(jbastr); print_help(parseobj); NULL})
+
+
+    opt = NULL;
+    if (!is.null(args)) {
+        opt = args$options
+        opt$jabba = args$args[1]
+        if (!file.exists(opt$jabba))
+        {
+            message('Did not find JaBbA output file ', opt$jabba)
+            print_help(parseobj); stop()
+        }
+        ## opt$junctions = args$args[1]
+        ## opt$coverage = args$args[2]
+        ## if (!file.exists(opt$junctions))
+        ## {
+        ##     message('Did not find junction file ', opt$junctions)
+        ##     message('Warning: will be running JaBbA without junctions')
+        ##     ## print_help(parseobj); stop()
+        ##     opt$junctions = ""
+        ## }
+        ## if (!file.exists(opt$coverage))
+        ## {
+        ##     message('Did not find coverage file ', opt$coverage)
+        ##     print_help(parseobj); stop()
+        ## }
+    } else {
+        stop("See usage.")
+    }
+}
+
+## util function
+rel2abs = function (gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, 
+    field = "ratio", field.ncn = NULL) 
+{
+    mu = values(gr)[, field]
+    mu[is.infinite(mu)] = NA
+    w = as.numeric(width(gr))
+    w[is.na(mu)] = NA
+    sw = sum(w, na.rm = T)
+    mutl = sum(mu * w, na.rm = T)
+    ncn = rep(2, length(mu))
+    if (!is.null(field.ncn)) 
+        if (field.ncn %in% names(values(gr))) 
+            ncn = values(gr)[, field.ncn]
+    ploidy_normal = sum(w * ncn, na.rm = T)/sw
+    if (is.na(gamma)) 
+        gamma = 2 * (1 - purity)/purity
+    if (is.na(beta)) 
+        beta = ((1 - purity) * ploidy_normal + purity * ploidy) * 
+            sw/(purity * mutl)
+    return(beta * mu - ncn * gamma/2)
+}
+
+## QC helper function
+jabba.qc = function(gg, cov.fn, juncs.fn, )
+
+message("Starting qc on ", opt$jabba)
+setDTthreads(opt$dtthreads)
+## set up all data
+jfn = opt$jabba
+stopifnot(file.exists(jfn))
+jab = readRDS(opt$jabba)
+
+## load JaBbA arguments
+jdir = dirname(jfn)
+jopt = readRDS(paste0(jdir, "/cmd.args.rds"))
+## gfn = paste0(jdir, "/jabba.simple.gg.rds")
+## gg = gGnome::refresh(readRDS(gfn))
+
+seg = gUtils::gr.stripstrand(jab$segstats %Q% (strand=="+"))
+seg.dt = gr2dt(seg)
+seg.dt[, subject.id := seq_len(.N)]
+
+## load coverage
+cfn = jopt$coverage
+stopifnot(file.exists(cfn))
+if (grepl("rds$", cfn)){
+    covv = readRDS(cfn)
+} else {
+    covv = fread(cfn)
+}
+
+if (inherits(covv, "data.frame")){
+    covv = gUtils::dt2gr(covv)
+}
+
+## find mapping
+ov = gUtils::gr.findoverlaps(covv, seg)
+ovdt = gUtils::gr2dt(ov)
+ovdt = merge(ovdt, seg.dt[, .(subject.id, cn)], by = "subject.id", all.x = TRUE)
+
+## change name to signal
+field = jopt$field
+ovdt$signal = values(covv)[ovdt$query.id, field]
+
+## some stats on each node
+geom.mean = function(x, na.rm = TRUE){
+    exp(mean(log(x[!is.infinite(log(x))]), na.rm=na.rm))
+}
+ovdt[, ":="(n = .N, n.na = sum(is.na(signal))), by = subject.id]
+ovdt[, ":="(n.good = n - n.na), by = subject.id]
+
+## convert coverage to CN space
+kag = readRDS(paste0(jdir, "/karyograph.rds"))
+pl = kag$ploidy
+pu = kag$purity
+abcovv = rel2abs(covv, purity = pu, ploidy = pl, field = field)
+ovdt[, absig := abcovv[query.id]]
+ovdt[, abmean := geom.mean(absig), by = subject.id]
+
+## calculate mse
+ovdt[!is.na(absig), mse := sum(((absig-cn)^2)*width, na.rm = T)/sum(width)/.N, by = subject.id]
+seg.dt = merge(seg.dt, ovdt[!is.na(absig)][!duplicated(subject.id), .(subject.id, mse, abmean)],
+               by = "subject.id", all.x = TRUE)
+
+## seg.dt[, table(is.na(mse))]
+## seg.dt[is.na(mse), .(seqnames, start, end, subject.id, mse, mean.abs)]
+if (require(ggplot2)){
+    pdf("jabba.qc.pdf")
+    print(
+        seg.dt %>%
+        ggplot2::ggplot(aes(x = abmean, y = cn)) +
+        ggplot2::geom_abline(slope = 1, intercept = 0, color = "grey50", alpha = 0.5, lty = "dashed") +
+        geom_point() +
+        geom_smooth(method = "lm") +
+        ## geom_text(x = seg.dt[, mean(range(abmean, na.rm = T))],
+        ##           y = seg.dt[, max(cn, na.rm = T) * 0.9],
+        ##           label = ) +
+        labs(x = "Mean absolute coverage", y = "Fitted cn") +
+        theme_pub()
+    )
+    dev.off()
+}
+
+new.md = merge(as.data.table(values(jab$seg)), seg.dt[, .(tile.id, mse, abmean)],
+               by = "tile.id", all.x = TRUE)
+values(jab$segstats) = new.md
+
+saveRDS(jab, "jabba.simple.qc.rds")
+message("Done QC procedure.")
