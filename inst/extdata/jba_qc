@@ -82,7 +82,7 @@ rel2abs = function (gr, purity = NA, ploidy = NA, gamma = NA, beta = NA,
 }
 
 ## QC helper function
-jabba.qc = function(gg, cov.fn, juncs.fn, )
+## jabba.qc = function(gg, cov.fn, juncs.fn, )
 
 message("Starting qc on ", opt$jabba)
 setDTthreads(opt$dtthreads)
