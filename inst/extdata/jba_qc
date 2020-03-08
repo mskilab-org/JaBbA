@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 library(optparse)
+library(JaBbA)
+
 jbastr = "
  _____         ___    _      _____ 
 (___  )       (  _`\\ ( )    (  _  )
@@ -59,6 +61,34 @@ if (!exists("opt"))
 }
 
 ## util function
+theme_pub = function(base_size=14, base_family="Helvetica") {
+    (ggthemes::theme_foundation(base_size=base_size, base_family=base_family)
+        + theme(plot.title = element_text(
+                    face = "plain",
+                    size = rel(1.2),
+                    hjust = 0.5),
+                text = element_text(face = "plain"),
+                panel.background = element_rect(colour = NA),
+                plot.background = element_rect(colour = NA),
+                panel.border = element_rect(colour = "black", size = 0.5),
+                panel.spacing = unit(0.1, "inch"),
+                axis.title = element_text(face = "plain",size = rel(1)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(),
+                axis.line = element_line(colour="black", size = 0.01),
+                axis.ticks = element_line(size = 0.05),
+                axis.ticks.length = grid::unit(0.02, "inch"),
+                panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+                legend.position = "bottom",
+                legend.direction = "horizontal",
+                legend.key.size= grid::unit(0.1, "inch"),
+                legend.background = element_blank(),
+                plot.margin = grid::unit(c(0.2,0.2,0.2,0.2),"inch"),
+                strip.background=element_blank()
+                ))
+}
 rel2abs = function (gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, 
     field = "ratio", field.ncn = NULL) 
 {
@@ -85,7 +115,7 @@ rel2abs = function (gr, purity = NA, ploidy = NA, gamma = NA, beta = NA,
 ## jabba.qc = function(gg, cov.fn, juncs.fn, )
 
 message("Starting qc on ", opt$jabba)
-setDTthreads(opt$dtthreads)
+data.table::setDTthreads(opt$dtthreads)
 ## set up all data
 jfn = opt$jabba
 stopifnot(file.exists(jfn))
@@ -97,8 +127,10 @@ jopt = readRDS(paste0(jdir, "/cmd.args.rds"))
 ## gfn = paste0(jdir, "/jabba.simple.gg.rds")
 ## gg = gGnome::refresh(readRDS(gfn))
 
-seg = gUtils::gr.stripstrand(jab$segstats %Q% (strand=="+"))
-seg.dt = gr2dt(seg)
+seg = gUtils::gr.stripstrand(
+    do.call(gUtils::`%Q%`, list(jab$segstats, expression(strand=="+")))
+)
+seg.dt = gUtils::gr2dt(seg)
 seg.dt[, subject.id := seq_len(.N)]
 
 ## load coverage
@@ -107,7 +139,7 @@ stopifnot(file.exists(cfn))
 if (grepl("rds$", cfn)){
     covv = readRDS(cfn)
 } else {
-    covv = fread(cfn)
+    covv = data.table::fread(cfn)
 }
 
 if (inherits(covv, "data.frame")){
@@ -121,7 +153,7 @@ ovdt = merge(ovdt, seg.dt[, .(subject.id, cn)], by = "subject.id", all.x = TRUE)
 
 ## change name to signal
 field = jopt$field
-ovdt$signal = values(covv)[ovdt$query.id, field]
+ovdt$signal = S4Vectors::values(covv)[ovdt$query.id, field]
 
 ## some stats on each node
 geom.mean = function(x, na.rm = TRUE){
@@ -151,12 +183,12 @@ if (require(ggplot2)){
         seg.dt %>%
         ggplot2::ggplot(aes(x = abmean, y = cn)) +
         ggplot2::geom_abline(slope = 1, intercept = 0, color = "grey50", alpha = 0.5, lty = "dashed") +
-        geom_point() +
-        geom_smooth(method = "lm") +
+        ggplot2::geom_point() +
+        ggplot2::geom_smooth(method = "lm") +
         ## geom_text(x = seg.dt[, mean(range(abmean, na.rm = T))],
         ##           y = seg.dt[, max(cn, na.rm = T) * 0.9],
         ##           label = ) +
-        labs(x = "Mean absolute coverage", y = "Fitted cn") +
+        ggplot2::labs(x = "Mean absolute coverage", y = "Fitted cn") +
         theme_pub()
     )
     dev.off()

@@ -225,7 +225,6 @@ JaBbA = function(## Two required inputs
         ## ra.all = ra.all.uf[ndup]
     }
 
-    ## browser()
     if (!is.null(blacklist.junctions)){2
         blacklist.junctions = read.junctions(blacklist.junctions)
         if (length(blacklist.junctions)>0){
@@ -972,6 +971,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     juncs = kag$junctions ## already removed ab.exclude!!!
     bpss = grl.unlist(juncs)
 
+
     if (nudge.balanced) {
         balanced.jix = c()
         if (length(juncs)>0) {
@@ -1003,6 +1003,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## both breakpoints in NA regions
     if (length(juncs)>0){
         junc.dt = data.table(data.frame(values(juncs)))
+        junc.dt[, ":="(from = NULL, to = NULL)]
         junc.dt = cbind(junc.dt,
                         data.table(matrix(kag$ab.edges[,,1],
                                           nrow=nrow(kag$ab.edges),
@@ -1049,7 +1050,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             init = readRDS(init)
     }
 
-    ## browser()
     if (overwrite | !file.exists(jabba.raw.rds.file))
     {
         ramip_stub(kag.file,
@@ -2508,7 +2508,6 @@ segstats = function(target,
         if (!(field %in% names(values(signal))))
             stop('Field not found in signal GRanges')
 
-        ## browser()
         utarget = unique(gr.stripstrand(target))
         ## target$raw.sd = target$sd
         ## good.bin = signal[which(!is.na(values(signal)[, field]) &
@@ -2618,6 +2617,7 @@ segstats = function(target,
             good = which.min(km2$centers)
             max.na = mean(max(dat[which(km2$cluster==good)]),
                           min(dat[which(km2$cluster!=good)]))
+            ## TODO: max.na cannot end up equal to 0!!
             if (verbose){
                 jmessage("No `max.na` argument found, inferring it for you now...")
                 jmessage("The suggested `max.na` is at ", max.na)
@@ -4289,7 +4289,6 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     ## now we have augmented adjacency matrix with loose ends, let's simplify the structure
     ## by collapsing all simple paths
-    ## if (!keep.all){browser()}
     collapsed = collapse.paths(adj, verbose = verbose)
 
     ## new segstats formed by reducing "collapsed' sets
@@ -5253,10 +5252,6 @@ collapse.paths = function(G, verbose = T)
         i = which(todo)[1]
 
         todo[i] = F
-
-        ## if (i %in% c(10108, 10230, 10231, 10292, 10168, 10169)){
-        ##     browser()
-        ## }
 
         child = which(out[i, ])
         parent = which(out[,i])
