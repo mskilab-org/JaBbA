@@ -198,5 +198,11 @@ new.md = merge(as.data.table(values(jab$seg)), seg.dt[, .(tile.id, mse, abmean)]
                by = "tile.id", all.x = TRUE)
 values(jab$segstats) = new.md
 
+## ============ annotate junction quality scores if SvABA ============ ##
+## load the junction
+## j = jab$junctions
+## sv = jopt$junctions
+
+
 saveRDS(jab, "jabba.simple.qc.rds")
 message("Done QC procedure.")
