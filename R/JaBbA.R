@@ -679,13 +679,13 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!is.null(blacklist.coverage)){
         if (is.character(blacklist.coverage)){
             if (file.exists(blacklist.coverage)){
-                if (grepl("[(txt)|(tsv)|(csv)]$", blacklist.coverage)){
+                if (grepl("rds$", blacklist.coverage)){
+                    blacklist.coverage = readRDS(blacklist.coverage)
+                } else if (grepl("[(txt)|(tsv)|(csv)]$", blacklist.coverage)){
                     blacklist.coverage = try(gUtils::dt2gr(fread(blacklist.coverage)))                    
                 } else if (grepl("bed$", blacklist.coverage)){
                     blacklist.coverage = rtracklayer::import.bed(blacklist.coverage)
-                } else if (grepl("rds$", blacklist.coverage)){
-                    blacklist.coverage = readRDS(blacklist.coverage)
-                }                
+                }                 
             }
         } else if (inherits(blacklist.coverage, "data.frame")){
             blacklist.coverage = try(gUtils::dt2gr(data.table(blacklist.coverage)))
@@ -6188,12 +6188,22 @@ read.junctions = function(rafile,
 #' @param ra rearrangement junctions object to be verified
 #' @return the input if meets all four criteria
 verify.junctions = function(ra){
-    stopifnot(inherits(ra, "GRangesList"))
-    if (length(ra)>0){
-        stopifnot(all(elementNROWS(ra)==2))
-        stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
-        stopifnot(all(as.numeric(width(unlist(ra)))==1))
+    .ra.stop = function(ra){
+        stopifnot(inherits(ra, "GRangesList"))
+        if (length(ra)>0){
+            stopifnot(all(elementNROWS(ra)==2))
+            stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
+            stopifnot(all(as.numeric(width(unlist(ra)))==1))
+        }
     }
+    if (inherits(ra, "GRangesList")){
+        .ra.stop(ra)
+    } else if (inherits(ra, "list")) {
+        for (i in seq_along(ra)){
+            .ra.stop(ra[[i]])
+        }
+    }
+    ## stopifnot(inherits(ra, "GRangesList"))
     return(ra)
 }
 
