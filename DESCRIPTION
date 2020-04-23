@@ -12,8 +12,7 @@ Depends:
   gplots (>= 3.0),
   GenomicRanges (>= 1.3),  
   optparse (>= 1.4.4),
-  gTrack (>= 0.1),
-  Ppurple(>= 0.2.0)
+  gTrack (>= 0.1)
 Imports:
   VariantAnnotation (>= 1.24),
   DNAcopy (>= 1.48),
@@ -36,7 +35,8 @@ Remotes:
   r-lib/covr
 Suggests:  
   testthat (>= 2.0),
-  covr
+  covr,
+  Ppurple(>= 0.2.0)
 License: GPL-2
 LazyData: true
 RoxygenNote: 6.1.1
