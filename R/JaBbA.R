@@ -653,7 +653,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         coverage = dt2gr(coverage)
 
     ## the most frequent width in a sample of coverage points
-    binwidth = as.numeric(names(sort(table(width(sample(coverage, 1000, replace=TRUE))), decreasing = TRUE)[1]))
+    binwidth = as.numeric(names(sort(
+        table(width(sample(coverage, 1000, replace=TRUE))), decreasing = TRUE
+    )[1]))
     
     if (verbose)
     {
@@ -1883,7 +1885,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     purity = as.numeric(purity)
     ploidy = as.numeric(ploidy)
-    if (!is.na(purity) & !is.na(ploidy)) ## purity and ploidy are completely set
+    if (!is.na(purity) & !is.na(ploidy) & length(purity)==1 & length(ploidy)==1) ## purity and ploidy are completely set
     {
         pp = data.table(purity = purity, ploidy = ploidy)
     } else {
@@ -5637,6 +5639,10 @@ read.junctions = function(rafile,
                     stop('Error reading bedpe')
                 }
             }
+
+            if (nrow(rafile)==0)
+                return(GRangesList())
+            
             ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, seq_along(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
@@ -7324,8 +7330,7 @@ ppgrid = function(segstats,
                   ploidy.max = 6,
                   plot = F,
                   verbose = F,
-                  mc.cores = 1
-                  ){
+                  mc.cores = 1){
     if (verbose)
         jmessage('setting up ppgrid matrices .. \n')
 
