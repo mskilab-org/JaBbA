@@ -34,9 +34,9 @@ Remotes:
   github::mskilab/Ppurple,
   github::mskilab/gGnome,
   r-lib/covr
-Suggests:  
+Suggests: 
   testthat (>= 2.0),
   covr
 License: GPL-2
 LazyData: true
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.0
