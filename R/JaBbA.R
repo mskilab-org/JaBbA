@@ -2871,7 +2871,6 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     ## save the naive solutions
     segstats$kag.cn = segstats$cn
 
-    browser()
     ## wrapper that calls jbaMIP recursively on subgraphs after "fixing"
     if (partition)
     {
