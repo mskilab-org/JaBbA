@@ -53,10 +53,17 @@ if (!exists("opt"))
             default = 0,
             help = "the number of extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield."),
         make_option(
-            c("--window"),
+            c("--rescue.window"),
             type = "numeric",
             default = 1e3,
             help = "window size in bp within which to look for lower confidence junctions. Default 1000."),
+        make_option(
+            c("--rescue.all"),
+            type = "logical",
+            default = FALSE,
+            action = "store_true",
+            help = "Attempt to rescue all loose ends regardless of internal quality filter"
+        ),
         make_option(
             c("--nudgebalanced"),
             type = "logical",
@@ -105,7 +112,7 @@ if (!exists("opt"))
             c("--hets"),
             type = "character",
             default = "",
-            help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),        
+            help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),
         make_option(
             c("--ploidy"),
             type = "character",

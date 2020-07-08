@@ -25,6 +25,39 @@
 ## appease R CMD CHECK misunderstanding of data.table syntax by declaring these global variables
 low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=predict.var=dup=psid=.N=es=res=esid=pid=ub=lb=esid=dup=lb=ub=dup=y=dup=pid=lb=es.s.ix=km=es.t.ix=adjusted.ratio=ref.count.t=alt.count.t=depth.normal=depth.tumor=good.reads=zygosity.normal=Bf=ALT=alt.count.n=bad=both.na=chr.a=chr.b=cn=eid=FILTER=force.in=FORMAT=from=from.cn=from.remain=from1=from2=GENO=grl.ix=gstr=i=id=ID=INFO=is.ref=j=label=mean.a=mean.b=mstr=nbins=nothing=oppo=ord=out=QUAL=ra=ra1.ix=ra2.ix=ref.count.n=ref.frac.n=reid=str1=str2=subid=this.cn=to=to.cn=to.remain=to1=to2=type=V1=var=NULL
 
+.onLoad <- function(libname, pkgname) {
+    op <- options()
+    op.JaBbA <- list(
+        JaBbA.verbose = TRUE,
+        JaBbA.reference = "hg19"
+        ## devtools.path = "~/R-dev",
+        ## devtools.install.args = "",
+        ## devtools.name = "Your name goes here",
+        ## devtools.desc.author = "First Last <first.last@example.com> [aut, cre]",
+        ## devtools.desc.license = "What license is it under?",
+        ## devtools.desc.suggests = NULL,
+        ## devtools.desc = list()
+    )
+    toset <- !(names(op.JaBbA) %in% names(op))
+    if(any(toset)) options(op.JaBbA[toset])
+
+    ## test for CPLEX environment
+    cplex.dir = Sys.getenv("CPLEX_DIR")
+    if (is.null(cplex.dir)){
+        stop("CPLEX_DIR environment variable not found!")
+    } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
+        stop("${CPLEX_DIR}/cplex not found")
+    } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
+               !file.exists(paste0(cplex.dir, "/cplex/lib"))){
+        stop("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+    } else {
+        jmessage("Found CPLEX environment in: ", cplex.dir)
+        ## jmessage("CPLEX version: ", cplex.version)
+    }
+
+    invisible()
+}
+
 #' @name JaBbA
 #' @title JaBbA
 #' @description
@@ -91,6 +124,7 @@ JaBbA = function(## Two required inputs
                  tfield = "tier",
                  reiterate = 0,
                  rescue.window = 1e3,
+                 rescue.all = FALSE,
                  nudge.balanced = FALSE,
                  thresh.balanced = 500,
                  edgenudge = 0.1,
@@ -352,13 +386,16 @@ JaBbA = function(## Two required inputs
             if (length(le)==0){
                 jmessage("No more loose ends to resolve, terminating.")
                 break
-            } else {
+            } else if (!rescue.all){
                 le = le %Q% which(passed==TRUE)
                 if (length(le)==0){
                     jmessage("No more plausible loose ends, terminating")
                     break
                 }
+            } else {
+                jmessage("Rescuing all ", len(le), " loose ends, regardless of confidence.")
             }
+            
             ## determine orientation of loose ends
             le.right = le %&% gr.start(jab$segstats %Q% (loose==FALSE))
             strand(le.right) = "+"
@@ -1864,7 +1901,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     this.kag$segstats$ncn = 2
 
     if (!is.null(nseg.file)){
-        if (is.null(nseg$ncn)){
+        if (is.null(nseg$cn)){
             warning('Normal seg file does not have "ncn" met data field. USING the default 2!!')
             this.kag$segstats$ncn = 2
         } else {
@@ -1996,7 +2033,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             if (exists("nseg") && !is.null(nseg)){
                 ## only running w/ diploid autosomes
                 ## to avoid situations like HCC1143BL
-                good.chr = union(seqnames(nseg %Q% (cn==2)), "X")
+                good.chr = union(as.character(seqnames(nseg %Q% (cn==2))), "X")
                 sites = sites[which(chromosome %in% good.chr)]
             } else {
                 ## only running w/ chr1-22 and X
@@ -2517,7 +2554,8 @@ segstats = function(target,
         ## signal$good.prop = (signal+1e5) %O% good.bin
         ## signal$col = ifelse(signal$good.prop>0.8, "grey", "red")
 
-        map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
+        ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
+        map = gr.tile.map(utarget, signal, verbose = T)
         val = values(signal)[, field]
         val[is.infinite(val)] = NA
         ## val[which(signal$good.prop<0.9)] = NA
@@ -2833,6 +2871,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     ## save the naive solutions
     segstats$kag.cn = segstats$cn
 
+    browser()
     ## wrapper that calls jbaMIP recursively on subgraphs after "fixing"
     if (partition)
     {
