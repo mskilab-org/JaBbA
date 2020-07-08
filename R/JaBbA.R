@@ -7332,7 +7332,16 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
                     values(out) = NULL
                     values(this.ra) = NULL
                     out = grl.bind(out, this.ra[nix])
-                    values(out) = rbind(as.data.table(val1), as.data.table(val2[nix, ]), fill = TRUE)
+                    d1 = as.data.table(val1)
+                    d2 = as.data.table(val2[nix, ])
+                    ## prevent column class mismatches
+                    c1 = data.table(class = sapply(d1, class), cnm = colnames(d1))
+                    c2 = data.table(class = sapply(d2, class), cnm = colnames(d2))
+                    conflict = merge(c1, c2, by = "cnm")[class.x != class.y]
+                    for (r in seq_len(nrow(conflict))){
+                        d1[[conflict[r, cnm]]] = as(d1[[conflict[r, cnm]]], conflict[r, c(class.y)])
+                    }
+                    values(out) = rbind(d1, d2, fill = TRUE)
                 }
             }
         }
