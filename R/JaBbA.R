@@ -1725,6 +1725,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         {
             if (file.exists(nseg.file))
             {
+                stopifnot(file.size(nseg.file)>0)
                 if (grepl('\\.rds$', nseg.file, ignore.case = TRUE))
                 {
                     nseg = readRDS(nseg.file)
