@@ -237,7 +237,7 @@ suppressPackageStartupMessages(
         cfield = opt$cfield,
         tfield = opt$tfield,
         reiterate = opt$iterate,
-        rescue.window = opt$window,
+        rescue.window = opt$rescue.window,
         nudge.balanced = opt$nudgebalanced,
         ## TODO: thresh.balanced, 500 default hardcoded
         edgenudge = opt$edgenudge,
