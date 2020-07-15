@@ -666,6 +666,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             stop(paste('Coverage path ', coverage, 'does not exist'))
         }
 
+        if (!file.size(coverage))
+        {
+            stop(paste('Coverage file ', coverage, 'is empty'))
+        }
+
         if (grepl('\\.rds$', coverage))
         {
             coverage = readRDS(coverage)
@@ -747,7 +752,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         seg = readRDS(seg.fn)
     } else {
-        if (is.null(seg) || (is.character(seg) && !file.exists(seg)))
+        if (is.null(seg) || (is.character(seg) && !file.exists(seg) && !file.size(seg)))
         {
             if (verbose)
             {
