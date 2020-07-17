@@ -173,10 +173,12 @@ JaBbA = function(## Two required inputs
     ##         stop(paste('Junction path', ra, 'does not exist'))
     ##     }
     ra.all = read.junctions(ra, geno = geno) ## GRL
+
     if (is.null(ra.all)){
         jmessage("Warning: no junction file is given, will be running JaBbA without junctions!")
         ra.all = GRangesList()
     }
+
     ## } else if (is.null(ra)) {
     ##     ra.all = GRangesList()
     ## } else {
@@ -726,7 +728,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 if (grepl("rds$", blacklist.coverage)){
                     blacklist.coverage = readRDS(blacklist.coverage)
                 } else if (grepl("[(txt)|(tsv)|(csv)]$", blacklist.coverage)){
-                    blacklist.coverage = try(gUtils::dt2gr(fread(blacklist.coverage)))                    
+                    blacklist.coverage = try(gUtils::dt2gr(data.table::fread(blacklist.coverage)))
                 } else if (grepl("bed$", blacklist.coverage)){
                     blacklist.coverage = rtracklayer::import.bed(blacklist.coverage)
                 }                 
@@ -1730,9 +1732,13 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 {
                     nseg = readRDS(nseg.file)
                 }
-                else
+                else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', nseg.file))
                 {
                     nseg = dt2gr(fread(nseg.file))
+                }
+                else
+                {
+                    nseg = rtracklayer::import(nseg.file)
                 }
             } else {
                 jmessage('Did not find nseg file! Ignore.')
@@ -1750,7 +1756,22 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     ## make sure all sl's are equiv
     if (is.character(seg.file)){
-        this.seg = gr.fix(readRDS(seg.file), sl, drop = T)[, c()]
+        if (file.exists(seg.file))
+        {
+            if (grepl('\\.rds$', seg.file, ignore.case = TRUE))
+            {
+                this.seg = readRDS(seg.file)
+            }
+            else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', seg.file))
+            {
+                this.seg = dt2gr(fread(seg.file))
+            }
+            else
+            {
+                this.seg = rtracklayer::import(seg.file)
+            }
+        }
+        this.seg = gr.fix(this.seg, sl, drop = T)[, c()]
     } else {
         this.seg = seg.file
     }
@@ -2669,7 +2690,7 @@ segstats = function(target,
                 jmessage("The suggested `max.na` is at ", max.na)
             }
         }
-
+        
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
         if (length(bad.nodes <- which((target$nbins.nafrac > max.na) | (is.na(target$nbins.nafrac))))>0)
         {
@@ -2713,10 +2734,11 @@ segstats = function(target,
         }
 
         ## overdispersion correction
+        ##lmd = tmp[, lm(var ~ mean)]
         loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
-        ## lmd = tmp[, lm(var ~ mean)] ##
-        ## tmp[, predict.var := predict(loe, newdata = mean)]
-        ## tmp[, predict.var := predict.lm(lmd, newdata = mean)] ## 
+
+        ## tmp[, predict.var := predict.lm(lmd, newdata = data.table(mean))] 
+        tmp[, predict.var := predict(loe, newdata = mean)]
 
         ## inferring segment specific variance using loess fit of mean to variance per node
         ## using loess fit as the prior sample var
@@ -3435,7 +3457,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         }
 
         model = list()
-        model$A = Amat
+       model$A = Amat
         model$rhs = varmeta$b;
         model$sense = c('E'='=', 'G'='>=', 'L'='<=')[varmeta$sense]
         model$Q = Qobj;
@@ -4303,34 +4325,6 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         segstats$loose = FALSE
     }
 
-
-    ##  lends = loose.ends(jab, kag)
-    ##  if (!is.null(lends))
-    ##  lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
-
-    ## if (length(lends)>0)
-    ##   {
-    ##     strand(lends) = '+'
-    ##     lends = c(lends, gr.flipstrand(lends))
-    ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
-    ##     lends$id = nrow(adj) + c(seq_along(lends))
-    ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
-    ##     adj.plus = rbind(cbind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
-    ##       cbind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
-
-    ##     ## right side ends of '+' and left side ends of '-' are sinks
-    ##     sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
-    ##     adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
-    ##     adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
-    ##     adj = adj.plus
-    ##     lends$loose = T
-    ##     segstats$loose = F
-    ##     segstats = grbind(jab$segstats, lends)
-    ##     values(segstats) = rrbind(values(jab$segstats), values(lends))
-    ##   }
-    ## else
-    ##   segstats$loose = F
-
     out = list()
 
     ## now we have augmented adjacency matrix with loose ends, let's simplify the structure
@@ -4347,9 +4341,10 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     tmp.ss = gr.string(gr.stripstrand(out$segstats), other.cols = 'loose')
     check1 = all(table(match(tmp.ss, tmp.ss)))
-    check2 = identical(seq_along(collapsed$sets), sort(out$segstats$set.id))
+    ## check2 = identical(1:length(collapsed$sets), sort(out$segstats$set.id))
 
-    if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
+    ##   if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
+    if (!check1) ## quick sanity check to make sure we didn't screw up collapsing
         stop('collapse yielded funny / missing segments')
     else
         out$segstats = out$segstats[match(seq_along(collapsed$sets), out$segstats$set.id), c('cn')]
@@ -4630,7 +4625,7 @@ jabba.alleles = function(jab,
 
     ## ###########
     ## phasing
-    ## ###########
+    ## ########### 
 
     ## iterate through all reference junctions and apply (wishful thinking) heuristic
     ##
@@ -5686,13 +5681,12 @@ read.junctions = function(rafile,
 
             if (nrow(rafile)==0)
                 return(GRangesList())
-            
             ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, seq_along(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-            rafile[, end1 := start1]
-            rafile[, end2 := start2]
+            ## converting bedpe to 1-based coordinates for verify.junctions()
+            rafile[, `:=`(start1 = start1 + 1, start2 = start2 +1)] 
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
 
           if (!is.null(seqlengths) && all(!is.na(seqlengths)))
@@ -6254,6 +6248,14 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
+    ## =======
+    ##     stopifnot(inherits(ra, "GRangesList"))
+    ##     if (length(ra)>0){
+    ##         stopifnot(all(elementNROWS(ra)==2))
+    ##         stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
+    ##         stopifnot(all(as.numeric(width(unlist(ra)))==1))
+    ##     }
+    ## >>>>>>> 0988b41049a833b592e36b402fb647f2b8e8f251
     return(ra)
 }
 
