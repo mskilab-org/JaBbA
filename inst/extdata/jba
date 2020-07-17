@@ -190,7 +190,9 @@ if (!exists("opt"))
         if (!file.exists(opt$junctions))
         {
             message('Did not find junction file ', opt$junctions)
-            print_help(parseobj); stop()
+            message('Warning: will be running JaBbA without junctions')
+            ## print_help(parseobj); stop()
+            opt$junctions = ""
         }
         if (!file.exists(opt$coverage))
         {
@@ -204,6 +206,31 @@ if (!exists("opt"))
 
 suppressPackageStartupMessages(
 {
+
+  if (!is.null(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
+  {
+    message('Did not find seg file ', opt$seg, ' setting to NULL')
+    opt$seg = "NULL"
+  }
+
+
+  if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+  {
+    message('Did not find j.supp file ', opt$j.supp, ' setting to NULL')
+    opt$j.supp = "NULL"
+  }
+
+  if (!is.null(opt$hets) && (is.na(opt$hets) || opt$hets == '/dev/null' || !file.exists(opt$hets)))
+  {
+    message('Did not find hets file ', opt$hets, ' setting to NULL')
+    opt$hets = "NULL"
+  }
+  if (!is.null(opt$nseg) && (is.na(opt$nseg) || opt$nseg == '/dev/null' || !file.exists(opt$nseg)))
+  {
+    message('Did not find nseg file ', opt$nseg, ' setting to NULL')
+    opt$nseg = "NULL"
+  }
+
     library(JaBbA)
     jmessage = function(..., pre = 'JaBbA'){
         message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)

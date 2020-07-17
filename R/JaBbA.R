@@ -2009,7 +2009,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             if (exists("nseg") && !is.null(nseg)){
                 ## only running w/ diploid autosomes
                 ## to avoid situations like HCC1143BL
-                good.chr = union(seqnames(nseg %Q% (cn==2)), "X")
+                good.chr = as.character(union(seqnames(nseg %Q% (cn==2)), "X"))
                 sites = sites[which(chromosome %in% good.chr)]
             } else {
                 ## only running w/ chr1-22 and X
@@ -4272,34 +4272,6 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
         segstats$loose = FALSE
     }
 
-
-    ##  lends = loose.ends(jab, kag)
-    ##  if (!is.null(lends))
-    ##  lends = lends[lends$type != 'type4'] ## don't include type 4 loose ends (i.e. unused rearrangements)
-
-    ## if (length(lends)>0)
-    ##   {
-    ##     strand(lends) = '+'
-    ##     lends = c(lends, gr.flipstrand(lends))
-    ##     lends$partner.id = gr.match((lends), jab$segstats, ignore.strand = F)
-    ##     lends$id = nrow(adj) + c(1:length(lends))
-    ##     lends$right = end(lends) == end(jab$segstats)[lends$partner.id]
-    ##     adj.plus = rbind(cbind(adj, sparseMatrix(1,1,x = 0, dims = c(nrow(adj), length(lends)))),
-    ##       cbind(sparseMatrix(1,1,x = 0, dims = c(length(lends), ncol(adj))), sparseMatrix(1,1,x = 0, dims = c(length(lends), length(lends)))))
-
-    ##     ## right side ends of '+' and left side ends of '-' are sinks
-    ##     sink.ix = as.logical((lends$right & as.logical( strand(lends)=='+') )| (!lends$right & as.logical( strand(lends)=='-')) )
-    ##     adj.plus[cbind(lends$partner.id, lends$id)[sink.ix, , drop = F]] = lends$cn[sink.ix]+0.01
-    ##     adj.plus[cbind(lends$id, lends$partner.id)[!sink.ix, , drop = F]] = lends$cn[!sink.ix]+0.01
-    ##     adj = adj.plus
-    ##     lends$loose = T
-    ##     segstats$loose = F
-    ##     segstats = grbind(jab$segstats, lends)
-    ##     values(segstats) = rrbind(values(jab$segstats), values(lends))
-    ##   }
-    ## else
-    ##   segstats$loose = F
-
     out = list()
 
     ## now we have augmented adjacency matrix with loose ends, let's simplify the structure
@@ -4317,9 +4289,10 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     tmp.ss = gr.string(gr.stripstrand(out$segstats), other.cols = 'loose')
     check1 = all(table(match(tmp.ss, tmp.ss)))
-    check2 = identical(1:length(collapsed$sets), sort(out$segstats$set.id))
+#    check2 = identical(1:length(collapsed$sets), sort(out$segstats$set.id))
 
-    if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
+    ##   if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
+    if (!check1) ## quick sanity check to make sure we didn't screw up collapsing
         stop('collapse yielded funny / missing segments')
     else
         out$segstats = out$segstats[match(1:length(collapsed$sets), out$segstats$set.id), c('cn')]
@@ -4600,7 +4573,7 @@ jabba.alleles = function(jab,
 
     ## ###########
     ## phasing
-    ## ###########
+    ## ########### 
 
     ## iterate through all reference junctions and apply (wishful thinking) heuristic
     ##
@@ -5268,10 +5241,6 @@ collapse.paths = function(G, verbose = T)
         i = which(todo)[1]
 
         todo[i] = F
-
-        ## if (i %in% c(10108, 10230, 10231, 10292, 10168, 10169)){
-        ##     browser()
-        ## }
 
         child = which(out[i, ])
         parent = which(out[,i])
