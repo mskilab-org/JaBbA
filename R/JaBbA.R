@@ -2644,6 +2644,7 @@ segstats = function(target,
             target$max.na = max.na ## what about really small segs in a good "environment"
             target$bad[bad.nodes] = TRUE
             target$mean[bad.nodes] = NA
+            
             ## target$sd[bad.nodes] = NA
             if (verbose)
             {
@@ -2651,7 +2652,7 @@ segstats = function(target,
                 jmessage("Definining coverage good quality nodes as ", max.na*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
                 jmessage("Hard setting ", na.wid,
                          " Mb of the genome to NA that didn't pass our quality threshold")
-                if (na.wid > (sum(as.double(seqlengths(signal)/1e6))/2)){
+                if (na.wid > (sum(as.double(seqlengths(target)/1e6))/2)){
                     jmessage("WARNING: more than half of the whole genome is set to NA, and ignored by JaBbA!!")
                 }
             }
