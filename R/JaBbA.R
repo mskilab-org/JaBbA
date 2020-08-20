@@ -2278,8 +2278,10 @@ ramip_stub = function(kag.file,
     }
 
     adj.nudge = this.kag$adj*0;
-    nnaix = rowSums(is.na(this.kag$ab.edges[,1:2,1]))==0
-    adj.nudge[this.kag$ab.edges[nnaix,1:2,1]] = 1*edge.nudge[nnaix] ## if edge.nudge is length ab.edges, then corresponding edges will be nudged
+    nnaix = which(rowSums(is.na(this.kag$ab.edges[,1:2, 1, drop = FALSE]))==0)
+    nna.abe = this.kag$ab.edges[nnaix, , 1, drop = FALSE]
+    ## adj.nudge[] = 1*edge.nudge[nnaix] ## if edge.nudge is length ab.edges, then corresponding edges will be nudged
+    adj.nudge[nna.abe[,1:2,1]] = 1*edge.nudge
 
     adj.lb = NULL
     if (!is.null(ab.force))
@@ -2306,7 +2308,7 @@ ramip_stub = function(kag.file,
                 jmessage(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
             }
         }
-        nnaix = which(rowSums(is.na(this.kag$ab.edges[,1:2,1]))==0)
+        nnaix = which(rowSums(is.na(this.kag$ab.edges[,1:2,1, drop = FALSE]))==0)
         ab.exclude = intersect(ab.exclude, nnaix)
         adj.ub = this.kag$adj*0
         ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -adj
