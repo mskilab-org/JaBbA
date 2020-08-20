@@ -214,7 +214,7 @@ if (!exists("opt"))
 suppressPackageStartupMessages(
 {
 
-  if (!is.null(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
+  if (!is.null(opt$seg) && is.character(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
   {
     message('Did not find seg file ', opt$seg, ' setting to NULL')
     opt$seg = "NULL"
@@ -232,11 +232,19 @@ suppressPackageStartupMessages(
     message('Did not find hets file ', opt$hets, ' setting to NULL')
     opt$hets = "NULL"
   }
+
   if (!is.null(opt$nseg) && (is.na(opt$nseg) || opt$nseg == '/dev/null' || !file.exists(opt$nseg)))
   {
     message('Did not find nseg file ', opt$nseg, ' setting to NULL')
     opt$nseg = "NULL"
   }
+
+  if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+  {
+    message('Did not find supplementary junction file ', opt$j.supp, ' setting to NULL')
+    opt$j.supp = NULL
+  }
+
 
     library(JaBbA)
     jmessage = function(..., pre = 'JaBbA'){

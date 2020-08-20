@@ -754,7 +754,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         seg = readRDS(seg.fn)
     } else {
-        if (is.null(seg) || (is.character(seg) && !file.exists(seg) && !file.size(seg)))
+        if (is.null(seg) || (is.character(seg) && (!file.exists(seg) || !file.size(seg))))
         {
             if (verbose)
             {
@@ -1054,7 +1054,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         data.table(matrix(kag$ab.edges[,,1],
                                           nrow=nrow(kag$ab.edges),
                                           dimnames=dimnames(kag$ab.edges)[1:2])))
-        junc.dt[, ":="(mean.a=kag$segstats$mean[from],
+        junc.dt[!is.na(from) & !is.na(to), ":="(mean.a=kag$segstats$mean[from],
                        mean.b=kag$segstats$mean[to],
                        chr.a = as.character(seqnames(kag$segstats[from])),
                        chr.b = as.character(seqnames(kag$segstats[to])))]
@@ -2278,7 +2278,8 @@ ramip_stub = function(kag.file,
     }
 
     adj.nudge = this.kag$adj*0;
-    adj.nudge[this.kag$ab.edges[,1:2,1]] = 1*edge.nudge ## if edge.nudge is length ab.edges, then corresponding edges will be nudged
+    nnaix = rowSums(is.na(this.kag$ab.edges[,1:2,1]))==0
+    adj.nudge[this.kag$ab.edges[nnaix,1:2,1]] = 1*edge.nudge[nnaix] ## if edge.nudge is length ab.edges, then corresponding edges will be nudged
 
     adj.lb = NULL
     if (!is.null(ab.force))
@@ -2305,9 +2306,11 @@ ramip_stub = function(kag.file,
                 jmessage(paste('Excluding aberrant junctions:', paste(ab.exclude, collapse = ',')))
             }
         }
+        nnaix = which(rowSums(is.na(this.kag$ab.edges[,1:2,1]))==0)
+        ab.exclude = intersect(ab.exclude, nnaix)
         adj.ub = this.kag$adj*0
-        ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -1
-        ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
+        ## adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = -adj
+        ## 1.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = -1
         adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,1])[, 1:2, drop = FALSE]] = 0.1
         adj.ub[rbind(this.kag$ab.edges[ab.exclude, ,2])[, 1:2, drop = FALSE]] = 0.1
         saveRDS(adj.ub, paste0(outdir, "/adj.ub.rds"))
@@ -6477,7 +6480,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
                    gr.match(gr.start(bp2), gr.end(tile)))
         )
 
-
         ## ab.pairs = cbind(
         ##   ifelse(as.logical(strand(bp1)=='+'), match(paste(seqnames(bp1), start(bp1)+1), paste(seqnames(tile), start(tile))),
         ##          match(paste(seqnames(bp1), start(bp1)), paste(seqnames(tile), end(tile)))),
@@ -6509,7 +6511,11 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
                         dimnames = rep( list( as.character(c(seq_along(tile), -(seq_along(tile))))), 2))
         tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
                        match(as.character(ab.pairs[,2]), colnames(adj.ab)))
-        adj.ab[tmp.ix[!duplicated(tmp.ix), , drop = F]] = ab.pairs.bpid[!duplicated(tmp.ix)]
+
+        ## added !is.na filters 8/4/2020 MI to take care of literal edge cases where edges point off the chromosome eg negative
+        ## coordinates
+        tix = !duplicated(tmp.ix) & !is.na(tmp.ix[,1]) & !is.na(tmp.ix[,2])
+        adj.ab[tmp.ix[tix, , drop = F]] = ab.pairs.bpid[tix]
     }
     else
     {
