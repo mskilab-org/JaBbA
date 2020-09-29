@@ -1,7 +1,7 @@
 language: r
 sudo: true
 cache: packages
-r: 3.5.1
+r: 3.6.1
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-tests --no-examples"
 before_install:
 #- sudo apt-get update
