@@ -17,6 +17,7 @@ r_packages:
 - covr
 - sequenza
 bioc_packages:
+- S4Vectors
 - GenomicRanges
 - VariantAnnotation
 - DNAcopy
