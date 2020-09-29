@@ -1,5 +1,4 @@
 language: r
-dist: trusty
 sudo: true
 cache: packages
 r: 3.5.1
