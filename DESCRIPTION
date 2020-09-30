@@ -11,7 +11,8 @@ Remotes:
   bioc::3.9/S4Vectors,
   bioc::3.9/GenomicRanges,
   bioc::3.9/rtracklayer,
-  bioc::3.9/VariantAnnotation
+  bioc::3.9/VariantAnnotation,
+  git::git@bitbucket.org:sequenzatools/sequenza.git
 Depends:
   R (>= 3.6.0),
   data.table (>= 1.9),
