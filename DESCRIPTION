@@ -28,6 +28,9 @@ Imports:
   GenomeInfoDb,
   rtracklayer
 Remotes:
+  bioc::3.8/GenomicRanges,
+  bioc::3.8/rtracklayer,
+  bioc::3.8/VariantAnnotation,
   github::mskilab/gUtils,
   github::mskilab/gTrack,  
   github::mskilab/Ppurple,
