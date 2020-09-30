@@ -1,23 +1,13 @@
 language: r
-sudo: true
+sudo: false
 cache: packages
-r: 3.6.1
-r_check_args: "--no-build-vignettes --no-manual --as-cran --no-tests --no-examples"
-before_install:
-- curl -OL $URL
-- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-- echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
-- mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
-- curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
-- chmod 755 ./travis-tool.sh
-- export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
+r: 3.5.1
 r_packages:
+- covr
 - devtools
 - testthat
-- covr
 - sequenza
 bioc_packages:
-- S4Vectors
 - GenomicRanges
 - VariantAnnotation
 - DNAcopy
@@ -25,10 +15,19 @@ r_github_packages:
 - mskilab/gUtils
 - mskilab/gTrack
 - mskilab/gGnome
+before_install:
+- curl -OL $URL
+- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+- echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
+- mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
+- curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+- chmod 755 ./travis-tool.sh
 script:
-- travis_wait 90 ./travis-tool.sh run_tests
+- "./travis-tool.sh run_tests"
 after_failure:
 - "./travis-tool.sh dump_logs"
+after_success:
+- travis_wait Rscript -e 'covr::codecov()'
 env:
   global:
   - secure: W5ZnqwUcd23wTcVqAYXOz9wtn12vK5R5C1nj1YYIqZJqqAZgu7jgL5j98TSf3uW6AR8enPBQDjGzNAK63gin+fpLhq560G0Cb5akSPexPkrikX7hCsm0APzaNsDXtXGiUPSC7ZuTU7t59oE+Tk2tJEGNPMCRjypzt10a6J2r6HcpyGVv4tvWrZizh3H+7F/M2C0qoaa3crHNBv7fzEinuTOXg6cHz6oJjFBVOY+zOgzSfG62NWxW1NVRfdeF1WAWeWdRei1++9Eh/CRI2ag4/e91oBtSudme0NaVzUkbMmsrzlwmYkUFTllOQn/gc9qLgaEJlQsW0VHv81YzzZ6dC3j5PQfmqWSRzl6qi/Q5CBg/qkq8lKbe2pZqQvLAnnPiY4MP7shqd1w++wNRKj+tjssTxOcX2S7kUh7CyszhX8r7jA9jmLYi0tqEtP6NHx5lkOGoztT9x73e2cpz92i7NvxzsVBM23QvuD8auZCtmWXNpa5/RQJtixFYERtBpNSHVisq/Jg5VpALM8oOPNa0o77I5MTbthZxbZfkxVxldNkShCnwkou6gFmPz8eBOu0uYoLiS2pZPnec75Cx0LByRNCr6oyE2fLad8Q4ADU8rm4f7KelwzlPmw+lGW2+X8xFLZliUIIlJ/V6+Ss6DFxWmEbAIsUE35cz9ukdyax+uAc=
@@ -39,4 +38,4 @@ env:
   - CPLEX_LIB_PATH=$HOME/my.cplex/lib
   - R_CHECK_ARGS="--no-build-vignettes --no-manual --as-cran --no-examples"
   - _R_CHECK_TESTS_NLINES_=0
-
+  - R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
