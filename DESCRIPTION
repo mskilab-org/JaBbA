@@ -8,37 +8,35 @@ Remotes:
   github::mskilab/gTrack,  
   github::mskilab/Ppurple,
   github::mskilab/gGnome,
-  bioc::3.8/GenomicRanges,
-  bioc::3.8/rtracklayer,
-  bioc::3.8/VariantAnnotation
+  bioc::3.9/S4Vectors,
+  bioc::3.9/GenomicRanges,
+  bioc::3.9/rtracklayer,
+  bioc::3.9/VariantAnnotation
 Depends:
   R (>= 3.6.0),
   data.table (>= 1.9),
   Matrix (>= 1.2),
   gUtils, 
   gTrack,
-  gGnome (>= 0.1), 
+  gGnome, 
   gplots (>= 3.0),
   GenomicRanges (>= 1.32),  
-  optparse (>= 1.4.4),
-  gTrack (>= 0.1)
+  optparse (>= 1.4.4)
 Imports:
   VariantAnnotation (>= 1.24),
-  DNAcopy (>= 1.48),
-  igraph (>= 1.1),  
+  GenomeInfoDb,
+  rtracklayer,
+  DNAcopy,
+  igraph,  
   methods,
   parallel,
   graphics,
-  grDevices,
-  stats,
-  utils,
-  sequenza,
-  GenomeInfoDb,
-  rtracklayer
+  grDevices
 Suggests: 
   testthat (>= 2.0),
   covr,
-  Ppurple(>= 0.2.0)
+  sequenza,
+  Ppurple
 License: GPL-2
 LazyData: true
 RoxygenNote: 7.1.0
