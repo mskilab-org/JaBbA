@@ -6,7 +6,6 @@ r_packages:
 - covr
 - devtools
 - testthat
-- sequenza
 bioc_packages:
 - GenomicRanges
 - VariantAnnotation
