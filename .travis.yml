@@ -4,19 +4,20 @@ cache: packages
 r: 3.6.1
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-tests --no-examples"
 before_install:
-#- sudo apt-get update
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
 - echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
 - curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+- export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
 r_packages:
 - devtools
 - testthat
 - covr
 - sequenza
 bioc_packages:
+- S4Vectors
 - GenomicRanges
 - VariantAnnotation
 - DNAcopy
@@ -24,8 +25,6 @@ r_github_packages:
 - mskilab/gUtils
 - mskilab/gTrack
 - mskilab/gGnome
-- mskilab/bamUtils
-- mskilab/Ppurple
 script:
 - travis_wait 90 ./travis-tool.sh run_tests
 after_failure:
