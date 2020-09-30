@@ -11,8 +11,7 @@ Remotes:
   bioc::3.9/S4Vectors,
   bioc::3.9/GenomicRanges,
   bioc::3.9/rtracklayer,
-  bioc::3.9/VariantAnnotation,
-  git::git@bitbucket.org:sequenzatools/sequenza.git
+  bioc::3.9/VariantAnnotation
 Depends:
   R (>= 3.6.0),
   data.table (>= 1.9),
@@ -32,13 +31,12 @@ Imports:
   methods,
   parallel,
   graphics,
-  grDevices,
-  stats,
-  utils,
-  sequenza
+  grDevices
 Suggests: 
   testthat (>= 2.0),
-  covr
+  covr,
+  sequenza,
+  Ppurple
 License: GPL-2
 LazyData: true
 RoxygenNote: 7.1.0
