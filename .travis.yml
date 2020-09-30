@@ -25,8 +25,6 @@ r_github_packages:
 - mskilab/gUtils
 - mskilab/gTrack
 - mskilab/gGnome
-- mskilab/bamUtils
-- mskilab/Ppurple
 script:
 - travis_wait 90 ./travis-tool.sh run_tests
 after_failure:
