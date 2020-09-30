@@ -2,8 +2,19 @@
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/JaBbA.svg)](https://codecov.io/github/mskilab/JaBbA?branch=master)
 
 # JaBbA (Junction Balance Analysis)
+```
+ _____         ___    _      _____ 
+(___  )       (  _`\ ( )    (  _  )
+    | |   _ _ | (_) )| |_   | (_) |
+ _  | | /'_` )|  _ <'| '_`\ |  _  |
+( )_| |( (_| || (_) )| |_) )| | | |
+`\___/'`\__,_)(____/'(_,__/'(_) (_)
 
-JaBbA builds a genome graph based on junctions and read depth, with optimal copy numbers for both vertices (DNA segments) and edges (bonds between segments) from whole genome sequencing. It can be used for discovering various patterns of structural variations.
+(Junction     Balance     Analysis)
+
+```
+
+JaBbA builds a genome graph based on junctions and read depth from whole genome sequencing, inferring optimal copy numbers for both vertices (DNA segments) and edges (bonds between segments). It can be used for discovering various patterns of structural variations.
 
 If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structural Variation Uncovered across Thousands of Cancer Genome Graphs](https://doi.org/10.1016/j.cell.2020.08.006)
 
@@ -12,7 +23,10 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
 - [Usage](#Usage)
 - [Output](#Output)
 - [FAQ](#FAQ)
+- [Algorithm](#algorithm)
+- [Benchmark](#benchmark)
 - [Acknowledgements](#Funding-sources)
+- [Fun fact](#fun-fact)
 
 ## Installation
 ------------
@@ -213,6 +227,11 @@ Options:
    
 	Optional, as JaBbA will infer internally with one of *ppgrid*, [*sequenza*](https://cran.r-project.org/web/packages/sequenza/index.html), and [*Ppurple*](https://github.com/mskilab/ppurple) of your choice through *ppmethod* argument, depending on the availability of necessary input files. Purity and ploidy estimation is arguably the most influential hyper-parameter of a JaBbA run, as it dictates the relationship between coverage data to copy number space, so if you want to make high quality graphs, start with better estiamtions. It is a very hard problem disguised as an easy one. Other external tools that helps: ABSOLUTE, ASCAT-wgs, TITAN.
 
+## Algorithm
+------------
+
+## Benchmark
+------------
 
 ## Attributions
 ------------
@@ -221,7 +240,6 @@ Options:
 
 > Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
 > Genome Center.
-
 
 ## Funding sources
 ------------
@@ -232,4 +250,5 @@ height="150" class ="center"> <img
 src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819b8aa4a996c2d584594/1524111841815/BWF.png?format=500w"
 height="150" class ="center">
 
-```
+## Fun fact
+------------
