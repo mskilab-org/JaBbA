@@ -20,10 +20,11 @@ Depends:
   gGnome (>= 0.1), 
   gplots (>= 3.0),
   GenomicRanges (>= 1.32),  
-  optparse (>= 1.4.4),
-  gTrack (>= 0.1)
+  optparse (>= 1.4.4)
 Imports:
   VariantAnnotation (>= 1.24),
+  GenomeInfoDb,
+  rtracklayer,
   DNAcopy (>= 1.48),
   igraph (>= 1.1),  
   methods,
@@ -32,9 +33,7 @@ Imports:
   grDevices,
   stats,
   utils,
-  sequenza,
-  GenomeInfoDb,
-  rtracklayer
+  sequenza
 Suggests: 
   testthat (>= 2.0),
   covr,
