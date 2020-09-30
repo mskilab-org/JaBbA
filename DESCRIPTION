@@ -3,20 +3,28 @@ Title: Infer cancer graph genomes from read depth and junctions
 Version: 0.0.0.9000
 Authors@R: person(given = "Marcin", family = "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
 Description: JaBbA simultaneously infers integer copy numbers for genomic segments and their connections based on the read depth and the graph structure defined by the structural variations identified from WGS data. Two essential inputs are 1) a high-density read depth ratio between tumor and normal samples (we also have guidelines for the cases lacking paired normal sequencing) and 2) the putative somatic structural variations. The output is a somatic rearrangement graph representing the integer copy numbers of DNA segments and their connections. The output is a copy number annotated genome graph.
-biocViews:
+Remotes:
+  github::mskilab/gUtils,
+  github::mskilab/gTrack,  
+  github::mskilab/Ppurple,
+  github::mskilab/gGnome,
+  bioc::3.8/GenomicRanges,
+  bioc::3.8/rtracklayer,
+  bioc::3.8/VariantAnnotation
 Depends:
-  R (>= 3.3.0),
+  R (>= 3.6.0),
+  data.table (>= 1.9),
   Matrix (>= 1.2),
-  gUtils (>= 0.2), 
+  gUtils, 
+  gTrack,
   gGnome (>= 0.1), 
   gplots (>= 3.0),
-  GenomicRanges (>= 1.3),  
+  GenomicRanges (>= 1.32),  
   optparse (>= 1.4.4),
   gTrack (>= 0.1)
 Imports:
   VariantAnnotation (>= 1.24),
   DNAcopy (>= 1.48),
-  data.table (>= 1.9),
   igraph (>= 1.1),  
   methods,
   parallel,
@@ -27,12 +35,6 @@ Imports:
   sequenza,
   GenomeInfoDb,
   rtracklayer
-Remotes:
-  github::mskilab/gUtils,
-  github::mskilab/gTrack,  
-  github::mskilab/Ppurple,
-  github::mskilab/gGnome,
-  r-lib/covr
 Suggests: 
   testthat (>= 2.0),
   covr,
