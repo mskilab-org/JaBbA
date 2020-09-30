@@ -23,6 +23,7 @@ bioc_packages:
 - DNAcopy
 r_github_packages:
 - mskilab/gUtils
+- mskilab/gTrack
 - mskilab/gGnome
 script:
 - travis_wait 90 ./travis-tool.sh run_tests
