@@ -25,8 +25,7 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
 	- [Usage](#usage)
 	- [Output](#output)
 	- [FAQ](#faq)
-	- [Algorithm](#algorithm)
-	- [Benchmark](#benchmark)
+	- [The design of JaBbA](#the-design-of-jabba)
 	- [Attributions](#attributions)
 	- [Funding sources](#funding-sources)
 	- [Fun fact](#fun-fact)
@@ -233,13 +232,10 @@ Options:
    
    The default used in the paper is 100, which in theory correspond to a prior belief that 1 in 100 breakends have loose end, or unexplained copy number change without consistent junction. In practice though, there are many source of noise in the coverage data that could mix with the desired signal of copy number change. After running JaBbA, plot the output copy number alongside the input coverage, If your output segmentation looks too "rigid", i.e. missing obvious clean copy number change points, you might want to consider dropping the slack penalty, as it indicates that JaBbA is so reluctant to add a loose end that it ignores the true signal from the coverage. For dryclean coverage input, which is at 1kbp resolution and denoised, we currently recommend trying slack penalty around 20.
 
-## Algorithm
+## The design of JaBbA
 The key to understanding what JaBbA is doing lies in its name, "balancing junctions". When analyzing SVs, junctions and segmental copy numbers have been treated separately in most if not all large scale WGS analyses, but what's not being addressed directly is that these are just two measurable features of the same DNA sequence. The structure of DNA tells us that it is a string, every segment in it are just joined in tandem, hence every copy of a segment should have exactly one upstream neighbor and one downstream neighbor. When adding all copies a segment has, the simple rule that cannot be broken is there must be same number of copies of up/downstream neighbors. If we treat segments as vertices and the 3'-5' phosphodiester bond between segments as edges, we get the *junction balance constraints* that couple them together.
 
-The construction of the objective function then is easier to understand. We want to find the copy number of the segments as close (minimize residual sum of square) as possible, while allowing the solution to break the 
-
-## Benchmark
-
+Of course there would be copy number change points where we can't find a matching junction, and we fill them with loose ends. To make the copy number more correct without a junction we have to use these loose ends like placeholders so the junction balance constraint is still met. Then the construction of the objective function is clear: we want the segment copy number estiamte to be as close to the data's center as possible (minimize residual sum of square) while limit the places where we had to use loose ends for better fit (minimize the number of loose ends).
 
 ## Attributions
 
@@ -258,3 +254,4 @@ src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575
 height="150" class ="center">
 
 ## Fun fact
+Why the name? Keith Bradnam started a parody award called [JABBA](http://www.acgt.me/blog/2020/3/31/three-cheers-for-jabba-awards) and we thought we'd won. However, jokes aside, did you notice the palidrome there? That's what would happen to a genome if it were to undergo BFB cycles.
