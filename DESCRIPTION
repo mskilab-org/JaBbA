@@ -4,13 +4,16 @@ Version: 0.0.0.9000
 Authors@R: person(given = "Marcin", family = "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
 Description: JaBbA simultaneously infers integer copy numbers for genomic segments and their connections based on the read depth and the graph structure defined by the structural variations identified from WGS data. Two essential inputs are 1) a high-density read depth ratio between tumor and normal samples (we also have guidelines for the cases lacking paired normal sequencing) and 2) the putative somatic structural variations. The output is a somatic rearrangement graph representing the integer copy numbers of DNA segments and their connections. The output is a copy number annotated genome graph.
 Remotes:
-  github::mskilab/gUtils,
-  github::mskilab/gTrack,
-  github::mskilab/gGnome,
+  bioc::3.10/BioGenerics,
+  bioc::3.10/GenomeInfoDb,
+  bioc::3.10/DNAcopy,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
-  bioc::3.10/VariantAnnotation
+  bioc::3.10/VariantAnnotation,
+  github::mskilab/gUtils,
+  github::mskilab/gTrack,
+  github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
   data.table (>= 1.9),
