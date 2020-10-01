@@ -2,7 +2,10 @@ language: r
 sudo: false
 cache: packages
 r: 3.6.1
+warnings_are_errors: false
+r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
 bioc_packages:
+- GenomeInfoDb
 - S4Vectors
 - GenomicRanges
 - VariantAnnotation
