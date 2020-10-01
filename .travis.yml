@@ -3,7 +3,6 @@ sudo: false
 cache: packages
 r: 3.6.1
 bioc_packages:
-- BioGenerics
 - GenomeInfoDb
 - S4Vectors
 - GenomicRanges
