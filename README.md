@@ -19,17 +19,19 @@ JaBbA builds a genome graph based on junctions and read depth from whole genome 
 If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structural Variation Uncovered across Thousands of Cancer Genome Graphs](https://doi.org/10.1016/j.cell.2020.08.006)
 
 ## Table of contents
-- [Installation](#Installation)
-- [Usage](#Usage)
-- [Output](#Output)
-- [FAQ](#FAQ)
-- [Algorithm](#algorithm)
-- [Benchmark](#benchmark)
-- [Acknowledgements](#Funding-sources)
-- [Fun fact](#fun-fact)
+- [JaBbA (Junction Balance Analysis)](#jabba-junction-balance-analysis)
+	- [Table of contents](#table-of-contents)
+	- [Installation](#installation)
+	- [Usage](#usage)
+	- [Output](#output)
+	- [FAQ](#faq)
+	- [Algorithm](#algorithm)
+	- [Benchmark](#benchmark)
+	- [Attributions](#attributions)
+	- [Funding sources](#funding-sources)
+	- [Fun fact](#fun-fact)
 
 ## Installation
-------------
 1. Install IBM ILOG
    [CPLEX Studio](https://www.ibm.com/products/ilog-cplex-optimization-studio).
    The software is proprietary, but can be obtained for free under [IBM's academic
@@ -180,7 +182,7 @@ Options:
 ```
 
 ## Output
-------------
+
 1. `jabba.simple.gg.rds` 
 
 	The out put genome graph with integer copy numbers. For more information of how to analyze it please refer to [gGnome tutorial](http://mskilab.com/gGnome/tutorial.html#applications)
@@ -204,7 +206,7 @@ Options:
    For detailed explanation of `tilim` and `epgap` please read our manuscript and CPLEX help doc.
 
 ## FAQ
-------------
+
 1. "CPLEX Error 1016: Community Edition. Problem size limits exceeded."
 	
 	You are using a free trial version of CPLEX, please contact [IBM's academic initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing) for a full license for academic use. We will work on supporting Gurobi in the future.
@@ -227,14 +229,20 @@ Options:
    
 	Optional, as JaBbA will infer internally with one of *ppgrid*, [*sequenza*](https://cran.r-project.org/web/packages/sequenza/index.html), and [*Ppurple*](https://github.com/mskilab/ppurple) of your choice through *ppmethod* argument, depending on the availability of necessary input files. Purity and ploidy estimation is arguably the most influential hyper-parameter of a JaBbA run, as it dictates the relationship between coverage data to copy number space, so if you want to make high quality graphs, start with better estiamtions. It is a very hard problem disguised as an easy one. Other external tools that helps: ABSOLUTE, ASCAT-wgs, TITAN.
 
+6. How to choose slack penalty?
+   
+   The default used in the paper is 100, which in theory correspond to a prior belief that 1 in 100 breakends have loose end, or unexplained copy number change without consistent junction. In practice though, there are many source of noise in the coverage data that could mix with the desired signal of copy number change. After running JaBbA, plot the output copy number alongside the input coverage, If your output segmentation looks too "rigid", i.e. missing obvious clean copy number change points, you might want to consider dropping the slack penalty, as it indicates that JaBbA is so reluctant to add a loose end that it ignores the true signal from the coverage. For dryclean coverage input, which is at 1kbp resolution and denoised, we currently recommend trying slack penalty around 20.
+
 ## Algorithm
-------------
+The key to understanding what JaBbA is doing lies in its name, "balancing junctions". When analyzing SVs, junctions and segmental copy numbers have been treated separately in most if not all large scale WGS analyses, but what's not being addressed directly is that these are just two measurable features of the same DNA sequence. The structure of DNA tells us that it is a string, every segment in it are just joined in tandem, hence every copy of a segment should have exactly one upstream neighbor and one downstream neighbor. When adding all copies a segment has, the simple rule that cannot be broken is there must be same number of copies of up/downstream neighbors. If we treat segments as vertices and the 3'-5' phosphodiester bond between segments as edges, we get the *junction balance constraints* that couple them together.
+
+The construction of the objective function then is easier to understand. We want to find the copy number of the segments as close (minimize residual sum of square) as possible, while allowing the solution to break the 
 
 ## Benchmark
-------------
+
 
 ## Attributions
-------------
+
 > Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
 > Core Member, New York Genome Center.
 
@@ -242,7 +250,6 @@ Options:
 > Genome Center.
 
 ## Funding sources
-------------
 
 <img
 src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819f02b6a28750f79597c/1524111879079/DDCF.jpeg?format=1500w"
@@ -251,4 +258,3 @@ src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575
 height="150" class ="center">
 
 ## Fun fact
-------------
