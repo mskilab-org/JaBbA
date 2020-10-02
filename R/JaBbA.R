@@ -2098,7 +2098,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
             pp = data.table(ploidy = confint$max.ploidy,
                             purity = confint$max.cellularity)
-        } else {
+        } else if (use.ppgrid){
             jmessage("Using ppgrid to estimate purity ploidy")
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
             if (!is.null(het.file))
@@ -2112,8 +2112,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             ploidy.min = ifelse(is.na(ploidy[1]), 1.2, ploidy[1]),
                             ploidy.max = ifelse(is.na(ploidy[length(ploidy)]), 6, ploidy[length(ploidy)]),
                             allelic = TRUE)
-            }
-            else {
+            } else {
                 pp = ppgrid(ss.tmp,
                             verbose = verbose,
                             plot = F,

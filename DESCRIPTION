@@ -28,11 +28,12 @@ Imports:
   GenomeInfoDb,
   rtracklayer,
   DNAcopy,
-  igraph
+  igraph,
+  methods
 Suggests: 
   testthat,
   covr,
-  sequenza
+  sequenza 
 License: GPL-2
 LazyData: true
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.1
