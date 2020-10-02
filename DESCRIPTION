@@ -32,8 +32,7 @@ Imports:
 Suggests: 
   testthat,
   covr,
-  sequenza,
-  Ppurple
+  sequenza
 License: GPL-2
 LazyData: true
 RoxygenNote: 7.1.0
