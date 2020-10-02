@@ -9,7 +9,6 @@
 #' @import optparse
 #' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
 #' @importFrom gplots col2hex
-#' @importFrom Ppurple ppurple
 #' @importFrom graphics plot
 #' @importFrom graphics abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
@@ -88,7 +87,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param hets  optional path to hets.file which is tab delimited text file with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n
 #' @param purity cellularity value of the sample
 #' @param ploidy ploidy value of the sample (segment length weighted copy number)
-#' @param pp.method character select from "ppgrid", "ppurple", and "sequenza" to infer purity and ploidy if not both given. Default, "sequenza".
+#' @param pp.method character select from "ppgrid" and "sequenza" to infer purity and ploidy if not both given. Default, "sequenza".
 #' @param min.nbins integer minimum number of bins of coverage of a segment
 #' @param max.na numeric between (0, 1), any vertex with more than this proportion missing coverage data is ignored
 #' @param blacklist.coverage GRanges marking regions of the genome where coverage is unreliable
@@ -1957,11 +1956,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             use.sequenza = TRUE
             use.ppurple = FALSE
             use.ppgrid = FALSE
-        } else if (grepl(pp.method, "ppurple")){
-            use.ppurple = TRUE
-            use.sequenza = FALSE
-            use.ppgrid = FALSE
-        } else if (grepl(pp.method, "ppgrid")){
+        } 
+        ## temporarily deprecate Ppurple
+        # else if (grepl(pp.method, "ppurple")){
+        #     use.ppurple = TRUE
+        #     use.sequenza = FALSE
+        #     use.ppgrid = FALSE
+        # } 
+        else if (grepl(pp.method, "ppgrid")){
             use.ppgrid = TRUE
             use.ppurple = FALSE
             use.sequenza = FALSE
@@ -1979,7 +1981,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             hets.gr = NULL
         }
 
-        if (is.null(hets.gr) || !file.exists(het.file)){
+        if (is.null(hets.gr) | !file.exists(het.file)){
             use.ppgrid = TRUE
             use.ppurple = use.sequenza = FALSE
         } else if (length(hets.gr)==0){
@@ -1990,46 +1992,48 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                           "ref.count.n",
                           "alt.count.n") %in% colnames(values(hets.gr)))){
             use.sequenza = FALSE
+            use.ppurple = FALSE ## temp deprecate Ppurple
             use.ppgrid = !use.ppurple
         }
 
-        if (use.ppurple)
-        {
-            jmessage("Using Ppurple to estimate purity ploidy")
-            if (is.na(purity))
-            {
-                purity = seq(0, 1, 0.1)
-            }
+        # if (use.ppurple)
+        # {
+        #     jmessage("Using Ppurple to estimate purity ploidy")
+        #     if (is.na(purity))
+        #     {
+        #         purity = seq(0, 1, 0.1)
+        #     }
 
-            if (is.na(ploidy))
-            {
-                ploidy = seq(1, 6, 0.2)
-            }
-            this.cov$y = values(this.cov)[, field]
+        #     if (is.na(ploidy))
+        #     {
+        #         ploidy = seq(1, 6, 0.2)
+        #     }
+        #     this.cov$y = values(this.cov)[, field]
 
-            if (verbose)
-            {
-                jmessage('Computing purity and ploidy with Ppurple')
-            }
+        #     if (verbose)
+        #     {
+        #         jmessage('Computing purity and ploidy with Ppurple')
+        #     }
 
-            max.chunk = 1e3
-            numchunks = ceiling(length(ss.tmp)/max.chunk)
-            if (numchunks>length(purity)*length(ploidy)){
-                pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
-                                      purities = purity, ploidies = ploidy,
-                                      verbose = verbose,
-                                      mc.cores = mc.cores,
-                                      ## numchunks = numchunks,
-                                      ignore.sex = TRUE)
-            } else {
-                pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
-                                      purities = purity, ploidies = ploidy,
-                                      verbose = verbose,
-                                      mc.cores = mc.cores,
-                                      numchunks = numchunks,
-                                      ignore.sex = TRUE)
-            }
-        } else if (use.sequenza) {
+        #     max.chunk = 1e3
+        #     numchunks = ceiling(length(ss.tmp)/max.chunk)
+        #     if (numchunks>length(purity)*length(ploidy)){
+        #         pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+        #                               purities = purity, ploidies = ploidy,
+        #                               verbose = verbose,
+        #                               mc.cores = mc.cores,
+        #                               ## numchunks = numchunks,
+        #                               ignore.sex = TRUE)
+        #     } else {
+        #         pp = Ppurple::ppurple(cov = this.cov, hets = hets.gr, seg = ss.tmp,
+        #                               purities = purity, ploidies = ploidy,
+        #                               verbose = verbose,
+        #                               mc.cores = mc.cores,
+        #                               numchunks = numchunks,
+        #                               ignore.sex = TRUE)
+        #     }
+        # } else 
+        if (use.sequenza) {
             jmessage("Using Sequenza to estimate purity ploidy")
             if (is.na(purity))
             {
@@ -2094,7 +2098,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
             pp = data.table(ploidy = confint$max.ploidy,
                             purity = confint$max.cellularity)
-        } else if (use.ppgrid) {
+        } else {
             jmessage("Using ppgrid to estimate purity ploidy")
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
             if (!is.null(het.file))
