@@ -168,7 +168,7 @@ print(list.expr(values(jab.reiterate$junctions$grl)$cn))
 
 cn.cor.single = function(segs,
                          cn.gs){
-    if (is.null(segs) || is.na(segs) || length(segs)==0){
+    if (is.null(segs) | is.na(segs) | length(segs)==0){
         return(as.numeric(NA))
     }
     bands.td = gTrack::karyogram()
@@ -212,7 +212,7 @@ test_that("JaBbA", {
                 info = print(jab.cn.cor))
 
     expect_true(identical(values(jab$junctions$grl)$cn,
-                          c(3, 3, 3, 29, 3, 29, 28, 1, 28, 5, 28, 16, 12, 16, 16, 16, 16, 8, 16, 4, 3, 3, 0, 0)) |
+                          c(3, 3, 3, 4, 0, 0)) |
                 identical(values(jab$junctions$grl)$cn,
                           c(3, 1, 3, 2, 2, 2, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 28, 26, 6, 26, 1, 26, 26, 2, 26, 26, 31, 2, 31, 31, 22, 19, 22, 31, 1, 31, 27, 5, 4, 23, 23, 1, 23, 4, 3, 1, 3, 4, 3, 3, 10, 5, 10, 0, 0)),
                 info = print(list.expr(values(jab$junctions$grl)$cn)))
@@ -230,7 +230,7 @@ test_that("JaBbA", {
     expect_true(
         identical(
             values(jab.reiterate$junctions$grl)$cn,
-            c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 3, 12, 12, 12, 12, 21, 26, 27, 7, 27, 31, 1, 31, 32, 25, 13, 25, 31, 31, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 5, 6, 0, 0)) |
+            c(3, 1, 3, 2, 2, 2, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 28, 26, 6, 26, 31, 22, 19, 22, 31, 1, 31, 27, 5, 3, 24, 4, 3, 1, 3, 4, 3, 3, 3, 3, 10, 5, 10, 0, 0)) |
         identical(
           values(jab.reiterate$junctions$grl)$cn,
             c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 5, 3, 5, 2, 2, 4, 5, 4, 4, 5, 4, 3, 2, 1, 2, 3, 12, 12, 12, 12, 20, 26, 27, 7, 26, 31, 1, 31, 32, 25, 13, 25, 25, 7, 8, 17, 4, 3, 1, 3, 4, 3, 3, 3, 3, 9, 6, 6)),

@@ -1,20 +1,17 @@
-#' @import igraph
-#' @import Matrix
 #' @import GenomicRanges
-#' @import parallel
-#' @import DNAcopy
 #' @import gUtils
 #' @import gTrack
 #' @import gGnome
-#' @import optparse
-#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey 
+#' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
+#' @importFrom optparse make_option OptionParser parse_args print_help
+#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey
+#' @importFrom Matrix which rowSums colSums Matrix sparseMatrix t diag
+#' @importFrom parallel mclapply
 #' @importFrom gplots col2hex
-#' @importFrom graphics plot
-#' @importFrom graphics abline hist title
+#' @importFrom graphics plot abline hist title
 #' @importFrom grDevices col2rgb dev.off pdf png rgb
 #' @importFrom stats C aggregate dist loess median ppois predict runif setNames hclust cutree
 #' @importFrom utils read.delim write.table
-#' @importFrom methods as is
 #' @importFrom sequenza segment.breaks baf.model.fit get.ci
 #' @importFrom rtracklayer import
 #' @importFrom GenomeInfoDb seqlengths
@@ -3057,7 +3054,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             }
         }
 
-        sols = mclapply(seq_along(cll), function(k, args)
+        sols = parallel::mclapply(seq_along(cll), function(k, args)
         {
             ix = node.map[cll[[k]]] ## indices in the original graph
             uix = unique(ix)
@@ -3452,7 +3449,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
     ## cap astronomical Qobj values so that CPLEX / gurobi does not freak out about large near-infinite numbers
     ## astronomical = value that is 1e8 higher than lowest value
-    qr = range(setdiff(diag(Qobj), 0))
+    qr = range(setdiff(Matrix::diag(Qobj), 0))
     CPLEX.INFIN = 1e9
     Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))] =
         pmin(CPLEX.INFIN*qr[1], Qobj[cbind(1:nrow(Qobj), 1:nrow(Qobj))])
@@ -5489,17 +5486,17 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
                                      rep(neg_elements[ind_neg], each = length(ind_pos))); # cartesian product of ind_pos and ind_neg
                     pix = rep(1:nrow(indpairs), 2)
                     ix = c(indpairs[,1], indpairs[,2])
-                                        #                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
+                    ## coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
                     coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
                     combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
                     combs[cbind(pix, ix)] = coeff;
 
                     H = combs %*% K_last;
 
-                                        # remove duplicated rows in H (with respect to sparsity)
-                    H = H[!duplicated(as.matrix(H)>ZERO), ];
+                    ## remove duplicated rows in H (with respect to sparsity)
+                    H = H[which(!duplicated(as.matrix(H)>ZERO)), , drop = FALSE];
 
-                                        # remove rows in H that have subsets in H (with respect to sparsity) ..
+                    ## remove rows in H that have subsets in H (with respect to sparsity) ..
                     if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
                     {
                         print('Exceeding maximum number of chunks in convex.basis computation')
@@ -5653,7 +5650,7 @@ read.junctions = function(rafile,
 
             ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                nh = min(c(Inf, which(!grepl('^((#)|(chr))', ln))))-1 ## it can also be chr
                 if (is.infinite(nh)){
                     nh = 1
                 }
@@ -5695,7 +5692,10 @@ read.junctions = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
             ## converting bedpe to 1-based coordinates for verify.junctions()
-            rafile[, `:=`(start1 = start1 + 1, start2 = start2 +1)] 
+            rafile[, `:=`(
+                start1 = ifelse(start1==end1-1, start1 + 1, start1),
+                start2 = ifelse(start2==end2-1, start2 + 1, start2)
+            )]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
 
           if (!is.null(seqlengths) && all(!is.na(seqlengths)))
@@ -7172,7 +7172,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
 
     ## matrix of (strand aware) reference distances between breakpoint pairs
-    adj[ixu, ] = do.call(rbind, mclapply(ix,
+    adj[ixu, ] = do.call(rbind, parallel::mclapply(ix,
                                          function(iix)
                                          {
                                              if (verbose)
@@ -7186,7 +7186,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
     if (verbose)
         cat('\n')
 
-    adj = adj | t(adj) ## symmetrize
+    adj = adj | Matrix::t(adj) ## symmetrize
 
     ## bidirected graph --> skew symmetric directed graph conversion
     ## split each junction (bp pair) into two nodes, one + and -
@@ -7241,7 +7241,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 
         if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
         { ## only need to do this for connected components that have 3 or more junctions
-            cl3 = do.call(c, mclapply(cl2[ix], function(x)
+            cl3 = do.call(c, parallel::mclapply(cl2[ix], function(x)
             {
                 tmp.adj = adj3[x, x]
                 lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
@@ -7448,7 +7448,7 @@ ppgrid = function(segstats,
     if (verbose)
         cat(paste(c(rep('.', length(purity.guesses)), '\n'), collapse = ''))
 
-    NLL = matrix(unlist(mclapply(seq_along(purity.guesses), function(i)
+    NLL = matrix(unlist(parallel::mclapply(seq_along(purity.guesses), function(i)
     {
         if (verbose)
             cat('.')

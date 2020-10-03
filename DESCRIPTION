@@ -15,25 +15,26 @@ Remotes:
   github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
-  data.table (>= 1.9),
-  Matrix,
   gUtils, 
   gTrack,
   gGnome, 
-  gplots,
-  GenomicRanges,  
-  optparse
+  GenomicRanges
 Imports:
+  data.table,
+  Matrix,
   VariantAnnotation,
   GenomeInfoDb,
   rtracklayer,
   DNAcopy,
   igraph,
-  methods
+  methods,
+  optparse,
+  gplots,
+  graphics,
+  sequenza
 Suggests: 
   testthat,
-  covr,
-  sequenza 
-License: GPL-2
+  covr
+License: MIT + file LICENSE
 LazyData: true
 RoxygenNote: 7.1.1
