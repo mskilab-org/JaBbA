@@ -13,136 +13,172 @@ jbastr = "
 if (!exists("opt"))
 {
     option_list = list(
-        make_option(c("-s", "--seg"),
-                    type = "character",
-                    help = "Path to .rds file of GRanges object of intervals corresponding to initial segmentation (required)"),
-        make_option(c("-c", "--coverage"),
-                    type = "character",
-                    help = "Path to .rds, file of GRanges object of fine scale genomic coverage / abundance as tiled intervals (100 - 5000 bp) along genome (required)"),
-        make_option(c("-j", "--junctions"),
-                    type = "character",
-                    help = "Path to rearrangement file, which can be VCF breakend format, dRanger tab delim output,  or an rds of GRangesList of signed locus pairs pointing AWAY from junction (required)"),
-        make_option(c("--j.supp"),
-                    type = "character",
-                    default = NULL,
-                    help = "Supplementary junctions which will be used in subsequent iterations, same format as '--junctions'"),
-        ## make_option(c("-j", "--cfield"),
-        ##             type = "character",
-        ##             help = "Name of meta data field of ra GRanges or data frame that specifies a junction confidence score, this will be used as a score to nudge (ie reward) each copy of that junction in the optimization"),
-        make_option(c("-i", "--tfield"),
-                    type = "character",
-                    help = "Name of meta data field of ra GRanges or data frame that specifies tiers of junctions, where tier 1 is forced to be included"),
-        make_option(c("-b", "--nseg"),
-                    type = "character",
-                    default = "",
-                    help = "Path to .rds file of GRanges object of intervals corresponding to normal tissue copy number, needs to have $cn field"),
-        make_option(c("-d", "--hets"),
-                    type = "character",
-                    default = "",
-                    help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),
-        make_option(c("-l", "--libdir"),
-                    type = "character",
-                    default = paste(Sys.getenv("GIT_HOME"), "isva", sep = "/"),
-                    help = "Directory containing karyoMIP.R file (eg default GIT.HOME/isva)"),
-        make_option(c("-o", "--outdir"),
-                    type = "character",
-                    default = "./",
-                    help = "Directory to dump output into"),
-        make_option(c("-n", "--name"),
-                    type = "character",
-                    default = "tumor",
-                    help = "Sample / Individual name"),
-        make_option(c("-f", "--field"),
-                    type = "character",
-                    default = "ratio",
-                    help = "Name of meta data field or column to use for abundance / coverage signal from abundance / coverage soignal file"),
-        make_option(c("-k", "--slack"),
-                    type = "numeric",
-                    default = 1000,
-                    help = "Slack penalty to apply per loose end copy"),
-        make_option(c("-z", "--subsample"),
-                    type = "numeric",
-                    default = 1,
-                    help = "Numeric value between 0 and 1 specifying whether to subsample coverage for intra segment variance estimation"),
-        make_option(c("-t", "--tilim"),
-                    type = "integer",
-                    default = 3600,
-                    help = "Time limit for JaBbA MIP"),
-        make_option(c("-p", "--ploidy"),
-                    type = "character",
-                    default = NA,
-                    help = "Ploidy guess"),
-        make_option(c("-q", "--purity"),
-                    type = "character",
-                    default = NA,
-                    help = "Purity guess"),
-        make_option(c("--cores"),
-                    type = "integer",
-                    default = 1,
-                    help = "Number of cores for JaBBa MIP"),
-        make_option(c("-m", "--iterate"),
-                    type = "integer",
-                    default = 0,
-                    help = "How many times to iterate through tiers"),
-        make_option(c("-w", "--window"),
-                    type = "numeric",
-                    default = 1e3,
-                    help = "Window to dumpster dive for junctions around loose ends"),
-        make_option(c("-e", "--edgenudge"),
-                    type = "numeric",
-                    default = 0.1,
-                    help = "Edge nudge for optimization, to be multiplied by edge specific confidence score if provided"),
-        make_option(c("--ppmethod"),
-                    type = "character",
-                    default = "sequenza",
-                    help = "choose from sequenza, ppurple, or ppgrid to estimate purity ploidy"),
-        make_option(c("--indel"),
-                    type = "character",
-                    default = "exclude",
-                    help = "if 'include' force the small isolated INDEL-like junctions non-zero copy numbers, 'exclude' force zero copy number, no action if any other value"),
-        make_option(c("--allin"),
-                    action = "store_true",
-                    default = FALSE,
-                    help = "if TRUE will put all tiers in the first round of iteration"),
-        make_option(c("--linear"),
-                    action = "store_true",
-                    default = FALSE,
-                    help = "if TRUE will use L1 loose end penalty"),
-        make_option(c("--epgap"),
-                    type="numeric",
-                    default = 0.01,
-                    help = "threshold for calling convergence"),
-        make_option(c("-x", "--strict"),
-                    type = 'character',
-                    default = "FALSE",
-                    help = "if TRUE will restrict input junctions to only the subset overlapping seg"),
-        make_option(c("--gurobi"),
-                    type = 'character',
-                    default = 'FALSE',
-                    help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
+        make_option(
+            c("--j.supp"),
+            type = "character",
+            default = NULL,
+            help = "supplement junctions in the same format as junctions"),
+        make_option(
+            c("--blacklist.junctions"),
+            type = "character",
+            default = NULL,
+            help = "rearrangement junctions to be excluded from consideration"),
+        make_option(
+            c("--whitelist.junctions"),
+            type = "character",
+            default = NULL,
+            help = "rearrangement junctions to be forced to be incorporated"),
+        make_option(
+            c("--geno"),
+            action = "store_true",
+            default = FALSE,
+            help = "whether the junction has genotype information"),
+        make_option(
+            c("--indel"),
+            type = "character",
+            default = "exclude",
+            help = "character of the decision to 'exclude' or 'include' small(< min.nbins * coverage bin width) isolated INDEL-like events into the model. Default NULL, do nothing."),
+        make_option(
+            c("--cfield"),
+            type = "character",
+            help = "junction confidence meta data field in ra"),
+        make_option(
+            c("--tfield"),
+            type = "character",
+            default = "tier",
+            help = "tier confidence meta data field in ra. tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end. Default 'tier'."),
+        make_option(
+            c("--iterate"),
+            type = "integer",
+            default = 0,
+            help = "the number of extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield."),
+        make_option(
+            c("--rescue.window"),
+            type = "numeric",
+            default = 1e3,
+            help = "window size in bp within which to look for lower confidence junctions. Default 1000."),
+        make_option(
+            c("--rescue.all"),
+            type = "logical",
+            default = FALSE,
+            action = "store_true",
+            help = "Attempt to rescue all loose ends regardless of internal quality filter"
+        ),
+        make_option(
+            c("--nudgebalanced"),
+            type = "logical",
+            default = TRUE,
+            help = "whether to attempt to add a small incentive for chains of quasi-reciprocal junctions."),
+        make_option(
+            c("--edgenudge"),
+            type = "numeric",
+            default = 0.1,
+            help = "numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation. Default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies."),
+        make_option(
+            c("--strict"),
+            default = FALSE,
+            action = "store_true",
+            help = "if used will only include junctions that exactly overlap segs"),
+        make_option(
+            c("--allin"),
+            action = "store_true",
+            default = FALSE,
+            help = "if TRUE will put all tiers in the first round of iteration"),
+        make_option(
+            c("--field"),
+            type = "character",
+            default = "ratio",
+            help = "name of the metadata column of coverage that contains the data. Default 'ratio' (coverage ratio between tumor and normal). If using dryclean, it is 'foreground'."),        
+        make_option(
+            c("-s", "--seg"),
+            type = "character",
+            help = "Path to .rds file of GRanges object of intervals corresponding to initial segmentation (required)"),
+        make_option(
+            c("--maxna"),
+            type = "numeric",
+            default = 0.1,
+            help = "Any node with more NA than this fraction will be ignored"),
+        make_option(
+            c("--blacklist.coverage"),
+            type = "character",
+            default = NULL,
+            help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome"),
+        make_option(
+            c("--nseg"),
+            type = "character",
+            default = "",
+            help = "Path to .rds file of GRanges object of intervals corresponding to normal tissue copy number, needs to have $cn field"),
+        make_option(
+            c("--hets"),
+            type = "character",
+            default = "",
+            help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),
+        make_option(
+            c("--ploidy"),
+            type = "character",
+            default = NA,
+            help = "Ploidy guess, can be a length 2 range"),
+        make_option(
+            c("--purity"),
+            type = "character",
+            default = NA,
+            help = "Purity guess, can be a length 2 range"),
+        make_option(
+            c("--ppmethod"),
+            type = "character",
+            default = "sequenza",
+            help = "select from 'ppgrid', 'ppurple', and 'sequenza' to infer purity and ploidy if not both given. Default, 'sequenza'."),        
+        make_option(
+            c("--cnsignif"),
+            type = "numeric",
+            default = 1e-5,
+            help = "alpha value for CBS"),
+        make_option(
+            c("--slack"),
+            type = "numeric",
+            default = 100,
+            help = "Slack penalty to apply per loose end"),
+        make_option(
+            c("--linear"),
+            action = "store_true",
+            default = FALSE,
+            help = "if TRUE will use L1 loose end penalty"),
+        make_option(
+            c("-t", "--tilim"),
+            type = "integer",
+            default = 6000,
+            help = "Time limit for JaBbA MIP"),
+        make_option(
+            c("--epgap"),
+            type="numeric",
+            default = 0.01,
+            help = "threshold for calling convergence"),        
+        make_option(
+            c("-o", "--outdir"),
+            type = "character",
+            default = "./",
+            help = "Directory to dump output into"),
+        make_option(
+            c("-n", "--name"),
+            type = "character",
+            default = "tumor",
+            help = "Sample / Individual name"),
+        make_option(
+            c("--cores"),
+            type = "integer",
+            default = 1,
+            help = "Number of cores for JaBBa MIP"),
+        ## make_option(c("--gurobi"),
+        ##             type = 'character',
+        ##             default = 'FALSE',
+        ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = FALSE,
-                    help = "verbose output"),
-        make_option(c("-y", "--nudgebalanced"),
-                    action = "store_true",
-                    default = TRUE,
-                    help = "Manually nudge balanced junctions into the model."),
-        make_option(c("--maxna"),
-                  type = "numeric",
-                  default = 0.1,
-                  help = "Any node with more NA than this fraction will be ignored"),
-        make_option(c("--blacklist"),
-                    type = "character",
-                    default = NULL,
-                    help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome"),
-        make_option(c("--geno"),
-                    action = "store_true",
-                    default = FALSE,
-                    help = "Whether to consider the `GENO` field in the input junctions VCF, use this flag if your SV VCF is generated by SvABA multisample run")
+                    help = "verbose output")
     )
 
-    parseobj = OptionParser(usage = paste(c("jba [options] JUNCTIONS COVERAGE",
+    parseobj = OptionParser(usage = paste(c("jba JUNCTIONS COVERAGE [options]",
                                             "\tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList",
                                             " \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges",
                                             "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
@@ -161,7 +197,9 @@ if (!exists("opt"))
         if (!file.exists(opt$junctions))
         {
             message('Did not find junction file ', opt$junctions)
-            print_help(parseobj); stop()
+            message('Warning: will be running JaBbA without junctions')
+            ## print_help(parseobj); stop()
+            opt$junctions = ""
         }
         if (!file.exists(opt$coverage))
         {
@@ -175,6 +213,39 @@ if (!exists("opt"))
 
 suppressPackageStartupMessages(
 {
+
+  if (!is.null(opt$seg) && is.character(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
+  {
+    message('Did not find seg file ', opt$seg, ' setting to NULL')
+    opt$seg = "NULL"
+  }
+
+
+  if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+  {
+    message('Did not find j.supp file ', opt$j.supp, ' setting to NULL')
+    opt$j.supp = "NULL"
+  }
+
+  if (!is.null(opt$hets) && (is.na(opt$hets) || opt$hets == '/dev/null' || !file.exists(opt$hets)))
+  {
+    message('Did not find hets file ', opt$hets, ' setting to NULL')
+    opt$hets = "NULL"
+  }
+
+  if (!is.null(opt$nseg) && (is.na(opt$nseg) || opt$nseg == '/dev/null' || !file.exists(opt$nseg)))
+  {
+    message('Did not find nseg file ', opt$nseg, ' setting to NULL')
+    opt$nseg = "NULL"
+  }
+
+  if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+  {
+    message('Did not find supplementary junction file ', opt$j.supp, ' setting to NULL')
+    opt$j.supp = NULL
+  }
+
+
     library(JaBbA)
     jmessage = function(..., pre = 'JaBbA'){
         message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
@@ -186,37 +257,51 @@ suppressPackageStartupMessages(
     system(paste('mkdir -p', opt$outdir))
     writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
     saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
-    jab = JaBbA(coverage = opt$coverage,
-                blacklist = opt$blacklist,
-                junctions = opt$junctions,
-                juncs.uf = opt$j.supp,
-                seg = opt$seg,
-                ## cfield = opt$cfield,
-                tfield = opt$tfield,
-                nseg = opt$nseg,
-                hets = opt$hets,
-                outdir = opt$outdir,
-                name = opt$name,
-                field = opt$field,
-                slack = opt$slack,
-                loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
-                strict = as.logical(opt$strict),
-                tilim = opt$tilim,
-                ploidy = opt$ploidy,
-                purity = opt$purity,
-                pp.method = opt$ppmethod,
-                verbose = 2,
-                mc.cores = opt$cores,
-                reiterate = opt$iterate,
-                rescue.window = opt$window,
-                edgenudge = opt$edgenudge,
-                nudge.balanced = opt$nudgebalanced,
-                indel = opt$indel,
-                all.in = opt$allin,
-                use.gurobi = opt$gurobi,
-                epgap = opt$epgap,
-                max.na = opt$maxna,
-                geno = opt$geno)
+    jab = JaBbA(
+        ## below are required positional arguments
+        junctions = opt$junctions,
+        coverage = opt$coverage,
+        ## below are junction related options
+        juncs.uf = opt$j.supp,
+        blacklist.junctions = opt$blacklist.junctions,
+        whitelist.junctions = opt$whitelist.junctions,
+        geno = opt$geno,
+        indel = opt$indel,
+        cfield = opt$cfield,
+        tfield = opt$tfield,
+        reiterate = opt$iterate,
+        rescue.window = opt$rescue.window,
+        nudge.balanced = opt$nudgebalanced,
+        ## TODO: thresh.balanced, 500 default hardcoded
+        edgenudge = opt$edgenudge,
+        strict = opt$strict,
+        all.in = opt$allin,
+        ## below are coverage related options
+        field = opt$field,
+        seg = opt$seg,
+        max.na = opt$maxna,                
+        blacklist.coverage = opt$blacklist.coverage,
+        nseg = opt$nseg,
+        hets = opt$hets,
+        purity = scan(text = opt$purity, what = numeric(), sep = ",", quiet = T),
+        ploidy = scan(text = opt$ploidy, what = numeric(), sep = ",", quiet = T),
+        pp.method = opt$ppmethod,
+        ## TODO: min.nbins, 5 by default
+        cn.signif = opt$cnsignif,
+        ## below are optimization related options
+        slack = opt$slack,
+        loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
+        tilim = opt$tilim,
+        epgap = opt$epgap,
+        ## TODO use.gurobi = opt$gurobi,
+        ## TODO max.threads = Inf, max.mem = 16
+        ## below are general options
+        outdir = opt$outdir,
+        name = opt$name,
+        mc.cores = opt$cores,
+        verbose = 2
+        ## TODO init, dyn.tuning
+    )
 })
 
 
