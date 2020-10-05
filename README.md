@@ -24,6 +24,7 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
 	- [Installation](#installation)
 	- [Usage](#usage)
 	- [Output](#output)
+	- [Best practice](#best-practice)
 	- [FAQ](#faq)
 	- [The design of JaBbA](#the-design-of-jabba)
 	- [Attributions](#attributions)
@@ -204,6 +205,9 @@ Options:
 
    For detailed explanation of `tilim` and `epgap` please read our manuscript and CPLEX help doc.
 
+## Best practice
+We are working on a best practice pipeline setting to take you from BAMs to good quality reconstructed genome graphs. For the time being please refer to FAQ for practical guidances.
+
 ## FAQ
 
 1. "CPLEX Error 1016: Community Edition. Problem size limits exceeded."
@@ -254,4 +258,4 @@ src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575
 height="150" class ="center">
 
 ## Fun fact
-Why the name? Keith Bradnam started a parody award called [JABBA](http://www.acgt.me/blog/2020/3/31/three-cheers-for-jabba-awards) and we thought we'd won. However, jokes aside, did you notice the palidrome there? That's what would happen to a genome if it were to undergo BFB cycles.
+Why the name? Keith Bradnam started a parody award called [JABBA](http://www.acgt.me/blog/2020/3/31/three-cheers-for-jabba-awards) and we thought we'd won. However, jokes aside, did you notice the palindrome there? That's what would happen to a genome if it were to undergo BFB cycles.
