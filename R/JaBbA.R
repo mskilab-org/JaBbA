@@ -2,7 +2,7 @@
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
 #' @importFrom gGnome gG
-#' @importFrom GenomicRanges GRanges GRangesList values split match
+#' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
 #' @importFrom gTrack gTrack
 #' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
 #' @importFrom optparse make_option OptionParser parse_args print_help
