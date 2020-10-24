@@ -1980,7 +1980,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             hets.gr = NULL
         }
 
-        if (is.null(hets.gr) || !file.exists(het.file)){
+        if (is.null(hets.gr)){
             use.ppgrid = TRUE
             use.ppurple = use.sequenza = FALSE
         } else if (length(hets.gr)==0){
