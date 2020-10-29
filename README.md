@@ -216,30 +216,116 @@ We are working on a best practice pipeline setting to take you from BAMs to good
 
 2. How to prepare the genome-wide coverage input?
 	
-	We used [*fragCounter*](https://github.com/mskilab/fragCounter) at 200bp resolution on hg19 reference genome in our [paper](https://doi.org/10.1016/j.cell.2020.08.006) (details in STAR Methods), which summarized the ratio between the numbers of reads mapped to a bin in tumor versus normal sample, and then corrected for GC content and mappability. Recently we've adopted [*dryclean*](https://github.com/mskilab/dryclean) ([Deshpande et al., BioRxiv, 2019](https://doi.org/10.1101/847681)) to denoise coverage data using robust PCA with a panel of normal (PON). The default bin width is 1 kbp and the best practice protocol with dryclean is in preparation (expected Dec 2020).
+	We used [*fragCounter*](https://github.com/mskilab/fragCounter) at
+    200bp resolution on hg19 reference genome in our
+    [paper](https://doi.org/10.1016/j.cell.2020.08.006) (details in
+    STAR Methods), which summarized the ratio between the numbers of
+    reads mapped to a bin in tumor versus normal sample, and then
+    corrected for GC content and mappability. Recently we've adopted
+    [*dryclean*](https://github.com/mskilab/dryclean) ([Deshpande et
+    al., BioRxiv, 2019](https://doi.org/10.1101/847681)) to denoise
+    coverage data using robust PCA with a panel of normal (PON). The
+    default bin width is 1 kbp and the best practice protocol with
+    dryclean is in preparation (expected Dec 2020).
+	
+	Please make sure that the `field` argument to JaBbA is set to the
+    column name of the coverage data in your coverage input file.
 
 3. How to prepare the junction input?
 	
-	We used [SvABA](https://github.com/walaj/svaba) ([Wala et al., Genome Research, 2018](https://doi.org/10.1101/gr.221028.117)), and we support all junctions callers whose output either conforms to BND style in [VCF4.2](https://samtools.github.io/hts-specs/VCFv4.2.pdf) specifications or [BEDPE](https://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format) format for junctions. Some popular junction callers that do not conform to either are supported too, namely [Delly](https://github.com/dellytools/delly), [Lumpy](https://github.com/arq5x/lumpy-sv), [Novobreak](https://sourceforge.net/projects/novobreak/). Besides, the input format can also be a RDS file containing *GRangesList* of junctions.
+	We used [SvABA](https://github.com/walaj/svaba) ([Wala et al.,
+    Genome Research, 2018](https://doi.org/10.1101/gr.221028.117)),
+    and we support all junctions callers whose output either conforms
+    to BND style in
+    [VCF4.2](https://samtools.github.io/hts-specs/VCFv4.2.pdf)
+    specifications or
+    [BEDPE](https://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format)
+    format for junctions. Some popular junction callers that do not
+    conform to either are supported too, namely
+    [Delly](https://github.com/dellytools/delly),
+    [Lumpy](https://github.com/arq5x/lumpy-sv),
+    [Novobreak](https://sourceforge.net/projects/novobreak/). Besides,
+    the input format can also be a RDS file containing *GRangesList*
+    of junctions.
+	
 
-	The *tfield* argument indicates the metadata column name in the junction input reflecting confidence in the call. Take advantage of this to customize your own consensus junction merging, e.g. set junctions called by all callers to tier 1 (highest confidence, JaBbA must use these junctions), called by at least 2 callers but not all to tier 2 (normal confidence, JaBbA will decide whether to use based on coverage change), and the junctions supported by only one caller to tier 3 (low confidence, JaBbA will only search for plausible candidates from them if close to a loose end, must set *iteration*>0).
+	The *tfield* argument indicates the metadata column name in the
+    junction input reflecting confidence in the call. Take advantage
+    of this to customize your own consensus junction merging, e.g. set
+    junctions called by all callers to tier 1 (highest confidence,
+    JaBbA must use these junctions), called by at least 2 callers but
+    not all to tier 2 (normal confidence, JaBbA will decide whether to
+    use based on coverage change), and the junctions supported by only
+    one caller to tier 3 (low confidence, JaBbA will only search for
+    plausible candidates from them if close to a loose end, must set
+    *iteration*>0).
+	
 	
 4. How to prepare the segmentation input?
 
-	Optional, as JaBbA will infer internally with [*CBS*](https://www.bioconductor.org/packages/release/bioc/html/DNAcopy.html), but if needed you can also provide tumor and/or normal segmentation through *seg* and *nseg* arguments.
+	Optional, as JaBbA will infer internally with
+    [*CBS*](https://www.bioconductor.org/packages/release/bioc/html/DNAcopy.html),
+    but if needed you can also provide tumor and/or normal
+    segmentation through *seg* and *nseg* arguments.
+	
 
 5. How to prepare the purity and ploidy input?
    
-	Optional, as JaBbA will infer internally with one of *ppgrid*, [*sequenza*](https://cran.r-project.org/web/packages/sequenza/index.html), and [*Ppurple*](https://github.com/mskilab/ppurple) of your choice through *ppmethod* argument, depending on the availability of necessary input files. Purity and ploidy estimation is arguably the most influential hyper-parameter of a JaBbA run, as it dictates the relationship between coverage data to copy number space, so if you want to make high quality graphs, start with better estiamtions. It is a very hard problem disguised as an easy one. Other external tools that helps: ABSOLUTE, ASCAT-wgs, TITAN.
+	Optional, as JaBbA will infer internally with one of *ppgrid*,
+    [*sequenza*](https://cran.r-project.org/web/packages/sequenza/index.html),
+    and [*Ppurple*](https://github.com/mskilab/ppurple) of your choice
+    through *ppmethod* argument, depending on the availability of
+    necessary input files. Purity and ploidy estimation is arguably
+    the most influential hyper-parameter of a JaBbA run, as it
+    dictates the relationship between coverage data to copy number
+    space, so if you want to make high quality graphs, start with
+    better estiamtions. It is a very hard problem disguised as an easy
+    one. Other external tools that helps: ABSOLUTE, ASCAT-wgs, TITAN.
+	
 
 6. How to choose slack penalty?
    
-   The default used in the paper is 100, which in theory correspond to a prior belief that 1 in 100 breakends have loose end, or unexplained copy number change without consistent junction. In practice though, there are many source of noise in the coverage data that could mix with the desired signal of copy number change. After running JaBbA, plot the output copy number alongside the input coverage, If your output segmentation looks too "rigid", i.e. missing obvious clean copy number change points, you might want to consider dropping the slack penalty, as it indicates that JaBbA is so reluctant to add a loose end that it ignores the true signal from the coverage. For dryclean coverage input, which is at 1kbp resolution and denoised, we currently recommend trying slack penalty around 20.
+   The default used in the paper is 100, which in theory correspond to
+   a prior belief that 1 in 100 breakends have loose end, or
+   unexplained copy number change without consistent junction. In
+   practice though, there are many source of noise in the coverage
+   data that could mix with the desired signal of copy number
+   change. After running JaBbA, plot the output copy number alongside
+   the input coverage, If your output segmentation looks too "rigid",
+   i.e. missing obvious clean copy number change points, you might
+   want to consider dropping the slack penalty, as it indicates that
+   JaBbA is so reluctant to add a loose end that it ignores the true
+   signal from the coverage. For dryclean coverage input, which is at
+   1kbp resolution and denoised, we currently recommend trying slack
+   penalty around 20.
+   
 
 ## The design of JaBbA
-The key to understanding what JaBbA is doing lies in its name, "balancing junctions". When analyzing SVs, junctions and segmental copy numbers have been treated separately in most if not all large scale WGS analyses, but what's not being addressed directly is that these are just two measurable features of the same DNA sequence. The structure of DNA tells us that it is a string, every segment in it are just joined in tandem, hence every copy of a segment should have exactly one upstream neighbor and one downstream neighbor. When adding all copies a segment has, the simple rule that cannot be broken is there must be same number of copies of up/downstream neighbors. If we treat segments as vertices and the 3'-5' phosphodiester bond between segments as edges, we get the *junction balance constraints* that couple them together.
+The key to understanding what JaBbA is doing lies in its name,
+"balancing junctions". When analyzing SVs, junctions and segmental
+copy numbers have been treated separately in most if not all large
+scale WGS analyses, but what's not being addressed directly is that
+these are just two measurable features of the same DNA sequence. The
+structure of DNA tells us that it is a string, every segment in it are
+just joined in tandem, hence every copy of a segment should have
+exactly one upstream neighbor and one downstream neighbor. When adding
+all copies a segment has, the simple rule that cannot be broken is
+there must be same number of copies of up/downstream neighbors. If we
+treat segments as vertices and the 3'-5' phosphodiester bond between
+segments as edges, we get the *junction balance constraints* that
+couple them together.
 
-Of course there would be copy number change points where we can't find a matching junction, and we fill them with loose ends. To make the copy number more correct without a junction we have to use these loose ends like placeholders so the junction balance constraint is still met. Then the construction of the objective function is clear: we want the segment copy number estiamte to be as close to the data's center as possible (minimize residual sum of square) while limit the places where we had to use loose ends for better fit (minimize the number of loose ends).
+
+Of course there would be copy number change points where we can't find
+a matching junction, and we fill them with loose ends. To make the
+copy number more correct without a junction we have to use these loose
+ends like placeholders so the junction balance constraint is still
+met. Then the construction of the objective function is clear: we want
+the segment copy number estiamte to be as close to the data's center
+as possible (minimize residual sum of square) while limit the places
+where we had to use loose ends for better fit (minimize the number of
+loose ends).
+
 
 ## Attributions
 

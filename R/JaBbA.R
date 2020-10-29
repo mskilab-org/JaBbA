@@ -5651,7 +5651,7 @@ read.junctions = function(rafile,
 
             ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chr))', ln))))-1 ## it can also be chr
+                nh = min(c(Inf, which(!grepl('^(#)', ln))))-1 ## it can also be chr
                 if (is.infinite(nh)){
                     nh = 1
                 }
@@ -5694,8 +5694,8 @@ read.junctions = function(rafile,
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
             ## converting bedpe to 1-based coordinates for verify.junctions()
             rafile[, `:=`(
-                start1 = ifelse(start1==end1-1, start1 + 1, start1),
-                start2 = ifelse(start2==end2-1, start2 + 1, start2)
+                end1 = ifelse(start1==end1-1, start1, end1),
+                end2 = ifelse(start2==end2-1, start2, end2)
             )]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
 
