@@ -5651,7 +5651,7 @@ read.junctions = function(rafile,
 
             ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^(#)', ln))))-1 ## it can also be chr
+                nh = min(c(Inf, which(!grepl('^((#)|(chrom1))', ln))))-1
                 if (is.infinite(nh)){
                     nh = 1
                 }
@@ -6247,7 +6247,7 @@ verify.junctions = function(ra){
         if (length(ra)>0){
             stopifnot(all(elementNROWS(ra)==2))
             stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
-            stopifnot(all(as.numeric(width(unlist(ra)))==1))
+            ## stopifnot(all(as.numeric(width(unlist(ra)))==1)) ## cancel this requirement but need to handle it later
         }
     }
     if (inherits(ra, "GRangesList")){
