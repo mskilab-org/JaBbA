@@ -287,9 +287,9 @@ JaBbA = function(## Two required inputs
         if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
             stop('Tiers in tfield can only have values 1,2,or 3')
         }
-        jmessage("There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctinos; ",
-                 sum(values(ra.all)[, tfield]==2), " tier 2 junctinos; ",
-                 sum(values(ra.all)[, tfield]==3), " tier 3 junctinos.")
+        jmessage("There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctions; ",
+                 sum(values(ra.all)[, tfield]==2), " tier 2 junctions; ",
+                 sum(values(ra.all)[, tfield]==3), " tier 3 junctions.")
     }
 
     ## if we are iterating more than once
@@ -1808,7 +1808,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ##     ov.na.runs = which(incident.gr %^% na.runs)
     ##     ov.na.bins = which(incident.gr$nafrac > 0.2)
     ##     na.ix = incident.nodes[union(ov.na.runs, ov.na.bins)]
-
     ##     ab.exclude = union(ab.exclude,
     ##                        abe[, which(from %in% na.ix | to %in% na.ix)])
     ##     ab.exclude = setdiff(ab.exclude, ab.force)
@@ -1943,7 +1942,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ## #    this.kag$segstats$mean[make.na] = NA
     ## this.kag$segstats$sd[fix.sd] = sqrt(this.kag$segstats$mean[fix.sd])
     ## #      if (is.character(tryCatch(png(paste(out.file, '.ppgrid.png', sep = ''), height = 500, width = 500), error = function(e) 'bla')))
-    ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
+    ## ss.tmp = this.kag$segstats[width(this.kag$segstats)>1e4, ] ## don't use ultra short segments
+    ss.tmp = this.kag$segstats %Q% (nbins>10) ## don't use ultra short segments
 
     purity = as.numeric(purity)
     ploidy = as.numeric(ploidy)
@@ -2597,10 +2597,12 @@ segstats = function(target,
         vall = vall[match(gr.stripstrand(target), utarget)]
 
         ## valid bins per node
-        target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
-            as.character(abs(as.numeric(names(target))))
-        ]
-        target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+        target$nbins = target %N% signal[which(!is.na(val))]
+        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
+        ##     as.character(abs(as.numeric(names(target))))
+        ## ]
+        target$nbins.tot = target %N% signal
+        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
         target$nbins.nafrac = 1-target$nbins/target$nbins.tot
 
         ## sample mean and sample var
@@ -2677,24 +2679,30 @@ segstats = function(target,
 
         ## target$good.prop = (target+1e5) %O% good.bin
         target$bad = FALSE
-
-
         ## if the user didn't give the max.na, we infer it
         if (!is.numeric(max.na) || !between(max.na, 0, 1)){
             ## gather the values of nafrac
             ## colnames(values(target))
-            nafrac = gr2dt(target %Q% (strand=="+"))[, .(seqnames, start, end, tile.id, nbins.nafrac)]
-            dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
-            rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
-            km2 = stats::kmeans(dat, center=2)
-            ## telll which part is good/bad
-            good = which.min(km2$centers)
-            max.na = mean(max(dat[which(km2$cluster==good)]),
-                          min(dat[which(km2$cluster!=good)]))
-            ## TODO: max.na cannot end up equal to 0!!
-            if (verbose){
-                jmessage("No `max.na` argument found, inferring it for you now...")
-                jmessage("The suggested `max.na` is at ", max.na)
+            nafrac = gr2dt(target[which(!duplicated(gr.stripstrand(target[, c()])))])[
+              , .(seqnames, start, end, tile.id = 1:.N, nbins.nafrac)]
+            if (nafrac[!is.na(nbins.nafrac), var(nbins.nafrac) > 0]){
+                dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
+                rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
+                km2 = stats::kmeans(dat, center=2)
+                ## telll which part is good/bad
+                good = which.min(km2$centers)
+                max.na = mean(max(dat[which(km2$cluster==good)]),
+                              min(dat[which(km2$cluster!=good)]))
+                ## TODO: max.na cannot end up equal to 0!!
+                if (verbose){
+                    jmessage("No `max.na` argument found, inferring it for you now...")
+                    jmessage("The suggested `max.na` is at ", max.na)
+                }
+            } else {
+                max.na = 0
+                if (verbose){
+                    jmessage("WARNING: your coverage input has no NAs, allowing all of the data...")
+                }
             }
         }
         
