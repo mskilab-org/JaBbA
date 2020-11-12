@@ -1272,7 +1272,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
         if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
             fdat = fdat[!is.na(lag) & !is.na(ac),]
-            if (nrow(fdat[!is.na(lag) & !is.na(ac),])<4)
+            if (nrow(fdat[!is.na(lag) & !is.na(ac),])<=4)
                 return(NA)
             fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
         }
@@ -2581,30 +2581,24 @@ segstats = function(target,
         if (!(field %in% names(values(signal))))
             stop('Field not found in signal GRanges')
 
-        utarget = unique(gr.stripstrand(target))
+        binwidth = as.numeric(names(sort(
+            table(width(sample(signal, 1000, replace=TRUE))), decreasing = TRUE
+        )[1]))
+        
+        utarget = unique(gr.stripstrand(target)) ## strand-agnostic
+        if (is.null(names(utarget))){
+            names(utarget) = as.character(seq_along(utarget))
+        }
+
+        ## start mapping signal to segments
+        map = gr2dt(gr.findoverlaps(utarget, signal))
+        map[, target.name := names(utarget)[query.id]]
+        setkey(map, "target.name")
+        map = map[names(utarget)]
+        ## map the value of field
+        map[, val := values(signal)[, field][subject.id]]
         ## target$raw.sd = target$sd
-        ## good.bin = signal[which(!is.na(values(signal)[, field]) &
-        ##                         !is.infinite(values(signal)[, field]))]
-        ## signal$good.prop = (signal+1e5) %O% good.bin
-        ## signal$col = ifelse(signal$good.prop>0.8, "grey", "red")
-
         ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
-        map = gr.tile.map(utarget, signal, verbose = T)
-        val = values(signal)[, field]
-        val[is.infinite(val)] = NA
-        ## val[which(signal$good.prop<0.9)] = NA
-        vall = lapply(map, function(x) val[x])
-        vall = vall[match(gr.stripstrand(target), utarget)]
-
-        ## valid bins per node
-        target$nbins = target %N% signal[which(!is.na(val))]
-        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
-        ##     as.character(abs(as.numeric(names(target))))
-        ## ]
-        target$nbins.tot = target %N% signal
-        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        target$nbins.nafrac = 1-target$nbins/target$nbins.tot
-
         ## sample mean and sample var
         ## sample.mean = sapply(vall, mean, na.rm = TRUE)
         .geom.mean = function(x, na.rm = TRUE){
@@ -2612,41 +2606,63 @@ segstats = function(target,
         }
 
         ## four type of means, all recorded but only use arithmetic
-        sample.art.mean = sapply(vall, mean, na.rm = TRUE)
-        sample.median = sapply(vall, median, na.rm = TRUE)
-        sample.geom.mean = sapply(vall, .geom.mean, na.rm = TRUE) ## change to geometric mean???
-        sample.trim.mean = sapply(vall,
-                                  function(x){
-                                      if (sum(!is.na(x))>20){
-                                          return(mean(x, trim=0.05, na.rm = TRUE))
-                                      } else {
-                                          return(mean(x, na.rm = TRUE))
-                                      }
-                                  })
+        ## sample.art.mean = sapply(vall, mean, na.rm = TRUE)
+        ## sample.median = sapply(vall, median, na.rm = TRUE)
+        map[, raw.mean := .geom.mean(val), by = target.name]
+        map[, raw.var := var(val), by = target.name]
+        map[is.na(map)] = NA_real_
+        ## sample.geom.mean = sapply(vall, .geom.mean, na.rm = TRUE) ## change to geometric mean???
+        ## sample.trim.mean = sapply(vall,
+        ##                           function(x){
+        ##                               if (sum(!is.na(x))>20){
+        ##                                   return(mean(x, trim=0.05, na.rm = TRUE))
+        ##                               } else {
+        ##                                   return(mean(x, na.rm = TRUE))
+        ##                               }
+        ##                           })
 
         ## DEBUGGING: replace arithmetic mean with geometric mean        
         ## sample.mean = sample.art.mean 
-        sample.mean = sample.geom.mean
+        ## sample.mean = sample.geom.mean
 
-        sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
-        ix = !is.na(sample.mean) & !is.na(sample.var)
+        ## sample.var = sapply(vall, var, na.rm = TRUE) ## computing sample variance for each segment
+        ix = map[!is.na(raw.mean) & !is.na(raw.var), unique(target.name)]
 
-        target$mean = NA;
-        if (any(ix)){
-            target$mean[ix] = sample.mean[ix]
-            target$var[ix] = sample.var[ix]
+        if (length(ix)>0){
+            target.mdat = map[!duplicated(target.name), .SD, keyby = target.name]
+            values(utarget) = cbind(values(utarget), target.mdat[names(utarget), .(raw.mean, raw.var)])
+            ## target$mean[ix] = sample.mean[ix]
+            ## target$var[ix] = sample.var[ix]
         } else {
             jmessage("Abort: No valid coverage present anywhere!")
             stop("No valid coverage present anywhere!")
         }
+        utarget$mean = utarget$raw.mean
+
+        ## val = values(signal)[, field]
+        ## val[is.infinite(val)] = NA
+        ## ## val[which(signal$good.prop<0.9)] = NA
+        ## vall = lapply(map, function(x) val[x])
+        ## vall = vall[match(gr.stripstrand(target), utarget)]
+
+        ## valid bins per node
+        valid.signal.ix = which(!is.na(values(signal)[, field]))
+        utarget$nbins = utarget %N% signal[valid.signal.ix]
+        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
+        ##     as.character(abs(as.numeric(names(target))))
+        ## ]
+        utarget$nbins.tot = pmax(ceiling(width(utarget)/binwidth), utarget$nbins)
+        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+        ## utarget$nbins.nafrac = 1 - utarget$nbins/utarget$nbins.tot
+        utarget$wbins.nafrac = 1 - do.call(gUtils::`%o%`, list(utarget, signal[valid.signal.ix]))/width(utarget)
 
         ## final clean up
-        target$art.mean = sample.art.mean
-        target$median = sample.median
-        target$geom.mean = sample.geom.mean
-        target$trim.mean = sample.trim.mean
-        target$raw.mean = target$mean
-        target$raw.var = target$var
+        ## target$art.mean = sample.art.mean
+        ## target$median = sample.median
+        ## target$geom.mean = sample.geom.mean
+        ## target$trim.mean = sample.trim.mean
+        ## target$raw.mean = target$mean
+        ## target$raw.var = target$var
         
         ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
         ## val = values(signal)[, field]
@@ -2678,16 +2694,22 @@ segstats = function(target,
         ## target$raw.mean = target$mean
 
         ## target$good.prop = (target+1e5) %O% good.bin
-        target$bad = FALSE
+        utarget$bad = FALSE
         ## if the user didn't give the max.na, we infer it
         if (!is.numeric(max.na) || !between(max.na, 0, 1)){
+            if (verbose){
+                jmessage("No `max.na` argument found, inferring it for you now...")
+            }
             ## gather the values of nafrac
             ## colnames(values(target))
-            nafrac = gr2dt(target[which(!duplicated(gr.stripstrand(target[, c()])))])[
-              , .(seqnames, start, end, tile.id = 1:.N, nbins.nafrac)]
-            if (nafrac[!is.na(nbins.nafrac), var(nbins.nafrac) > 0]){
-                dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
-                rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
+            ## nafrac = gr2dt(utarget[which(!duplicated(gr.stripstrand(target[, c()])))])[
+            ##   , .(seqnames, start, end, tile.id = 1:.N, nbins.nafrac)]
+            nafrac = utarget$wbins.nafrac
+            if (var(nafrac)>0){
+                ## dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
+                dat = cbind(nafrac)
+                ## rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
+                rownames(dat) = names(utarget)
                 km2 = stats::kmeans(dat, center=2)
                 ## telll which part is good/bad
                 good = which.min(km2$centers)
@@ -2695,7 +2717,6 @@ segstats = function(target,
                               min(dat[which(km2$cluster!=good)]))
                 ## TODO: max.na cannot end up equal to 0!!
                 if (verbose){
-                    jmessage("No `max.na` argument found, inferring it for you now...")
                     jmessage("The suggested `max.na` is at ", max.na)
                 }
             } else {
@@ -2707,16 +2728,16 @@ segstats = function(target,
         }
         
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
-        if (length(bad.nodes <- which((target$nbins.nafrac > max.na) | (is.na(target$nbins.nafrac))))>0)
+        if (length(bad.nodes <- which((utarget$wbins.nafrac > max.na) | (is.na(utarget$wbins.nafrac))))>0)
         {
-            target$max.na = max.na ## what about really small segs in a good "environment"
-            target$bad[bad.nodes] = TRUE
-            target$mean[bad.nodes] = NA
+            utarget$max.na = max.na ## what about really small segs in a good "environment"
+            utarget$bad[bad.nodes] = TRUE
+            utarget$mean[bad.nodes] = NA_real_
             
             ## target$sd[bad.nodes] = NA
             if (verbose)
             {
-                na.wid = sum(width(target[bad.nodes]))/1e6/2
+                na.wid = sum(width(utarget[bad.nodes]))/1e6/2
                 jmessage("Definining coverage good quality nodes as ", max.na*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
                 jmessage("Hard setting ", na.wid,
                          " Mb of the genome to NA that didn't pass our quality threshold")
@@ -2734,10 +2755,10 @@ segstats = function(target,
         ## the assumption is that such a function exists
         ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]        
         MINBIN = 5 ## enough data so variance can be estimated
-        tmp = data.table(var = target$raw.var,
-                         mean = target$mean,
-                         nbins = target$nbins,
-                         bad = target$bad)[var>0 & nbins>MINBIN & !bad, ]
+        tmp = data.table(var = utarget$raw.var,
+                         mean = utarget$mean,
+                         nbins = utarget$nbins,
+                         bad = utarget$bad)[var>0 & nbins>MINBIN & !bad, ]
 
         if (verbose)
         {
@@ -2753,6 +2774,13 @@ segstats = function(target,
         ##lmd = tmp[, lm(var ~ mean)]
         loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
 
+        ## ppdf(print(
+        ##     tmp %>%
+        ##     ggplot(aes(x = mean, y = var)) +
+        ##     geom_point() +
+        ##     geom_smooth(method = "loess")
+        ## ))
+
         ## tmp[, predict.var := predict.lm(lmd, newdata = data.table(mean))] 
         tmp[, predict.var := predict(loe, newdata = mean)]
 
@@ -2762,16 +2790,16 @@ segstats = function(target,
         ## with conjugate prior of scaled inverse chi-sq
         min.var = min(tmp$var, na.rm = TRUE) ## min allowable var
 
-        target$loess.var = predict(loe, target$mean)
+        utarget$loess.var = predict(loe, utarget$mean)
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
         ## neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
-        neu = target$nbins
+        neu = utarget$nbins
         ## neu = 434 ## let's start with this
-        neu.post = target$nbins + neu
-        target$tau.sq.post = (neu * target$loess.var + (target$nbins - 1) * target$raw.var)/ (neu + target$nbins)
-        target$post.var = try(neu.post * target$tau.sq.post / (neu.post - 2))
-        target$var = target$post.var
+        neu.post = utarget$nbins + neu
+        utarget$tau.sq.post = (neu * utarget$loess.var + (utarget$nbins - 1) * utarget$raw.var)/ (neu + utarget$nbins)
+        utarget$post.var = try(neu.post * utarget$tau.sq.post / (neu.post - 2))
+        utarget$var = utarget$post.var
 
         ## plot the prediction
         ## tdt = gr2dt(target)
@@ -2793,23 +2821,25 @@ segstats = function(target,
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
         ## basically assign all means below the left domain bnound of the function the variance of the left domain bound
         ## and analogously for all means above the right domain bound
-        na.var = is.na(target$var)
-        rrm = range(target$mean[!na.var])
+        na.var = is.na(utarget$var)
+        rrm = range(utarget$mean[!na.var])
         rrv = pmax(predict(loe, rrm), min.var)
-        target$var[target$mean<=rrm[1]] = rrv[1]
-        target$var[target$mean>=rrm[2]] = rrv[2]
+        utarget$var[utarget$mean<=rrm[1]] = rrv[1]
+        utarget$var[utarget$mean>=rrm[2]] = rrv[2]
 
-        ## computing sd / sem for each target
-        target$sd = sqrt((2*target$var)/target$nbins)
+        ## computing sd / sem for each utarget
+        utarget$sd = sqrt((2*utarget$var)/utarget$nbins)
 
-        var.ratio = max(target$var,na.rm = TRUE)/min(target$var, na.rm = TRUE)
+        var.ratio = max(utarget$var,na.rm = TRUE)/min(utarget$var, na.rm = TRUE)
 
         if ((var.ratio)>1e7)
         {
             warning('Ratio of highest and lowest segment variances exceed 1e7. This could result from very noisy bin data and/or extreme hypersegmentation.  Downstream optimization results may be unstable.')
         }
-    }
 
+        ## finally copy all metadata from utarget to target
+        values(target) = values(utarget)[gr.match(target, utarget), ]
+    }
     return(target)
 }
 
