@@ -2609,8 +2609,8 @@ segstats = function(target,
         ## sample.art.mean = sapply(vall, mean, na.rm = TRUE)
         ## sample.median = sapply(vall, median, na.rm = TRUE)
         map[, raw.mean := .geom.mean(val), by = target.name]
-        map[, raw.var := var(val), by = target.name]
-        map[is.na(map)] = NA_real_
+        map[, raw.var := var(val, na.rm = TRUE), by = target.name] ## na.rm  = TRUE!!
+        ## map[is.na(map)] = NA_real_
         ## sample.geom.mean = sapply(vall, .geom.mean, na.rm = TRUE) ## change to geometric mean???
         ## sample.trim.mean = sapply(vall,
         ##                           function(x){
@@ -2754,7 +2754,7 @@ segstats = function(target,
         ## i.e. we fit loess function to map segment mean to variance across the sample
         ## the assumption is that such a function exists
         ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]        
-        MINBIN = 5 ## enough data so variance can be estimated
+        MINBIN = 5 ## enough data so variance~mean function can be estimated
         tmp = data.table(var = utarget$raw.var,
                          mean = utarget$mean,
                          nbins = utarget$nbins,
@@ -2816,7 +2816,7 @@ segstats = function(target,
         ##     facet_wrap(~ more_than_5bins, nrow = 1, scales = "free")
         ## ), width = 12)
 
-        ## wtf = target %Q% which(strand=="+" & raw.var>8000)       
+        ## wtf = target %Q% which(strand=="+" & raw.var>8000)
         
         ## clean up NA values which are below or above the domain of the loess function which maps mean -> variance
         ## basically assign all means below the left domain bnound of the function the variance of the left domain bound
