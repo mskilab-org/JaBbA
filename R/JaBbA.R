@@ -43,12 +43,12 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
     ## test for CPLEX environment
     cplex.dir = Sys.getenv("CPLEX_DIR")
     if (is.null(cplex.dir)){
-        stop("CPLEX_DIR environment variable not found!")
+        jerror("CPLEX_DIR environment variable not found!")
     } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-        stop("${CPLEX_DIR}/cplex not found")
+        jerror("${CPLEX_DIR}/cplex not found")
     } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
                !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-        stop("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+        jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     } else {
         jmessage("Found CPLEX environment in: ", cplex.dir)
         ## jmessage("CPLEX version: ", cplex.version)
@@ -169,12 +169,12 @@ JaBbA = function(## Two required inputs
     ## {
     ##     if (!file.exists(ra))
     ##     {
-    ##         stop(paste('Junction path', ra, 'does not exist'))
+    ##         jerror(paste('Junction path', ra, 'does not exist'))
     ##     }
     ra.all = read.junctions(ra, geno = geno) ## GRL
 
     if (is.null(ra.all)){
-        jmessage("Warning: no junction file is given, will be running JaBbA without junctions!")
+        jwarning("no junction file is given, will be running JaBbA without junctions!")
         ra.all = GRangesList()
     }
 
@@ -191,9 +191,9 @@ JaBbA = function(## Two required inputs
         if (length(match.nm)==1){
             ra.all = ra.all[[match.nm]]            
         } else if (length(match.nm)==0){
-            stop("There's no junction matching this sample name: ", name)
+            jerror("There's no junction matching this sample name: ", name)
         } else {
-            jmessage("Warning: there are more than one sample id in the junciton input ",
+            jwarning("there are more than one sample id in the junciton input ",
                      ids[match.nm],
                      " match this run id ",
                      name,
@@ -203,7 +203,7 @@ JaBbA = function(## Two required inputs
     }
     
     if (!inherits(ra.all, "GRangesList")){
-        stop("The given input `ra` is not valid.")
+        jerror("The given input `ra` is not valid.")
     }
 
     ## temporary filter for any negative coords
@@ -236,7 +236,7 @@ JaBbA = function(## Two required inputs
     ## if no tier field in junctions, set all of them to 2
     if (!(tfield %in% names(values(ra.all))))
     {
-        warning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
+        jwarning("Tier field ", tfield, " missing: giving every junction the same tier, i.e. all have the potential to be incorporated")
         values(ra.all)[, tfield] = rep(2, length.out = length(ra.all))
     }
 
@@ -285,7 +285,7 @@ JaBbA = function(## Two required inputs
     if (length(ra.all)>0){
         ## final sanity check before running
         if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
-            stop('Tiers in tfield can only have values 1,2,or 3')
+            jerror('Tiers in tfield can only have values 1,2,or 3')
         }
         jmessage("There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctions; ",
                  sum(values(ra.all)[, tfield]==2), " tier 2 junctions; ",
@@ -663,12 +663,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     {
         if (!file.exists(coverage))
         {
-            stop(paste('Coverage path ', coverage, 'does not exist'))
+            jerror(paste('Coverage path ', coverage, 'does not exist'))
         }
 
         if (!file.size(coverage))
         {
-            stop(paste('Coverage file ', coverage, 'is empty'))
+            jerror(paste('Coverage file ', coverage, 'is empty'))
         }
 
         if (grepl('\\.rds$', coverage))
@@ -711,7 +711,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!(field %in% names(values(coverage))))
     {
         new.field = names(values(coverage))[1]
-        jmessage(paste0('Warning: Field ',
+        jwarning(paste0('Field ',
                         field,
                         ' not found in coverage GRanges metadata so using ',
                         new.field,
@@ -740,6 +740,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             if (length(bad.ix)>0){
                 values(coverage)[bad.ix, field] = NA
             }
+        } else {
+            jwarning("'--blacklist.coverage' cannot be parsed into a GRanges, please check")
         }
     }
 
@@ -837,7 +839,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         {
             if (!file.exists(hets))
             {
-                warning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
+                jwarning(sprintf('hets file "%s" not found, ignoring hets\n', hets))
                 hets = NULL
             }
         }
@@ -847,7 +849,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (inherits(ra, "character")){
         ra = read.junctions(junctions, geno = geno)
     } else if (!inherits(ra, "GRangesList")){
-        stop("`ra` must be GRangesList here")
+        jerror("`ra` must be GRangesList here")
     }
     jmessage(paste("Loaded", length(ra), "junctions from the input."))
 
@@ -921,7 +923,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             }
         }
     } else {
-        jmessage("Warning: doing nothing special to the small INDEL-like isolated junctions")
+        jwarning("doing nothing special to the small INDEL-like isolated junctions")
     }
     
     ## clean up the seqlevels before moving on
@@ -968,7 +970,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         jmessage(length(ra)-length(new.ra), " rearrangements are discarded because they fall out of the ref genome.")
         ## at this point, there's got to be at least 1 coverage point to start the program
         if (length(coverage)==0){
-            stop("Empty coverage data. Please check if their reference chromsome name match the other inputs.")
+            jerror("Empty coverage data. Please check if their reference chromsome name match the other inputs.")
         }
     }
     ra = new.ra
@@ -993,7 +995,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         ab.force = ab.force,
                         max.na = max.na)
     } else {
-        warning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
+        jwarning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
 
     kag = readRDS(kag.file)
@@ -2123,7 +2125,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             allelic = FALSE)
             }
         } else {
-            stop("Need purity ploidy estimates to start JaBbA.")
+            jerror("Need purity ploidy estimates to start JaBbA.")
         }
     }
 
@@ -2359,7 +2361,7 @@ ramip_stub = function(kag.file,
                 ## ndt[cn > cn.ub, cn := cn.ub]
                 ndt[cn < cn.lb, cn := cn.lb]
                 if (ndt[, any(is.na(cn) | cn<cn.lb, na.rm=T)]){
-                    stop("Infeasible bounds!!")
+                    jerror("Infeasible bounds!!")
                 }
                 
                 ## construct the adj
@@ -2573,13 +2575,13 @@ segstats = function(target,
             target$sd_low = asignal.dt[list(seq_along(target)), sqrt(alpha_low / (beta_low)^2)]
         }
         else
-            stop('One or more of the afields ', paste(afields, collapse = ', '), ' not found as meta data columns of asignal')
+            jerror('One or more of the afields ', paste(afields, collapse = ', '), ' not found as meta data columns of asignal')
     }
 
     if (!is.null(signal))
     {
         if (!(field %in% names(values(signal))))
-            stop('Field not found in signal GRanges')
+            jerror('Field not found in signal GRanges')
 
         binwidth = as.numeric(names(sort(
             table(width(sample(signal, 1000, replace=TRUE))), decreasing = TRUE
@@ -2635,7 +2637,7 @@ segstats = function(target,
             ## target$var[ix] = sample.var[ix]
         } else {
             jmessage("Abort: No valid coverage present anywhere!")
-            stop("No valid coverage present anywhere!")
+            jerror("No valid coverage present anywhere!")
         }
         utarget$mean = utarget$raw.mean
 
@@ -2681,7 +2683,7 @@ segstats = function(target,
         ##     target$var[ix] = sample.var[ix]
         ## } else {
         ##     jmessage("Abort: No valid coverage present anywhere!")
-        ##     stop("No valid coverage present anywhere!")
+        ##     jerror("No valid coverage present anywhere!")
         ## }
 
         ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
@@ -2848,6 +2850,16 @@ segstats = function(target,
 jmessage = function(..., pre = 'JaBbA')
     message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
 
+#' @name jwarning
+#' @rdname internal
+jwarning = function(..., pre = 'JaBbA', call. = FALSE)
+    warning(paste0(pre, ' ', paste0(as.character(Sys.time()), ': '), ...), call. = call.)
+
+#' @name jerror
+#' @rdname internal
+jerror = function(..., pre = 'JaBbA', call. = TRUE)
+    stop(paste0(pre, ' ', paste0(as.character(Sys.time()), ': '), ...), call. = call.)
+
 #' @name jbaMIP
 #' @rdname internal
 #' jbaMIP
@@ -2937,7 +2949,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
                   )
 {
     if (length(segstats) != nrow(adj))
-        stop('length(segstats) !=  nrow(adj)')
+        jerror('length(segstats) !=  nrow(adj)')
 
     if (is.null(adj.lb))
         adj.lb = 0*adj
@@ -3666,13 +3678,13 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     sid = ifelse(duplicated(rcpairs), -1, 1)*rcpairs
 
     if (any(is.na(rev.ix)))
-        stop('Input genome graph malformed, some nodes missing their exact reverse complement')
+        jerror('Input genome graph malformed, some nodes missing their exact reverse complement')
 
     ## "duplicates" of og.ix i.e. revcomp vertices
     dup.ix = suppressWarnings(neg.ix[match(segstats[og.ix], gr.flipstrand(segstats[neg.ix]))])
 
     if (!identical(segstats$mean[og.ix] , segstats$mean[dup.ix]) & !identical(segstats$sd[og.ix] , segstats$sd[dup.ix]))
-        stop('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
+        jerror('Segstats mean or sd not identical for all pos / neg strand interval pairs: check segstats computation')
     return(sid)
 }
 
@@ -3693,7 +3705,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
     edges.dt[, res := paste(-sid[col], -sid[row])]
     erev.ix = match(edges.dt$es, edges.dt$res)
     if (any(is.na(erev.ix)))
-        stop('Input genome graph malformed, some edges missing their exact reverse complement')
+        jerror('Input genome graph malformed, some edges missing their exact reverse complement')
 
     rcepairs = igraph::clusters(graph.edgelist(cbind(seq_along(erev.ix), erev.ix)), 'weak')$membership
     edges.dt[, esid := ifelse(duplicated(rcepairs), -1, 1)*rcepairs]
@@ -3903,7 +3915,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
         ## set up indicator constraints
         M = min(c(max(varmeta[type == 'interval', ub], na.rm = TRUE)+1, 1e10))
         if (M>1e10){
-            warning('Using extremely high copy number upper bounds (above 10000) is not recommended for this model')
+            jwarning('Using extremely high copy number upper bounds (above 10000) is not recommended for this model')
         }
 
         ## only make indicator constraints for non dup source and target
@@ -4312,7 +4324,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 {
     if (any(dim(jab$adj) != dim(kag$adj)))
-        stop('JaBbA and karyograph object mismatch')
+        jerror('JaBbA and karyograph object mismatch')
 
     bk.adj = kag$adj ## the background graph will make sure our collapsed paths are reference adjacent
 
@@ -4391,7 +4403,7 @@ JaBbA.digest = function(jab, kag, verbose = T, keep.all = T)
 
     ##   if (!check1 | !check2) ## quick sanity check to make sure we didn't screw up collapsing
     if (!check1) ## quick sanity check to make sure we didn't screw up collapsing
-        stop('collapse yielded funny / missing segments')
+        jerror('collapse yielded funny / missing segments')
     else
         out$segstats = out$segstats[match(seq_along(collapsed$sets), out$segstats$set.id), c('cn')]
 
@@ -4565,9 +4577,9 @@ jabba.alleles = function(jab,
                          )
 {
     if (!all(c(alt.count.field, ref.count.field) %in% names(values(het.sites)))){
-        warning('count fields not found in meta data of het.sites input, trying BAF...')
+        jwarning('count fields not found in meta data of het.sites input, trying BAF...')
         if (!(baf.field %in% names(values(het.sites))))
-            stop('BAF field not found in meta data of het.sites input either!')
+            jerror('BAF field not found in meta data of het.sites input either!')
         else{
             ## outputs are re.seg$low and re.seg$high
             ## test deviations of observed BAF from expected by beta distribution
@@ -4577,7 +4589,7 @@ jabba.alleles = function(jab,
 
         }
     } else {
-        ## stop('count fields not found in meta data of het.sites input')
+        ## jerror('count fields not found in meta data of het.sites input')
 
         if (verbose)
         {
@@ -5540,7 +5552,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
                     if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
                     {
                         print('Exceeding maximum number of chunks in convex.basis computation')
-                        stop('Exceeding maximum number of chunks in convex.basis computation')
+                        jerror('Exceeding maximum number of chunks in convex.basis computation')
                     }
                     keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
                     H = H[keep, , drop = FALSE]
@@ -5552,7 +5564,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
                             if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks)
                             {
                                 print('Exceeding maximum number of chunks in convex.basis computation')
-                                stop('Exceeding maximum number of chunks in convex.basis computation')
+                                jerror('Exceeding maximum number of chunks in convex.basis computation')
                             }
                             keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
                             H = H[keep, , drop = FALSE]
@@ -5565,7 +5577,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
                             if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks)
                             {
                                 print('Exceeding maximum number of chunks in convex.basis computation')
-                                stop('Exceeding maximum number of chunks in convex.basis computation')
+                                jerror('Exceeding maximum number of chunks in convex.basis computation')
                             }
                             keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
                             H = H[keep, , drop = FALSE]
@@ -5720,7 +5732,7 @@ read.junctions = function(rafile,
                 }
 
                 if (is.null(rafile)){
-                    stop('Error reading bedpe')
+                    jerror('Error reading bedpe')
                 }
             }
 
@@ -5762,12 +5774,12 @@ read.junctions = function(rafile,
             values(vgr) = mc
 
             if (!('SVTYPE' %in% colnames(mc))) {
-                warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+                jwarning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
             }
 
             if (any(w.0 <- (width(vgr)<1))){
-                warning("Some breakpoint width==0.")
+                jwarning("Some breakpoint width==0.")
                 ## right bound smaller coor
                 ## and there's no negative width GR allowed
                 vgr[which(w.0)] = gr.start(vgr[which(w.0)]) %-% 1
@@ -5786,7 +5798,7 @@ read.junctions = function(rafile,
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
                 if (!"END" %in% colnames(values(vgr))){
-                    stop("Non BND SV should have the second breakpoint coor in END columns!")
+                    jerror("Non BND SV should have the second breakpoint coor in END columns!")
                 }
 
                 if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2))){
@@ -5900,7 +5912,7 @@ read.junctions = function(rafile,
 
             ## sanity check
             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
-                stop("MATEID or SVTYPE not included. Required")
+                jerror("MATEID or SVTYPE not included. Required")
             }
 
             vgr$mateid = vgr$MATEID
@@ -5916,11 +5928,11 @@ read.junctions = function(rafile,
             }
 
             if (sum(vgr$svtype == 'BND')==0){
-                warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+                jwarning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
             }
 
             if (!all(vgr$svtype == 'BND')){
-                warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
+                jwarning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
                                 sum(vgr$svtype != 'BND')))
             }
 
@@ -5980,14 +5992,14 @@ read.junctions = function(rafile,
                 ## add extra genotype fields to vgr
                 if (all(is.na(vgr$mateid)))
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        jwarning('MATEID tag missing, guessing BND partner by parsing names of vgr')
                         vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
                         (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
                     else if (!is.null(vgr$SCTG))
                     {
-                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                        require(igraph)
+                        jwarning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        ## require(igraph)
                         ucoord = unique(c(vgr$coord, vgr$mcoord))
                         vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
@@ -5999,7 +6011,7 @@ read.junctions = function(rafile,
                         }
                     }
                     else{
-                        stop('Error: MATEID tag missing')
+                        jerror('Error: MATEID tag missing')
                     }
 
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
@@ -6009,7 +6021,7 @@ read.junctions = function(rafile,
                 vgr.pair = vgr[pix]
 
                 if (length(vgr.pair)==0){
-                    stop('Error: No mates found despite nonzero number of BND rows in VCF')
+                    jerror('Error: No mates found despite nonzero number of BND rows in VCF')
                 }
 
                 vgr.pair$mix = match(vgr.pair$mix, pix)
@@ -6370,13 +6382,13 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         start(bp1) = pmax(1, start(bp1))
 
         if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
-            stop('bp1 and bp2 must be signed intervals (i.e. either + or -)')
+            jerror('bp1 and bp2 must be signed intervals (i.e. either + or -)')
 
         if (length(bp1) != length(bp2))
-            stop('bp1 and bp2 inputs must have identical lengths')
+            jerror('bp1 and bp2 inputs must have identical lengths')
 
         ## #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
-        ## #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
+        ## #      jerror('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
 
         values(bp1)$bp.id = seq_along(bp1);
         values(bp2)$bp.id = seq_along(bp1)+length(bp1);
@@ -6399,7 +6411,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
             tile = si2gr(junctions)
             if (length(tile)==0)
             {
-                warning('Empty input given, producing empty output')
+                jwarning('Empty input given, producing empty output')
                 return(NULL)
             }
             A = sparseMatrix(1,1, x = 0, dims = rep(length(tile), 2))
@@ -7059,7 +7071,7 @@ read_vcf = function(fn,
     ##   if (!is.null(swap.header))
     ##   {
     ##     if (!file.exists(swap.header))
-    ##       stop(sprintf('Swap header file %s does not exist\n', swap.header))
+    ##       jerror(sprintf('Swap header file %s does not exist\n', swap.header))
 
     ##     system(paste('mkdir -p', tmp.dir))
     ##     tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
@@ -7453,12 +7465,12 @@ ppgrid = function(segstats,
     if (allelic)
         if (!all(c('mean_high', 'mean_low', 'sd_high', 'sd_low') %in% names(values(segstats))))
         {
-            warning('If allelic = TRUE then must have meta data fields mean_high, mean_low, sd_high, sd_low in input segstats')
+            jwarning('If allelic = TRUE then must have meta data fields mean_high, mean_low, sd_high, sd_low in input segstats')
             allelic = FALSE
         }
 
     if (is.null(segstats$mean))
-        stop('segstats must have field $mean')
+        jerror('segstats must have field $mean')
 
     segstats = segstats[!is.na(segstats$mean) & !is.na(segstats$sd)]
 
@@ -7476,7 +7488,7 @@ ppgrid = function(segstats,
     }
     segstats = segstats[!is.na(segstats$mean) & !is.na(segstats$sd), ]
     if (length(segstats)==0)
-      stop('No non NA segments provided')
+      jerror('No non NA segments provided')
 
     mu = segstats$mean
     w = as.numeric(width(segstats))
