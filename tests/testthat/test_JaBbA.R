@@ -14,7 +14,7 @@ hets = system.file("extdata", "hets.txt", package = 'JaBbA')
 segs = system.file("extdata", "segs.rds", package = 'JaBbA')
 blacklist.junctions = system.file("extdata", "blacklist.junctions.rds", package = 'JaBbA')
 whitelist.junctions = system.file("extdata", "whitelist.junctions.rds", package = 'JaBbA')
-blacklist.coverage = system.file("extdata", "blacklist.coverage.rds", package = 'JaBbA')
+blacklist.coverage = system.file("extdata", "hg19.blacklist.coverage.rds", package = 'JaBbA')
 
 Sys.setenv(DEFAULT_GENOME = paste0(system.file(
                "extdata",
@@ -48,9 +48,7 @@ segs.gr$mean = segs.gr$ratio
 segs.gr$sd_high = segs.gr$sd_low = segs.gr$sd = 1
 
 pp = JaBbA:::ppgrid(segs.gr, allelic = TRUE)
-
-
-print(pp[1,])
+## print(pp[1,])
 
 test_that("ppgrid", {
     expect_equal(pp$purity[1], 0.98)
@@ -107,7 +105,7 @@ jab = JaBbA(junctions = junc,
             seg = segs,
             nseg = nsegs,
             strict = TRUE,
-            slack.penalty = 1e4,
+            slack.penalty = 10,
             hets = hets,
             tilim = TILIM,
             cfield = 'nudge',
@@ -128,7 +126,7 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       coverage = cov.fn,
                       blacklist.junctions = blacklist.junctions,
                       hets = hets.gr,
-                      slack.penalty = 1e4,
+                      slack.penalty = 10,
                       tilim = TILIM,
                       verbose = 2,
                       outdir = 'JaBbA.reiterate',
