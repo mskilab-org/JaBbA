@@ -209,11 +209,13 @@ test_that("JaBbA", {
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
-    expect_true(identical(values(jab$junctions$grl)$cn,
+    expect_true(
+        identical(values(jab$junctions$grl)$cn,
                           c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 28, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 1, 31, 32, 1, 32, 32, 2, 32, 32, 16, 20, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 3, 4, 0, 0)) |
-                identical(values(jab$junctions$grl)$cn,
-                          c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 16, 20, 30, 30, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 3, 0, 0)),
-                info = print(list.expr(values(jab$junctions$grl)$cn)))
+        identical(values(jab$junctions$grl)$cn,
+                  c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 36, 1, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 6, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 4, 0, 0)),
+        info = print(list.expr(values(jab$junctions$grl)$cn))
+    )
 
     print("Comparing results from linear mode with iteration:")
     expect_true((jab.reiterate.cn.cor <<- pmax(
