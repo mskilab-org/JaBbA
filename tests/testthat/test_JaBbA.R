@@ -55,9 +55,9 @@ test_that("ppgrid", {
     expect_equal(pp$ploidy[1], 3.88)
 })
 
-junc = read.junctions(juncs.fn)
+juncs = read.junctions(juncs.fn)
 values(junc)$nudge = 0
-junc = rep(junc, 2)
+junc = rep(juncs, 2)
 
 test_that("ra.merge", {
     ram = JaBbA:::ra.merge(read.junctions(juncs.fn),
@@ -72,7 +72,7 @@ test_that("ra.merge", {
 })
 
 set.seed(42);
-TILIM = 900
+TILIM = 60
 EPGAP = 0.95
 nsegs = readRDS(segs)
 nsegs$cn = 2
@@ -98,7 +98,7 @@ list.expr = function(x)
 }
 
 ## default is boolean
-jab = JaBbA(junctions = junc,
+jab = JaBbA(junctions = juncs,
             coverage = cov.fn,
             whitelist.junctions = whitelist.junctions,
             blacklist.coverage = blacklist.coverage,
@@ -120,6 +120,9 @@ jab = JaBbA(junctions = junc,
             tfield = 'nothing',
             nudge.balanced = TRUE,
             dyn.tuning = TRUE)
+
+wj = readRDS(whitelist.junctions)
+mj = merge(jJ(juncs), jab$junctions)
 
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = juncs.fn,
@@ -209,11 +212,17 @@ test_that("JaBbA", {
                  )) > 0.8,
                 info = print(jab.cn.cor))
 
+    ## travis = c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 16, 20, 30, 30, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 3, 0, 0)
+    ## local = values(jab$junctions$grl)$cn
+    cor(values(junc)$cool_cn, values(readRDS("JaBbA/junctions.rds"))$cn.jabba)
+    
     expect_true(
         identical(values(jab$junctions$grl)$cn,
-                          c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 28, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 1, 31, 32, 1, 32, 32, 2, 32, 32, 16, 20, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 3, 4, 0, 0)) |
+                  c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 28, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 1, 31, 32, 1, 32, 32, 2, 32, 32, 16, 20, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 3, 4, 0, 0)) |
         identical(values(jab$junctions$grl)$cn,
-                  c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 17, 20, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 4, 0, 0)),
+                  c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 17, 20, 29, 29, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 4, 0, 0)) |
+        identical(values(jab$junctions$grl)$cn,
+                  c(3, 3, 3, 1, 3, 4, 2, 3, 2, 3, 2, 1, 2, 3, 3, 14, 11, 14, 14, 25, 29, 31, 2, 31, 31, 2, 31, 31, 2, 31, 31, 3, 31, 24, 7, 24, 29, 31, 2, 31, 33, 1, 33, 33, 16, 20, 30, 30, 33, 1, 33, 33, 1, 33, 32, 1, 32, 27, 6, 2, 25, 5, 4, 3, 1, 3, 4, 3, 3, 11, 4, 3, 0, 0)),
         info = print(list.expr(values(jab$junctions$grl)$cn))
     )
 

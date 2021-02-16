@@ -2596,9 +2596,18 @@ segstats = function(target,
         map = gr2dt(gr.findoverlaps(utarget, signal))
         map[, target.name := names(utarget)[query.id]]
         setkey(map, "target.name")
+        mapped = unique(map[, target.name])
+        ## these are the segments without a overlapping coverage point
+        unmapped = setdiff(names(utarget), mapped) 
         map = map[names(utarget)]
         ## map the value of field
         map[, val := values(signal)[, field][subject.id]]
+
+        ## xtYao ## Monday, Feb 15, 2021 11:10:32 PM
+        ## Here explicitly set the infinite coverage values to NA
+        ## Otherwise they will make the raw.var NAN
+        map[is.infinite(val), val := NA_real_]
+        
         ## target$raw.sd = target$sd
         ## map = gr.tile.map(utarget, signal, verbose = T, mc.cores = mc.cores)
         ## sample mean and sample var
@@ -2612,6 +2621,19 @@ segstats = function(target,
         ## sample.median = sapply(vall, median, na.rm = TRUE)
         map[, raw.mean := .geom.mean(val), by = target.name]
         map[, raw.var := var(val, na.rm = TRUE), by = target.name] ## na.rm  = TRUE!!
+
+        ## summarize valid bins per node
+        map[, good.bin := !is.na(val)]
+        ## valid.signal.ix = which(!is.na(values(signal)[, field]))
+        ## utarget$nbins = utarget %N% signal[valid.signal.ix]
+        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
+        ##     as.character(abs(as.numeric(names(target))))
+        ## ]
+        ## utarget$nbins.tot = pmax(ceiling(width(utarget)/binwidth), utarget$nbins)
+        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
+        ## utarget$nbins.nafrac = 1 - utarget$nbins/utarget$nbins.tot
+        ## utarget$wbins.nafrac = 1 - do.call(gUtils::`%o%`, list(utarget, signal[valid.signal.ix]))/width(utarget)
+
         ## map[is.na(map)] = NA_real_
         ## sample.geom.mean = sapply(vall, .geom.mean, na.rm = TRUE) ## change to geometric mean???
         ## sample.trim.mean = sapply(vall,
@@ -2631,12 +2653,23 @@ segstats = function(target,
         ix = map[!is.na(raw.mean) & !is.na(raw.var), unique(target.name)]
 
         if (length(ix)>0){
-            target.mdat = map[!duplicated(target.name), .SD, keyby = target.name]
-            values(utarget) = cbind(values(utarget), target.mdat[names(utarget), .(raw.mean, raw.var)])
+            target.mdat = map[
+               ,.(raw.mean = raw.mean[1],
+                  raw.var = raw.var[1],
+                  target.name = target.name[1],
+                  nbins = sum(good.bin),
+                  nbins.tot = .N,
+                  nbins.nafrac = 1 - sum(good.bin)/.N,
+                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
+                keyby = target.name]
+            values(utarget) = cbind(
+                values(utarget),
+                target.mdat[names(utarget), .(raw.mean, raw.var, nbins, nbins.tot, nbins.nafrac, wbins.nafrac)]
+            )
             ## target$mean[ix] = sample.mean[ix]
             ## target$var[ix] = sample.var[ix]
         } else {
-            jmessage("Abort: No valid coverage present anywhere!")
+            ## jmessage("Abort: No valid coverage present anywhere!")
             jerror("No valid coverage present anywhere!")
         }
         utarget$mean = utarget$raw.mean
@@ -2646,17 +2679,6 @@ segstats = function(target,
         ## ## val[which(signal$good.prop<0.9)] = NA
         ## vall = lapply(map, function(x) val[x])
         ## vall = vall[match(gr.stripstrand(target), utarget)]
-
-        ## valid bins per node
-        valid.signal.ix = which(!is.na(values(signal)[, field]))
-        utarget$nbins = utarget %N% signal[valid.signal.ix]
-        ## target$nbins = sapply(vall, function(x) sum(!is.na(x)))[
-        ##     as.character(abs(as.numeric(names(target))))
-        ## ]
-        utarget$nbins.tot = pmax(ceiling(width(utarget)/binwidth), utarget$nbins)
-        ## target$nbins.tot = sapply(map, length)[as.character(abs(as.numeric(names(target))))]
-        ## utarget$nbins.nafrac = 1 - utarget$nbins/utarget$nbins.tot
-        utarget$wbins.nafrac = 1 - do.call(gUtils::`%o%`, list(utarget, signal[valid.signal.ix]))/width(utarget)
 
         ## final clean up
         ## target$art.mean = sample.art.mean
@@ -2706,12 +2728,14 @@ segstats = function(target,
             ## colnames(values(target))
             ## nafrac = gr2dt(utarget[which(!duplicated(gr.stripstrand(target[, c()])))])[
             ##   , .(seqnames, start, end, tile.id = 1:.N, nbins.nafrac)]
-            nafrac = utarget$wbins.nafrac
+            
+            nafrac = utarget[mapped]$wbins.nafrac
             if (var(nafrac)>0){
                 ## dat = nafrac[!is.na(nbins.nafrac), cbind(nbins.nafrac)]
                 dat = cbind(nafrac)
                 ## rownames(dat) = nafrac[!is.na(nbins.nafrac), tile.id]
-                rownames(dat) = names(utarget)
+                ## rownames(dat) = names(utarget)
+                rownames(dat) = mapped
                 km2 = stats::kmeans(dat, center=2)
                 ## telll which part is good/bad
                 good = which.min(km2$centers)
@@ -2739,12 +2763,12 @@ segstats = function(target,
             ## target$sd[bad.nodes] = NA
             if (verbose)
             {
-                na.wid = sum(width(utarget[bad.nodes]))/1e6/2
+                na.wid = sum(width(utarget[mapped] %Q% which(bad==TRUE)))/1e6
                 jmessage("Definining coverage good quality nodes as ", max.na*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
                 jmessage("Hard setting ", na.wid,
                          " Mb of the genome to NA that didn't pass our quality threshold")
-                if (na.wid > (sum(as.double(seqlengths(target)/1e6))/2)){
-                    jmessage("WARNING: more than half of the whole genome is set to NA, and ignored by JaBbA!!")
+                if (na.wid > (sum(as.double(seqlengths(target[mapped])/1e6))/2)){
+                    jmessage("WARNING: more than half of the mapped reference genome is set to NA, and ignored by JaBbA!!")
                 }
             }
         }
@@ -2802,6 +2826,17 @@ segstats = function(target,
         utarget$tau.sq.post = (neu * utarget$loess.var + (utarget$nbins - 1) * utarget$raw.var)/ (neu + utarget$nbins)
         utarget$post.var = try(neu.post * utarget$tau.sq.post / (neu.post - 2))
         utarget$var = utarget$post.var
+
+        ## xtYao ## Tuesday, Feb 16, 2021 03:31:04 PM
+        ## There could be good small segments with a valid mean without a var
+        ## fill them in with just the LOESS prediction
+        miss.var = which(is.na(utarget$var) & !is.na(utarget$mean))
+        utarget$var[miss.var] = utarget$loess.var[miss.var]
+        ## xtYao ## Tuesday, Feb 16, 2021 09:53:50 AM
+        ## CHECK: no good node should have NA var
+        if (any(is.na(utarget$var) & !is.na(utarget$mean))){
+            jerror("Some segments with valid mean do not have a variance.")
+        }
 
         ## plot the prediction
         ## tdt = gr2dt(target)
