@@ -2798,7 +2798,12 @@ segstats = function(target,
 
         ## overdispersion correction
         ##lmd = tmp[, lm(var ~ mean)]
-        loe = tmp[, loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##
+        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2)] ## loe = tmp[, loess(var ~ mean)] ##
+        ## browser()
+        ## xtYao ## Wednesday, Feb 17, 2021 02:56:29 PM
+        ## Switch to "surface='direct'" for LOESS as it extrapolates
+        ## Also, tune up the span parameter to reduce overfitting
+        loe = tmp[, loess(var ~ mean, weights = nbins, span = 2, control = loess.control(surface = "direct"))]
 
         ## ppdf(print(
         ##     tmp %>%
@@ -2808,8 +2813,17 @@ segstats = function(target,
         ## ))
 
         ## tmp[, predict.var := predict.lm(lmd, newdata = data.table(mean))] 
-        tmp[, predict.var := predict(loe, newdata = mean)]
+        ## tmp[, predict.var := predict(loe, newdata = mean)]
+        ## tmp[, predict.var := predict(loe2, newdata = mean)]
 
+        ## tmp = tmp[order(mean)]
+        ## ppdf(print(
+        ##     ggplot(tmp) +
+        ##     geom_point(aes(x = mean, y = var)) +
+        ##     geom_line(aes(x = mean, y = predict.var), col = "red") +
+        ##     geom_line(aes(x = mean, y = predict.var2), col = "purple") +
+        ##     theme_pub()
+        ## ))
         ## inferring segment specific variance using loess fit of mean to variance per node
         ## using loess fit as the prior sample var
         ## get the bayesian point estimator (expectation of posterior distribution)
