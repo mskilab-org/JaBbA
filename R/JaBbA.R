@@ -2786,6 +2786,11 @@ segstats = function(target,
                          nbins = utarget$nbins,
                          bad = utarget$bad)[var>0 & nbins>MINBIN & !bad, ]
 
+        ## xtYao ## Thursday, Feb 18, 2021 02:07:22 PM
+        ## To prevent extreme outlying variances, limit traing data to variance between 0.05 and 0.95 quantile
+        middle.mean = tmp[, which(between(mean, quantile(mean, 0.05), quantile(mean, 0.95)))]
+        middle.var = tmp[, which(between(var, quantile(var, 0.05), quantile(var, 0.95)))]
+
         if (verbose)
         {
             jmessage('Using loess to fit mean to variance relationship in segments with greater than ', MINBIN, ' bins')
@@ -2798,19 +2803,13 @@ segstats = function(target,
 
         ## overdispersion correction
         ##lmd = tmp[, lm(var ~ mean)]
-        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2)] ## loe = tmp[, loess(var ~ mean)] ##
-        ## browser()
+        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2)]
+        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 5)] 
+        ## No don't, this is stupid
         ## xtYao ## Wednesday, Feb 17, 2021 02:56:29 PM
         ## Switch to "surface='direct'" for LOESS as it extrapolates
         ## Also, tune up the span parameter to reduce overfitting
-        loe = tmp[, loess(var ~ mean, weights = nbins, span = 2, control = loess.control(surface = "direct"))]
-
-        ## ppdf(print(
-        ##     tmp %>%
-        ##     ggplot(aes(x = mean, y = var)) +
-        ##     geom_point() +
-        ##     geom_smooth(method = "loess")
-        ## ))
+        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2, control = loess.control(surface = "direct"))]
 
         ## tmp[, predict.var := predict.lm(lmd, newdata = data.table(mean))] 
         ## tmp[, predict.var := predict(loe, newdata = mean)]
@@ -2828,8 +2827,9 @@ segstats = function(target,
         ## using loess fit as the prior sample var
         ## get the bayesian point estimator (expectation of posterior distribution)
         ## with conjugate prior of scaled inverse chi-sq
-        min.var = min(tmp$var, na.rm = TRUE) ## min allowable var
-
+        ## min allowable var
+        loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
+        loe = loe.middle.i
         utarget$loess.var = predict(loe, utarget$mean)
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
@@ -2841,16 +2841,14 @@ segstats = function(target,
         utarget$post.var = try(neu.post * utarget$tau.sq.post / (neu.post - 2))
         utarget$var = utarget$post.var
 
+        min.var = min(tmp$var, na.rm = TRUE)
+        ## max.var = min(tmp$var, na.rm = TRUE)
+
         ## xtYao ## Tuesday, Feb 16, 2021 03:31:04 PM
         ## There could be good small segments with a valid mean without a var
-        ## fill them in with just the LOESS prediction
+        ## fill them in with just the LOESS prediction        
         miss.var = which(is.na(utarget$var) & !is.na(utarget$mean))
         utarget$var[miss.var] = utarget$loess.var[miss.var]
-        ## xtYao ## Tuesday, Feb 16, 2021 09:53:50 AM
-        ## CHECK: no good node should have NA var
-        if (any(is.na(utarget$var) & !is.na(utarget$mean))){
-            jerror("Some segments with valid mean do not have a variance.")
-        }
 
         ## plot the prediction
         ## tdt = gr2dt(target)
@@ -2877,6 +2875,48 @@ segstats = function(target,
         rrv = pmax(predict(loe, rrm), min.var)
         utarget$var[utarget$mean<=rrm[1]] = rrv[1]
         utarget$var[utarget$mean>=rrm[2]] = rrv[2]
+        ## no negative var!
+        utarget$var[utarget$var<=0] = rrv[1]
+
+        pdf("var.mean.loess.pdf")
+        ## all points training
+        ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 5)]
+        ## plot(x = tmp$mean, y = tmp$var, pch = 19, cex = 0.5)
+        ## lines(x = sort(tmp$mean), y = predict(loe, sort(tmp$mean)), col = "red")
+        ## middle means only
+        ## loe.middle.mean = tmp[middle.mean, loess(var ~ mean, weights = nbins, span = 5)]
+        ## plot(x = tmp$mean, y = tmp$var, pch = 19, cex = 0.5, xlim = tmp[, quantile(mean, c(0.05, 0.95))])
+        ## lines(x = sort(tmp[, mean]), y = predict(loe.middle.mean, sort(tmp[, mean])), col = "orange")
+        ## middle vars only
+        ## loe.middle.var = tmp[middle.var, loess(var ~ mean, weights = nbins, span = 5)]
+        ## plot(x = tmp$mean, y = tmp$var, pch = 19, cex = 0.5, xlim = tmp[, quantile(mean, c(0.05, 0.95))])
+        ## lines(x = sort(tmp[, var]), y = predict(loe.middle.var, sort(tmp[, mean])), col = "salmon")
+        ## union
+        ## loe.middle.u = tmp[union(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
+        ## plot(x = tmp$mean, y = tmp$var, pch = 19, cex = 0.5, xlim = tmp[, quantile(mean, c(0.05, 0.95))])
+        ## lines(x = sort(tmp[, var]), y = predict(loe.middle.u, sort(tmp[, mean])), col = "salmon")
+        ## intersect        
+        ## pcols = .get_density(tmp$mean, tmp$var)
+        ## cr = colorRamp(c("#f7f7f7", "#2166ac"))
+        plot(x = tmp$mean, y = tmp$var, pch = 19, cex = 0.5, xlim = tmp[, quantile(mean, c(0.05, 0.95))], ylim = tmp[, quantile(var, c(0.05, 0.95))]## ,
+             ## col = col2hex(t(cr(pcols)))
+             )
+        lines(x = sort(tmp[, var]), y = predict(loe.middle.i, sort(tmp[, mean])), col = "salmon")
+        plot(x = tmp[nbins>100]$mean, y = tmp[nbins>100]$var, pch = 19, cex = 0.5, xlim = tmp[, quantile(mean, c(0.05, 0.95))], ylim = tmp[, quantile(var, c(0.05, 0.95))])
+        lines(x = sort(tmp[nbins>100, var]), y = predict(loe.middle.i, sort(tmp[nbins>100, mean])), col = "salmon")
+        plot(utarget$raw.var, utarget$var)
+        dev.off()
+
+
+        ## xtYao ## Tuesday, Feb 16, 2021 09:53:50 AM
+        ## CHECK: no good node should have NA var
+        if (any(is.na(utarget$var) & !is.na(utarget$mean))){
+            jerror("Some segments with valid mean do not have a variance.")
+        }
+
+        if (any(utarget$var<=0, na.rm = TRUE)){
+            jerror("Some segments have non-positive variance.")
+        }
 
         ## computing sd / sem for each utarget
         utarget$sd = sqrt((2*utarget$var)/utarget$nbins)
@@ -7781,4 +7821,10 @@ arrstring = function(A, x = NULL, sep = ', ', sep2 = '_', signif = 3, dt = FALSE
 }
 
 
-
+#' @name .get_density
+.get_density = function(x1, x2){
+            ## why does this work????
+            (col2rgb(
+                densCols(x1,x2, colramp=colorRampPalette(c("black", "white")))
+            )[1,] + 1L)/256
+        }
