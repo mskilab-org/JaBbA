@@ -159,7 +159,9 @@ JaBbA = function(## Two required inputs
                  dyn.tuning = TRUE)
 {
     system(paste('mkdir -p', outdir))
-    jmessage('Starting analysis in ', normalizePath(outdir))
+    jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
+    cdir = normalizePath(getwd())
+    setwd(outdir)
     if (overwrite)
         jmessage('Overwriting previous analysis contents')
     ra = junctions
@@ -240,6 +242,7 @@ JaBbA = function(## Two required inputs
         values(ra.all)[, tfield] = rep(2, length.out = length(ra.all))
     }
 
+    
     if (!is.null(ra.uf)){
         ## merge ra.all with ra.uf
         ## junctions from ra.all will always have tier 2
@@ -545,6 +548,7 @@ JaBbA = function(## Two required inputs
             geno = geno,
             cn.signif = cn.signif)
     }
+    setwd(cdir)
     return(jab)
 }
 
@@ -678,7 +682,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
         {
             tmp = fread(coverage)
-            coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
+            coverage = try(dt2gr(tmp))
+            if (inherits(tmp, "try-error")){
+                jerror("Input coverage data ", coverage, " cannot be converted to genomic intervals.")
+            }
+            ## coverage = dt2gr(tmp, seqlengths = tmp[, max(end), by = seqnames][, structure(V1, names = seqnames)])
         }
         else
         {
@@ -3351,7 +3359,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
             return(out)
         }, args, mc.cores = mc.cores, mc.preschedule = FALSE)
 
-        saveRDS(sols, "raw.sols.rds")
+        ## saveRDS(sols, "raw.sols.rds")
         out = list()
         ## scalar fields --> length(cluster) vector
         for (f in c('residual', 'nll.cn', 'nll.opt', 'gap.cn', 'slack.prior')){
@@ -5757,7 +5765,8 @@ convex.basis = function(A, interval = 80, chunksize = 100, maxchunks = Inf,
 ###########################################################
 read.junctions = function(rafile,
                           keep.features = T,
-                          seqlengths = hg_seqlengths(),
+                          ## seqlengths = hg_seqlengths(),
+                          seqlengths = NULL,
                           chr.convert = T,
                           geno=FALSE,
                           flipstrand = FALSE,
@@ -5850,7 +5859,7 @@ read.junctions = function(rafile,
             vcf = VariantAnnotation::readVcf(
                                          rafile)
           }
-              ## vgr = rowData(vcf) ## parse BND format
+            ## vgr = rowData(vcf) ## parse BND format
             vgr = DelayedArray::rowRanges(vcf) ## this range is identical to using read_vcf
             ## old.vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
             mc = data.table(as.data.frame(mcols(vgr)))
@@ -7191,6 +7200,101 @@ read_vcf = function(fn,
         values(out)$path = in.fn
 
     return(out)
+}
+
+#' @name write_vcf
+#' @title write_vcf
+#'
+#' @description
+#'
+#' writes any GRanges vars into vcf using columns of vars to guide choice of common fields like
+#' $FILTER
+#' $GT
+#' $REF
+#' $ALT
+#'
+#' and adding all other fields to INFO
+#'
+#' @noRd
+#' @author Marcin Imielinski
+write_vcf = function(vars, filename, sname = "mysample", info.fields = setdiff(names(values(vars)), c("FILTER", "GT", "REF", "ALT")))
+{
+    
+    genoh = DataFrame(row.names = 'GT', Number = 1, Type = 'Float', Description = 'Genotypes')
+
+    for (field in names(values(vars))) ## clean up vars of weird S4 data structures that are not compatible with before
+    {
+        tmp = tryCatch(as.character(values(vars)[, field]), error = function(e) NULL)
+        if (is.null(tmp))
+        {
+            values(vars)[, field] = NULL
+            warning(paste('Could not process field', field, "due to S4 conversion issues, discarding"))
+        }
+        is.num = !all(is.na(as.numeric(tmp)))
+        if (!is.num)
+            values(vars)[, field] = tmp
+    }
+
+    info.fields = intersect(info.fields, names(values(vars)))
+
+    if (length(info.fields)==0) # dummy field to keep asVCF happy
+    {
+        info.fields = "DM"
+        vars$DM = '.'
+    }
+
+    is.num = sapply(info.fields, function(x) !suppressWarnings(all(is.na(as.numeric(as.character(values(vars)[, x]))))))
+    infoh = DataFrame(
+        row.names = info.fields, Number = 1,
+        Type = ifelse(is.num, 'Float', 'String'),
+        Description = paste('Field', info.fields))
+
+    if (is.null(vars$REF))
+        vars$REF = vars$refbase
+
+    if (is.null(vars$ALT))
+        vars$ALT = vars$altbase
+
+    if (is.null(vars$REF))
+        vars$REF =  "N"
+
+    if (is.null(vars$ALT))
+        vars$ALT =  "X"
+
+    if (is.null(vars$FILTER))
+        vars$FILTER =  "PASS"
+
+    ## vcf = asVCF(vars)
+    vr = VRanges(seqnames(vars), ranges(vars), ref = vars$REF, alt = vars$ALT, sampleNames = rep(sname, length(vars)))
+    names(vr) = names(vars)
+    vcf = asVCF(vr)
+
+
+    for (field in info.fields)
+        info(vcf)[[field]] = values(vars)[[field]]
+
+##    geno(vcf)$DP = vars$DP; geno(vcf)$AD = vars$AD; geno(vcf)$FT = vars$FT
+
+    info(header(vcf)) = infoh
+
+    if (is.null(vars$FILTER))
+        filt(vcf) = rep('PASS', length(vars))
+    else
+        filt(vcf) = vars$FILTER
+
+    ## xtYao ## Thursday, Feb 25, 2021 02:55:16 PM
+    ## use the names if they are there!!
+    if (!is.null(names(vars))){
+        rownames(vcf) = names(vars)
+    } else {
+        rownames(vcf) = vars$assembly.coord ## WHY, WHY, WHY??????
+    }
+    
+    geno(header(vcf)) = genoh
+
+    geno(vcf)$GT = vcf$GT
+
+    writeVcf(vcf, filename)
 }
 
 #' @name levapply
