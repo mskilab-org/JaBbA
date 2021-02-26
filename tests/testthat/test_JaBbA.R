@@ -22,10 +22,10 @@ Sys.setenv(DEFAULT_GENOME = paste0(system.file(
                package = 'JaBbA'),
                "/human_g1k_v37.chrom.sizes")) ## must do this           
 print(Sys.getenv("DEFAULT_GENOME"))
-print("This is the default seqlengths: ")
-print(hg_seqlengths())
-print("IS IT A VECTOR NOW??????!!!!!!")
-print(is.vector(hg_seqlengths()))
+## print("This is the default seqlengths: ")
+## print(hg_seqlengths())
+## print("IS IT A VECTOR NOW??????!!!!!!")
+## print(is.vector(hg_seqlengths()))
 
 test_that("read.junctions", {
     expect_equal(all(values(read.junctions(juncs.fn))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
@@ -57,7 +57,7 @@ test_that("ppgrid", {
 })
 
 juncs = read.junctions(juncs.fn)
-values(junc)$nudge = 0
+values(juncs)$nudge = 0
 junc = rep(juncs, 2)
 
 test_that("ra.merge", {
@@ -83,10 +83,10 @@ hets.gr = dt2gr(fread(hets))
 
 test_that("karyograph", {
     kag = JaBbA:::karyograph(junctions = junc)
-    expect_equal(length(kag$tile), 382)
+    expect_equal(length(kag$tile), 336)
     seqlevels(nsegs) = as.character(1:22)
     kag = JaBbA:::karyograph(junctions = junc, tile = nsegs, label.edges = TRUE)
-    expect_equal(length(kag$tile), 1190)
+    expect_equal(length(kag$tile), 1144) ## removed garbage seqnames
     kag = JaBbA:::karyograph(junctions = NULL, tile = nsegs)
     expect_equal(length(kag$tile), 812)
 })
