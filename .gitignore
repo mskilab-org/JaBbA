@@ -8,3 +8,15 @@ _build*
 *.log
 *.synctex.gz
 *.tex
+JaBbA.reiterate/
+JaBbA/
+man/
+raw.prm
+raw.sols.rds
+src/
+tests/testthat/JaBbA.reiterate/
+tests/testthat/JaBbA/
+tests/testthat/raw.prm
+tests/testthat/raw.sols.rds
+JaBbA.allin
+tmp.R
