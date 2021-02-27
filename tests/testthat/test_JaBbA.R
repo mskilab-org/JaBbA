@@ -104,6 +104,7 @@ list.expr = function(x)
 jj = system.file("testing", "junctions.rds", package = "JaBbA")
 cf = system.file("testing", "coverage.txt", package = "JaBbA")
 ht = system.file("testing", "hets.txt", package = "JaBbA")
+hr = fread(ht) %>% dt2gr
 
 ## default is boolean
 jab = suppressWarnings(
@@ -135,12 +136,12 @@ jab = suppressWarnings(
 ## mj = merge(jJ(juncs), jab$junctions)
 
 ## with iteration, linear penalty, no dynamic tuning
-jab.reiterate = JaBbA(junctions = juncs.fn,
-                      coverage = cov.fn,
+jab.reiterate = JaBbA(junctions = jj,
+                      coverage = cf,
                       blacklist.junctions = blacklist.junctions,
-                      hets = hets.gr,
+                      hets = hr,
                       slack.penalty = 10,
-                      tilim = TILIM,
+                      tilim = 60,
                       verbose = 2,
                       outdir = 'JaBbA.reiterate',
                       overwrite = TRUE,
@@ -148,7 +149,7 @@ jab.reiterate = JaBbA(junctions = juncs.fn,
                       ploidy=3.72,
                       purity=0.99,
                       loose.penalty.mode = 'linear',
-                      epgap = EPGAP,
+                      epgap = 0.01,
                       dyn.tuning = FALSE)
 
 ## for testing purposes, print out the exact output
@@ -162,7 +163,7 @@ print(list.expr(values(jab$junctions$grl)$cn))
 
 print('jab.reiterate cn')
 print(list.expr(
-    gr.string(sort(gr.stripstrand(jab.reiterate$gr %Q% (strand=="+"))), other.cols="cn")
+    gr.string(sort(gr.stripstrand(jab.reiterate$gr %Q% (strand=="+" & !is.na(cn)))), other.cols="cn")
 ))
 
 print('jab.reiterate junctions cn')
@@ -209,7 +210,7 @@ print(list.expr(values(jab.reiterate$junctions$grl)$cn))
 
 test_that("JaBbA", {
     print("Comparing results from boolean mode without iteration:")
-
+    expect_true(identical(jab$nodes$dt[!is.na(cn), cn], c(5, 3, 2, 4, 5, 3, 5, 3, 2, 3, 5)))
     ## expect_true((jab.cn.cor <<- pmax(
     ##                  cn.cor.single(jab$gr %Q% (strand=="+"), cn.gs),
     ##                  cn.cor.single(jab$gr %Q% (strand=="+"), cn.gs.2)
@@ -230,6 +231,7 @@ test_that("JaBbA", {
     ## )
 
     print("Comparing results from linear mode with iteration:")
+    expect_true(identical(jab.reiterate$nodes$dt[!is.na(cn), cn], c(4, 3, 2, 3, 4, 3, 4, 3, 2, 3, 4)))
     ## expect_true((jab.reiterate.cn.cor <<- pmax(
     ##                  cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate),
     ##                  cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate.2)
@@ -238,7 +240,7 @@ test_that("JaBbA", {
 
     ## expect_true((jab.reiterate.cn.cor <<- cn.cor.single(jab.reiterate$gr %Q% (strand=="+"), cn.gs.reiterate)) > 0.8,
     ##             info = print(jab.reiterate.cn.cor))
-
+    expect_true(identical(jab.reiterate$junctions$dt$cn, c(3, 1, 2, 1, 2, 3, 3, 1, 3, 3, 1, 2, 1, 2, 3)))
     ## expect_true(
     ##     identical(
     ##         values(jab.reiterate$junctions$grl)$cn,
