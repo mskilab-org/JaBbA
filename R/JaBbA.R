@@ -1270,222 +1270,232 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         return(as.data.table(out))
     }
 
-    PTHRESH = 0.01
+    ## Old code replaced by new filter.loose function
+    ## PTHRESH = 0.01
+    ## .waviness = function(x, y, min.thresh = 5e3, max.thresh = 10e4, spar = 0.5, smooth = TRUE, filter = rep(FALSE, length(x)), trim = 10) {
+    ##     if(length(x)==0) return(NA)
+    ##     dat = data.table(x, y)[order(x), ]
+    ##     dat[, lag := x-min(x)]
+    ##     fdat = dat[!is.na(y), ][!is.infinite(y), ]
+    ##     ## autocorrelation
+    ##     if(nrow(fdat)==0) return(NA)
+    ##     fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
+    ##     if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
+    ##         fdat = fdat[!is.na(lag) & !is.na(ac),]
+    ##         if (nrow(fdat[!is.na(lag) & !is.na(ac),])<=4)
+    ##             return(NA)
+    ##         fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
+    ##     }
+    ##     return(fdat[lag>min.thresh & lag<max.thresh, sum(ac^2)])
+    ## }
 
-    .waviness = function(x, y, min.thresh = 5e3, max.thresh = 10e4, spar = 0.5, smooth = TRUE, filter = rep(FALSE, length(x)), trim = 10) {
-        if(length(x)==0) return(NA)
-        dat = data.table(x, y)[order(x), ]
-        dat[, lag := x-min(x)]
-        fdat = dat[!is.na(y), ][!is.infinite(y), ]
-        ## autocorrelation
-        if(nrow(fdat)==0) return(NA)
-        fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
-        if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
-            fdat = fdat[!is.na(lag) & !is.na(ac),]
-            if (nrow(fdat[!is.na(lag) & !is.na(ac),])<=4)
-                return(NA)
-            fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
-        }
-        return(fdat[lag>min.thresh & lag<max.thresh, sum(ac^2)])
-    }
-
-    .mod = function(dt){
-        mod = dt[, glm(counts ~ tumor + fused + ix, family='gaussian')]
-        res = dt$counts - predict(mod, dt, type='response')
-        return(res)
-    }
+    ## .mod = function(dt){
+    ##     mod = dt[, glm(counts ~ tumor + fused + ix, family='gaussian')]
+    ##     res = dt$counts - predict(mod, dt, type='response')
+    ##     return(res)
+    ## }
 
     ## start building the model
     ## gather loose ends from sample
     gg = tryCatch(gG(jabba = jabd), error=function(e) readRDS(jabba.rds.file))
     ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
     lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
+
+    ## TODO
+    ## arbitrarily defined based on Julie's paper and prelim TGCT 1kb dryclean data
+    if (binwidth<1000){
+        PTHRESH = 3.4e-7
+    } else {
+        PTHRESH = 2e-6
+    }       
+
     if ((nrow(ll)+nrow(lr))>0){
         l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
         l[, leix := 1:.N]
         l = dt2gr(l)
+        le.class = filter.loose(gg, cov = coverage, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
 
-        ## load coverage and beta (coverage CN fit)
-        if (is.character(coverage)){
-            if (grepl("rds$", coverage)){
-                cov = readRDS(coverage)
-            } else {
-                cov = dt2gr(fread(coverage))
-            }
-        } else if (inherits(coverage, "GRanges")){
-            cov = coverage
-        }
+        ## ## load coverage and beta (coverage CN fit)
+        ## if (is.character(coverage)){
+        ##     if (grepl("rds$", coverage)){
+        ##         cov = readRDS(coverage)
+        ##     } else {
+        ##         cov = dt2gr(fread(coverage))
+        ##     }
+        ## } else if (inherits(coverage, "GRanges")){
+        ##     cov = coverage
+        ## }
         
-        kary = readRDS(paste0(outdir, "/karyograph.rds"))
-        purity = as.numeric(kary$purity)
-        ploidy = as.numeric(kary$ploidy)
-        ratios = values(cov)[, field]
-        beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
-        segs = gg$nodes$gr
+        ## ## kag = readRDS(paste0(outdir, "/karyograph.rds"))
+        ## purity = as.numeric(kag$purity)
+        ## ploidy = as.numeric(kag$ploidy)
+        ## ratios = values(cov)[, field]
+        ## beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
+        ## segs = gg$nodes$gr
 
-        ## identify nodes flanking each loose end, extending up to 100kb away
-        o = gr.findoverlaps(segs, l+1)
-        segs = segs[o$query.id]; segs$leix = l[o$subject.id]$leix
-        sides = gr.findoverlaps(segs, l+1e5, by="leix")
-        values(sides) = cbind(values(sides), values(l[sides$subject.id]))
-        sides$fused = !is.na(gr.match(sides, l, by="leix"))
-        sides$wid = width(sides)
+        ## ## identify nodes flanking each loose end, extending up to 100kb away
+        ## o = gr.findoverlaps(segs, l+1)
+        ## segs = segs[o$query.id]; segs$leix = l[o$subject.id]$leix
+        ## sides = gr.findoverlaps(segs, l+1e5, by="leix")
+        ## values(sides) = cbind(values(sides), values(l[sides$subject.id]))
+        ## sides$fused = !is.na(gr.match(sides, l, by="leix"))
+        ## sides$wid = width(sides)
 
-        .QQ = 0.05
-        ## gather coverage bins corresponding to fused & unfused sides of loose ends
-        rel = gr.findoverlaps(cov, sides)
-        values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
+        ## .QQ = 0.05
+        ## ## gather coverage bins corresponding to fused & unfused sides of loose ends
+        ## rel = gr.findoverlaps(cov, sides)
+        ## values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
 
-        ## the difference of coverage
-        field.val = values(rel)[, field]
-        lb = quantile(field.val, .QQ, na.rm=T)
-        ub = quantile(field.val, 1-.QQ, na.rm=T)
-        rel = gr2dt(rel)
-        rel[, field := field.val]
-        rel[, ":="(in.quant.r = between(field, lb, ub)),
-            by=.(subject.id, fused)]
+        ## ## the difference of coverage
+        ## field.val = values(rel)[, field]
+        ## lb = quantile(field.val, .QQ, na.rm=T)
+        ## ub = quantile(field.val, 1-.QQ, na.rm=T)
+        ## rel = gr2dt(rel)
+        ## rel[, field := field.val]
+        ## rel[, ":="(in.quant.r = between(field, lb, ub)),
+        ##     by=.(subject.id, fused)]
 
-        if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-            rel[, ":="(in.quant.r = rep(field >= quantile(field, .QQ, na.rm=T) &
-                                        field <= quantile(field, 1-.QQ, na.rm=T),
-                                        length.out = .N),
-                       good.cov = rep(sum(is.na(tum.counts))/.N < 0.1 &
-                                      sum(is.na(norm.counts))/.N < 0.1 &
-                                      sum(is.na(field.val))/.N < 0.1 &
-                                      wid > 5e4, length.out = .N)),
-                by=.(subject.id, fused)]
-            rel[, ":="(
-                tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
-                tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
-                normal.mean.fused = mean(norm.counts[fused], na.rm=T),
-                normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
-            ), by=leix]
-            glm.in = melt(
-                rel[(in.quant.r),],
-                id.vars=c("leix", "fused"),
-                measure.vars=c("tum.counts", "norm.counts"),
-                value.name="counts")[, tumor := variable=="tum.counts"]
-            ## some points are NA, remove
-            glm.in = glm.in[!is.na(counts)]
-            ## prep glm input matrix
-            glm.in[, ix := seq_len(.N), by=leix]
-            rel2 = copy(glm.in)
-            setnames(glm.in, "leix", "leix2")
-            ## calculate residuals from glm 
-            rel2[, residual := tryCatch(.mod(glm.in[leix2==leix[1],]), error = function(e){return(as.double(NA))}), by=leix]
-            ## evaluate KS-test on residuals and calculate effect size
-            res = rel2[
-                tumor==TRUE,
-                .(p = tryCatch(.dflm(ks.test(residual[fused], residual[!fused]))$p,
-                               error=function(e) return(as.double(NA)))),
-                by=leix]
-            est = rel2[
-              , mean(counts),
-                keyby=.(fused, tumor, leix)][
-              , V1[tumor] / V1[!tumor], keyby=.(leix, fused)][
-              , V1[fused]-V1[!fused], keyby=leix]
-            res$leix = as.character(res$leix); setkey(res, leix)
-            ## FIXME: sometimes estimate is NA!!
-            res[as.character(est$leix), estimate := est$V1]
-            ## also compare the significance on tumor versus normal
-            test = rel2[
-            (tumor),
-            mean(counts),
-            keyby=.(fused, leix)][
-              , V1[fused]-V1[!fused], keyby=leix]
-            setnames(test, "V1", "testimate")
-            test$leix = as.character(test$leix)
-            setkey(test, leix)
-            nest = rel2[
-                !(tumor),
-                mean(counts),
-                keyby=.(fused, leix)][
-              , V1[fused]-V1[!fused],
-                keyby=leix]
-            setnames(nest, "V1", "nestimate")
-            nest$leix = as.character(nest$leix)
-            setkey(nest, leix)
-        } else {
-            rel[, ":="(in.quant.r = field >= quantile(field, .QQ, na.rm=T) &
-                           field <= quantile(field, 1-.QQ, na.rm=T),
-                       good.cov = sum(is.na(field))/.N < 0.1 &
-                           wid > 5e4),
-                by=.(subject.id, fused)]
-            ## count the coverage on each side
-            rel[, ":="(
-                mean.fused = mean(field.val[fused], na.rm=T),
-                mean.unfused = mean(field.val[!fused], na.rm=T)),
-                by=leix]
-            ## simple ks.test
-            res = rel[, .(
-                p = tryCatch(ks.test(field.val[fused], field.val[!fused])$`p.value`,
-                             error = function(e){return(as.double(NA))})), keyby=leix]            
-        }
+        ## if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
+        ##     rel[, ":="(in.quant.r = rep(field >= quantile(field, .QQ, na.rm=T) &
+        ##                                 field <= quantile(field, 1-.QQ, na.rm=T),
+        ##                                 length.out = .N),
+        ##                good.cov = rep(sum(is.na(tum.counts))/.N < 0.1 &
+        ##                               sum(is.na(norm.counts))/.N < 0.1 &
+        ##                               sum(is.na(field.val))/.N < 0.1 &
+        ##                               wid > 5e4, length.out = .N)),
+        ##         by=.(subject.id, fused)]
+        ##     rel[, ":="(
+        ##         tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
+        ##         tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
+        ##         normal.mean.fused = mean(norm.counts[fused], na.rm=T),
+        ##         normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
+        ##     ), by=leix]
+        ##     glm.in = melt(
+        ##         rel[(in.quant.r),],
+        ##         id.vars=c("leix", "fused"),
+        ##         measure.vars=c("tum.counts", "norm.counts"),
+        ##         value.name="counts")[, tumor := variable=="tum.counts"]
+        ##     ## some points are NA, remove
+        ##     glm.in = glm.in[!is.na(counts)]
+        ##     ## prep glm input matrix
+        ##     glm.in[, ix := seq_len(.N), by=leix]
+        ##     rel2 = copy(glm.in)
+        ##     setnames(glm.in, "leix", "leix2")
+        ##     ## calculate residuals from glm 
+        ##     rel2[, residual := tryCatch(.mod(glm.in[leix2==leix[1],]), error = function(e){return(as.double(NA))}), by=leix]
+        ##     ## evaluate KS-test on residuals and calculate effect size
+        ##     res = rel2[
+        ##         tumor==TRUE,
+        ##         .(p = tryCatch(.dflm(ks.test(residual[fused], residual[!fused]))$p,
+        ##                        error=function(e) return(as.double(NA)))),
+        ##         by=leix]
+        ##     est = rel2[
+        ##       , mean(counts),
+        ##         keyby=.(fused, tumor, leix)][
+        ##       , V1[tumor] / V1[!tumor], keyby=.(leix, fused)][
+        ##       , V1[fused]-V1[!fused], keyby=leix]
+        ##     res$leix = as.character(res$leix); setkey(res, leix)
+        ##     ## FIXME: sometimes estimate is NA!!
+        ##     res[as.character(est$leix), estimate := est$V1]
+        ##     ## also compare the significance on tumor versus normal
+        ##     test = rel2[
+        ##     (tumor),
+        ##     mean(counts),
+        ##     keyby=.(fused, leix)][
+        ##       , V1[fused]-V1[!fused], keyby=leix]
+        ##     setnames(test, "V1", "testimate")
+        ##     test$leix = as.character(test$leix)
+        ##     setkey(test, leix)
+        ##     nest = rel2[
+        ##         !(tumor),
+        ##         mean(counts),
+        ##         keyby=.(fused, leix)][
+        ##       , V1[fused]-V1[!fused],
+        ##         keyby=leix]
+        ##     setnames(nest, "V1", "nestimate")
+        ##     nest$leix = as.character(nest$leix)
+        ##     setkey(nest, leix)
+        ## } else {
+        ##     rel[, ":="(in.quant.r = field >= quantile(field, .QQ, na.rm=T) &
+        ##                    field <= quantile(field, 1-.QQ, na.rm=T),
+        ##                good.cov = sum(is.na(field))/.N < 0.1 &
+        ##                    wid > 5e4),
+        ##         by=.(subject.id, fused)]
+        ##     ## count the coverage on each side
+        ##     rel[, ":="(
+        ##         mean.fused = mean(field.val[fused], na.rm=T),
+        ##         mean.unfused = mean(field.val[!fused], na.rm=T)),
+        ##         by=leix]
+        ##     ## simple ks.test
+        ##     res = rel[, .(
+        ##         p = tryCatch(ks.test(field.val[fused], field.val[!fused])$`p.value`,
+        ##                      error = function(e){return(as.double(NA))})), keyby=leix]            
+        ## }
 
-        ## evaluate waviness across bins per loose end
-        rel[, good.cov := all(good.cov), by=subject.id]
-        rel[, waviness := max(.waviness(start[fused], field[fused]), .waviness(start[!fused], field[!fused]), na.rm=T), by=subject.id]
+        ## ## evaluate waviness across bins per loose end
+        ## rel[, good.cov := all(good.cov), by=subject.id]
+        ## rel[, waviness := max(.waviness(start[fused], field[fused]), .waviness(start[!fused], field[!fused]), na.rm=T), by=subject.id]
         
-        ## don't call the loose ends around NA regions
-        .BADWIN = 1e5
-        bad.win = streduce(kag$segstats[which(is.na(kag$segstats$mean))], .BADWIN)
-        l$bad.l = gUtils::gr.in(l, bad.win)
+        ## ## don't call the loose ends around NA regions
+        ## .BADWIN = 1e5
+        ## bad.win = streduce(kag$segstats[which(is.na(kag$segstats$mean))], .BADWIN)
+        ## l$bad.l = gUtils::gr.in(l, bad.win)
 
-        ## combine relevant fields from each test
-        ## cnl = rev(rev(colnames(rel))[1:6])
-        cnl = c("waviness", "good.cov", "wid", "leix")
+        ## ## combine relevant fields from each test
+        ## ## cnl = rev(rev(colnames(rel))[1:6])
+        ## cnl = c("waviness", "good.cov", "wid", "leix")
 
-        if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-            ## we got rid of the columns from .dflm except `p` and `estimate`
-            cns = colnames(res)[c(2:3)]
-            ## combine all metrics
-            le.class = cbind(
-                gr2dt(l[rel[!duplicated(subject.id), leix]]),
-                rel[!duplicated(subject.id), cnl, with=F],
-                res[rel[!duplicated(subject.id), as.character(leix)], cns, with=F],
-                nest[rel[!duplicated(subject.id), as.character(leix)], "nestimate"],
-                test[rel[!duplicated(subject.id), as.character(leix)], "testimate"])[
-              , effect.thresh := beta]
+        ## if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
+        ##     ## we got rid of the columns from .dflm except `p` and `estimate`
+        ##     cns = colnames(res)[c(2:3)]
+        ##     ## combine all metrics
+        ##     le.class = cbind(
+        ##         gr2dt(l[rel[!duplicated(subject.id), leix]]),
+        ##         rel[!duplicated(subject.id), cnl, with=F],
+        ##         res[rel[!duplicated(subject.id), as.character(leix)], cns, with=F],
+        ##         nest[rel[!duplicated(subject.id), as.character(leix)], "nestimate"],
+        ##         test[rel[!duplicated(subject.id), as.character(leix)], "testimate"])[
+        ##       , effect.thresh := beta]
 
-            ## final call
-            ## needs columns: p, estimate
-            le.class[, passed := !is.na(p) &
-                           p < PTHRESH &
-                           estimate > (0.6*effect.thresh) &
-                           testimate > (0.6*effect.thresh) &
-                           waviness < 2 &
-                           nestimate < (0.6*effect.thresh) &
-                           !bad.l]
-        } else {
-            ## combine all metrics
-            le.class = merge(
-                gr2dt(l[rel[!duplicated(subject.id), leix]]),
-                rel[!duplicated(subject.id), cnl, with=F],
-                by = "leix", all.x = TRUE)[
-              , effect.thresh := beta]
+        ##     ## final call
+        ##     ## needs columns: p, estimate
+        ##     le.class[, passed := !is.na(p) &
+        ##                    p < PTHRESH &
+        ##                    estimate > (0.6*effect.thresh) &
+        ##                    testimate > (0.6*effect.thresh) &
+        ##                    waviness < 2 &
+        ##                    nestimate < (0.6*effect.thresh) &
+        ##                    !bad.l]
+        ## } else {
+        ##     ## combine all metrics
+        ##     le.class = merge(
+        ##         gr2dt(l[rel[!duplicated(subject.id), leix]]),
+        ##         rel[!duplicated(subject.id), cnl, with=F],
+        ##         by = "leix", all.x = TRUE)[
+        ##       , effect.thresh := beta]
 
-            le.class = merge(
-                le.class, res,
-                by="leix", all.x = TRUE)
+        ##     le.class = merge(
+        ##         le.class, res,
+        ##         by="leix", all.x = TRUE)
 
-            ## final call
-            ## needs columns: p, estimate
-            le.class[, passed := !is.na(p) &
-                           p < PTHRESH &
-                           waviness < 2 &
-                           !bad.l]
-        }
+        ##     ## final call
+        ##     ## needs columns: p, estimate
+        ##     le.class[, passed := !is.na(p) &
+        ##                    p < PTHRESH &
+        ##                    waviness < 2 &
+        ##                    !bad.l]
+        ## }
         
         saveRDS(le.class, le.class.file.rds)
         n.le = dt2gr(le.class)
         jabd.simple$segstats =
             grbind(
                 jabd.simple$segstats %Q% (loose==FALSE),
-                jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, "passed"])
+                jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
         jabd$segstats =
             grbind(
                 jabd$segstats %Q% (loose==FALSE),
-                jabd$segstats %Q% (loose==TRUE) %$% n.le[, "passed"])
+                jabd$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
 
         ## message("legacy code for plotting the loose end quality in gTrack")
         ## values(l)$passed=le.class[order(leix), passed]
@@ -7925,10 +7935,267 @@ arrstring = function(A, x = NULL, sep = ', ', sep2 = '_', signif = 3, dt = FALSE
 }
 
 
-#' @name .get_density
-.get_density = function(x1, x2){
-            ## why does this work????
-            (col2rgb(
-                densCols(x1,x2, colramp=colorRampPalette(c("black", "white")))
-            )[1,] + 1L)/256
+
+
+#' filter.loose
+#'
+#' analyze coverage surrounding given loose ends to evaluate quality
+#' @param gg gGraph of JaBbA model
+#' @param cov.rds character path to binned coverage data
+#' @param l data.table of loose ends to evaluate
+#' @param purity optional, fractional purity of sample, default assumes 1
+#' @param ploidy optional, ploidy of sample, default infers from gg
+#' @param field optional, column name in cov.rds, default="ratio"
+#' @param PTHRESH optional, threshold for GLM p-value for calling true positive loose ends, default=3.4e-7 provides consanguinity with large dataset bonferroni correction
+#' @param max.epgap optional, threshold for JaBbA MIQP convergence epgap. Values over this is considered incomplete optimization and disregarded.
+#' @param verbose optional, default=FALSE
+#' @return data.table containing a row for every input loose end and logical column `true.pos` indicating whether each loose end has passed all filters (TRUE) or not (FALSE)
+#' @author Julie Behr
+filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTHRESH=3.4e-7, max.epgap = 1e-3, verbose=F){
+    ## ## load coverage and beta (coverage CN fit)
+    ## if(verbose) message("Loading coverage bins")
+    ## cov = readRDS(cov.rds)
+    ## cov = gr.sub(cov, "chr", "")
+    if(!(field %in% colnames(values(cov)))) stop("must provide field in cov.rds")
+    if(field != "ratio") cov$ratio = values(cov)[, field]
+    if(!("tum.counts" %in% colnames(values(cov)))){
+        yf = ifelse("reads.corrected" %in% colnames(values(cov)), "reads.corrected", field)
+        cov$tum.counts = values(cov)[, yf]
+    }
+    if(!("norm.counts" %in% colnames(values(cov)))){
+        cov$norm.counts = 1 ## dummy to make it flat
+    }
+    if(is.null(purity)){
+        if (is.null(purity <- gg$meta$purity)){
+            jerror("Purity must be given.")
         }
+    }  ## purity = 1
+    if(is.null(ploidy)) {
+        ploidy = weighted.mean(gg$nodes$gr$cn, gg$nodes$gr %>% width, na.rm=T)
+    }
+    ratios = cov$ratio
+    beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
+    segs = gg$nodes$gr
+    ## segs = gr.sub(segs, "chr", "")
+    ## l = gr.sub(l, "chr", "")
+
+    if (!is(l, "GRanges")){
+        try({l = dt2gr(l)})
+        if (inherits(l, "try-error")){
+            jerror("l must be a GRanges or a data.table that can be converted to a GRanges.")
+        }
+    }
+
+    ## identify nodes flanking each loose end, extending up to 100kb away
+    o = gr.findoverlaps(segs, l+1)
+    segs = segs[o$query.id]; segs$leix = l[o$subject.id]$leix
+    sides = gr.findoverlaps(segs, l+1e5, by="leix")
+    values(sides) = cbind(values(sides), values(l[sides$subject.id]))
+    sides$fused = !is.na(gr.match(sides, l, by="leix"))
+    sides$wid = width(sides)
+
+    ## gather coverage bins corresponding to fused & unfused sides of loose ends
+    if(verbose) jmessage("Overlapping coverage with loose end fused and unfused sides")
+    rel = gr.findoverlaps(cov, sides)
+    values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
+    qq = 0.05
+    rel = gr2dt(rel)[, ":="(
+                   in.quant.r = ratio >= quantile(ratio, qq, na.rm=T) & ratio <= quantile(ratio, 1-qq, na.rm=T),
+                   good.cov=sum(is.na(tum.counts))/.N < 0.1 & sum(is.na(norm.counts))/.N < 0.1 & sum(is.na(ratio))/.N < 0.1 & wid > 5e4
+               ), by=.(subject.id, fused)]
+
+    rel[, lxxx := leix]
+    variances = rel[(in.quant.r), var(ratio), keyby=.(fused, lxxx)]
+    variances[, side := ifelse(fused, "f_std", "u_std")]
+    variances[, std := sqrt(V1)]
+    vars = dcast.data.table(variances, lxxx ~ side, value.var="std")
+    rel[is.na(in.quant.r), in.quant.r := FALSE]
+    rel[, tum.median := median(tum.counts[in.quant.r]), by=.(lxxx)]
+    rel[, norm.median := median(norm.counts[in.quant.r]), by=.(lxxx)]
+    rel[, tum.res := tum.counts - tum.median]
+    rel[, norm.res := norm.counts - norm.median]
+    tum.ks = rel[(in.quant.r), tryCatch(dflm(ks.test(tum.res[fused], tum.res[!fused])), error = function(e) dflm(ks.test(tum.res, tum.res))), by=lxxx][, p, by=lxxx]
+    norm.ks = rel[(in.quant.r), tryCatch(dflm(ks.test(norm.res[fused], norm.res[!fused])), error = function(e) dflm(ks.test(norm.res, norm.res))), by=lxxx][, p, by=lxxx]
+    pt1 = merge(vars, merge(tum.ks, norm.ks, by="lxxx", suffixes=c("_tum", "_norm"),all=T), by="lxxx", all=T)
+    pt1$lxxx = as.character(pt1$lxxx); setkey(pt1, lxxx)
+    pt1[, n_fdr := p.adjust(p_norm, "bonferroni")]
+    pt1[, t_fdr := p.adjust(p_tum, "bonferroni")]
+
+    rel[, ":="(
+        tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
+        tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
+        normal.mean.fused = mean(norm.counts[fused], na.rm=T),
+        normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
+    ), by=leix]
+
+    ## evaluate waviness across bins per loose end
+    rel[, good.cov := all(good.cov), by=subject.id]
+    if(verbose) message("Calculating waviness around loose end")
+    rel[, waviness := max(.waviness(start[fused], ratio[fused]), .waviness(start[!fused], ratio[!fused]), na.rm=T), by=subject.id]
+
+    ## prep glm input matrix
+    if(verbose) message("Prepping GLM input matrix")
+    glm.in = melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+    glm.in[, ix := 1:.N, by=leix]
+    rel2 = copy(glm.in)
+    setnames(glm.in, "leix", "leix2")
+
+    ## calculate residuals from glm 
+    rel2[, residual := .mod(glm.in[leix2==leix[1],]), by=leix]
+
+    ## evaluate KS-test on residuals and calculate effect size
+    ## effect will be from KS test on residuals
+    ## estimate is replaced with difference of median coverage
+    if(verbose) message("Running KS-test on fused vs unfused sides of loose ends")
+    res = rel2[(tumor), tryCatch(dflm(ks.test(residual[fused], residual[!fused])), error=function(e) dflm(ks.test(residual, residual))), by=leix]
+    est = rel2[, median(counts), keyby=.(fused, tumor, leix)][, V1[tumor] / V1[!tumor], keyby=.(leix, fused)][, V1[fused]-V1[!fused], keyby=leix]
+    res$leix = as.character(res$leix); setkey(res, leix)
+    res[as.character(est$leix), estimate := est$V1]
+
+    ## combine relevant fields from each test
+    test = rel2[(tumor), mean(counts), keyby=.(fused, leix)][, V1[fused]-V1[!fused], keyby=leix]; setnames(test, "V1", "testimate")
+    test$leix = as.character(test$leix); setkey(test, leix)
+    nest = rel2[!(tumor), mean(counts), keyby=.(fused, leix)][, V1[fused]-V1[!fused], keyby=leix]; setnames(nest, "V1", "nestimate")
+    nest$leix = as.character(nest$leix); setkey(nest, leix)
+    cnl = rev(rev(colnames(rel))[1:6])
+    cns = c("name", "method", "estimate", "effect", "p")
+    le.class = cbind(gr2dt(l[rel[!duplicated(subject.id), subject.id]]), rel[!duplicated(subject.id), cnl, with=F], res[rel[!duplicated(subject.id), as.character(leix)], cns, with=F], nest[rel[!duplicated(subject.id), as.character(leix)], "nestimate"], test[rel[!duplicated(subject.id), as.character(leix)], "testimate"])[, effect.thresh := beta]
+
+    le.class[, f.std := pt1[.(as.character(leix)), f_std]]
+    le.class[, u.std := pt1[.(as.character(leix)), u_std]]
+    le.class[, ":="(n_fdr = pt1[.(as.character(leix)), n_fdr], t_fdr = pt1[.(as.character(leix)), t_fdr])]
+    le.class[, bon := p.adjust(p, "bonferroni")]
+
+    ## correct p values
+    if(verbose) message("Identifying true positives")
+    if(!("epgap" %in% colnames(le.class))){
+        le.class[, passed := !is.na(p) & p < PTHRESH & estimate > (0.6*effect.thresh) & testimate > (0.6*effect.thresh) & waviness < 2 & abs(nestimate) < (0.6*effect.thresh)]
+    } else {
+        le.class[, passed := !is.na(p) & p < PTHRESH & estimate > (0.6*effect.thresh) & testimate > (0.6*effect.thresh) & waviness < 2 & abs(nestimate) < (0.6*effect.thresh) &
+                       epgap < max.epgap]
+    }
+    le.class[, true.pos := passed & estimate > f.std & estimate > u.std & n_fdr > 0.05 & t_fdr < 0.01]
+    ## le.class$passed = NULL
+    
+    gc()
+    return(le.class)
+}
+
+#' @name dflm
+#' @title dflm
+#' @description
+#' @noRd
+#'
+#' Formats lm, glm, or fisher.test outputs into readable data.table
+#' @author Marcin Imielinski
+dflm = function(x, last = FALSE, nm = '')
+{
+    if (is.null(x))
+        out = data.frame(name = nm, method = as.character(NA), p = as.numeric(NA), estimate = as.numeric(NA), ci.lower = as.numeric(NA),  ci.upper = as.numeric(NA), effect = as.character(NA))
+    else if (any(c('lm', 'betareg') %in% class(x)))
+    {
+
+        coef = as.data.frame(summary(x)$coefficients)
+        colnames(coef) = c('estimate', 'se', 'stat', 'p')
+        if (last)
+            coef = coef[nrow(coef), ]
+        coef$ci.lower = coef$estimate - 1.96*coef$se
+        coef$ci.upper = coef$estimate + 1.96*coef$se
+        if (!is.null(summary(x)$family))
+        {
+            fam = summary(x)$family$family
+            if (summary(x)$family$link %in% c('log', 'logit'))
+            {
+                coef$estimate = exp(coef$estimate)
+                coef$ci.upper= exp(coef$ci.upper)
+                coef$ci.lower= exp(coef$ci.lower)
+            }
+        }
+        else
+            fam = 'Unknown'
+
+        if (!last)
+            nm = paste(nm, rownames(coef))
+        
+        out = data.frame(name = nm,
+                         method = fam,
+                         stat = coef$stat,
+                         p = signif(coef$p, 3),
+                         estimate = coef$estimate,
+                         ci.lower = coef$ci.lower,
+                         ci.upper = coef$ci.upper,
+                         effect = paste(signif(coef$estimate, 3), ' [',
+                                        signif(coef$ci.lower,3),'-',
+                                        signif(coef$ci.upper, 3), ']',
+                                        sep = ''))
+    }
+    else if (class(x) == 'htest')
+    {
+        if (is.null(x$estimate))
+            x$estimate = x$statistic
+        if (is.null(x$conf.int))
+            x$conf.int = c(NA, NA)
+        out = data.table(name = nm, method = x$method, estimate = x$estimate, ci.lower = x$conf.int[1], ci.upper = x$conf.int[2], effect = paste(signif(x$estimate, 3), ' [',  signif(x$conf.int[1],3),'-', signif(x$conf.int[2], 3), ']', sep = ''), p = x$p.value)
+    }
+    else if (class(x) == 'polr')
+    {
+        coef = coef(summary(x)) %>% as.data.frame
+        nm = paste(nm, rownames(coef))
+        coef = as.data.table(coef)
+        setnames(coef, c('estimate', 'se', 't'))
+        out = data.table(name = nm) %>% cbind(coef)
+        out$p =  pnorm(abs(out$t), lower.tail = FALSE) * 2
+        out[, ci.lower := estimate-1.96*se]
+        out[, ci.upper := estimate+1.96*se]
+        out[, effect := paste(signif(estimate, 3), ' [',  signif(ci.lower,3),'-', signif(ci.upper, 3), ']', sep = '')]
+    }
+    else
+    {
+        out = data.frame(name = nm, method = x$method, p = signif(x$p.value, 3), estimate = x$estimate, ci.lower = x$conf.int[1], ci.upper = x$conf.int[2], effect = paste(signif(x$estimate, 3), ' [',  signif(x$conf.int[1],3),'-', signif(x$conf.int[2], 3), ']', sep = ''))
+    }
+
+    out$effect = as.character(out$effect)
+    out$name = as.character(out$name)
+    out$method = as.character(out$method)
+    rownames(out) = NULL
+    return(as.data.table(out))
+}
+
+
+#' @name .waviness
+#'
+#' quantifies autocorrelation in coverage
+.waviness = function(x, y, min.thresh = 5e3, max.thresh = 10e4, spar = 0.5, smooth = TRUE, filter = rep(FALSE, length(x)), trim = 10) {
+    if(length(x)==0) return(NA)
+    dat = data.table(x, y)[order(x), ]
+    dat[, lag := x-min(x)]
+    fdat = dat[!is.na(y), ][!is.infinite(y), ]
+    ## autocorrelation
+    if(nrow(fdat)==0) return(NA)
+    fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
+    if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
+        fdat = fdat[!is.na(lag) & !is.na(ac),]
+        if (nrow(fdat[!is.na(lag) & !is.na(ac),])<4)
+            return(NA)
+        fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
+    }
+    return(fdat[lag>min.thresh & lag<max.thresh, sum(ac^2)])
+}
+
+#' @name .mod
+#'
+#' fit data table with glm and return residuals
+.mod = function(dt){
+    mod = dt[, glm(counts ~ tumor + fused + ix, family='gaussian')]
+    res = dt$counts - predict(mod, dt, type='response')
+    return(res)
+}
+
+#' @name .mod2
+#'
+#' fit data table with glm and return residuals
+.mod2 = function(dt){
+    mod = dt[, glm(counts ~ tumor + ix, family='gaussian')]
+    res = dt$counts - predict(mod, dt, type='response')
+    return(res)
+}
