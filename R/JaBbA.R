@@ -1313,7 +1313,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
         l[, leix := 1:.N]
         l = dt2gr(l)
-        le.class = filter.loose(gg, cov = coverage, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
+        le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
 
         ## ## load coverage and beta (coverage CN fit)
         ## if (is.character(coverage)){

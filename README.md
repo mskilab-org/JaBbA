@@ -19,7 +19,6 @@ JaBbA builds a genome graph based on junctions and read depth from whole genome 
 If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structural Variation Uncovered across Thousands of Cancer Genome Graphs](https://doi.org/10.1016/j.cell.2020.08.006)
 
 ## Table of contents
-- [JaBbA (Junction Balance Analysis)](#jabba-junction-balance-analysis)
 	- [Table of contents](#table-of-contents)
 	- [Installation](#installation)
 	- [Usage](#usage)
