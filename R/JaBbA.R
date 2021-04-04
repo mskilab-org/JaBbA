@@ -109,6 +109,8 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param verbose logical whether to print out the most verbose version of progress log
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param dyn.tuning logical whether to let JaBbA dynamically tune the convergence criteria, default TRUE
+#' @param lp logical indicating whether to run as linear program, default FALSE
+#' @param ism logical indicating wehther to add ism constraints. default FALSE. only used if lp = TRUE
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -156,7 +158,9 @@ JaBbA = function(## Two required inputs
                  overwrite = FALSE,
                  verbose = TRUE,
                  init = NULL,
-                 dyn.tuning = TRUE)
+                 dyn.tuning = TRUE,
+                 lp = FALSE,
+                 ism = FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -381,7 +385,9 @@ JaBbA = function(## Two required inputs
                 verbose = as.numeric(verbose),
                 dyn.tuning = dyn.tuning,
                 geno = geno,
-                cn.signif = cn.signif)
+                cn.signif = cn.signif,
+                lp = lp,
+                ism = ism)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -546,7 +552,9 @@ JaBbA = function(## Two required inputs
             verbose = as.numeric(verbose),
             dyn.tuning = dyn.tuning,
             geno = geno,
-            cn.signif = cn.signif)
+            cn.signif = cn.signif,
+            lp = lp,
+            ism = ism)
     }
     setwd(cdir)
     return(jab)
@@ -602,6 +610,8 @@ JaBbA = function(## Two required inputs
 #' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param lp whether to run as linear program (default FALSE)
+#' @param ism logical whether to add ISM constraints default FALSE
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -636,6 +646,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       indel = "exclude", ## default should be nothing
                       min.nbins = 5, ## default to 5, if larger bin can reduce
                       overwrite = F, ## whether to overwrite existing output in outdir
+                      lp = FALSE, ## whether to run as linear program
+                      ism = FALSE, ## add ISM constraints (only used if lp = TRUE)
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
@@ -1127,7 +1139,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty,
                    loose.penalty.mode = loose.penalty.mode,
-                   dyn.tuning = dyn.tuning)
+                   dyn.tuning = dyn.tuning,
+                   lp = lp,
+                   ism = ism)
     }
 
 
@@ -2248,7 +2262,9 @@ ramip_stub = function(kag.file,
                       ab.exclude = NULL,
                       loose.penalty.mode = "boolean",
                       dyn.tuning = TRUE,
-                      debug.ix = NULL)
+                      debug.ix = NULL,
+                      lp = FALSE,
+                      ism = FALSE)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2448,26 +2464,35 @@ ramip_stub = function(kag.file,
                                 dims = dim(this.kag$adj))
     }
 
-    ra.sol = jbaMIP(this.kag$adj,
-                    this.kag$segstats,
-                    beta = this.kag$beta,
-                    gamma = this.kag$gamma,
-                    tilim = tilim,
-                    slack.prior = slack.prior,
-                    mipemphasis = 0,
-                    mipstart = mipstart, ## make mipstart if not provided
-                    adj.lb = adj.lb,
-                    epgap = epgap,
-                    adj.ub = adj.ub,
-                    use.gurobi = use.gurobi,
-                    mc.cores = mc.cores,
-                    adj.nudge = adj.nudge,
-                    outdir = outdir,
-                    cn.ub = rep(500, length(this.kag$segstats)),
-                    use.L0 = loose.penalty.mode == 'boolean',
-                    verbose = verbose,
-                    dyn.tuning = dyn.tuning,
-                    debug.ix = debug.ix)
+    if (lp) {
+        ra.sol = jbaLP(kag.file = kag.file,
+                       verbose = verbose,
+                       tilim = tilim,
+                       epgap = epgap,
+                       lambda = 1/slack.prior,
+                       ism = ism)
+    } else {
+        ra.sol = jbaMIP(this.kag$adj,
+                        this.kag$segstats,
+                        beta = this.kag$beta,
+                        gamma = this.kag$gamma,
+                        tilim = tilim,
+                        slack.prior = slack.prior,
+                        mipemphasis = 0,
+                        mipstart = mipstart, ## make mipstart if not provided
+                        adj.lb = adj.lb,
+                        epgap = epgap,
+                        adj.ub = adj.ub,
+                        use.gurobi = use.gurobi,
+                        mc.cores = mc.cores,
+                        adj.nudge = adj.nudge,
+                        outdir = outdir,
+                        cn.ub = rep(500, length(this.kag$segstats)),
+                        use.L0 = loose.penalty.mode == 'boolean',
+                        verbose = verbose,
+                        dyn.tuning = dyn.tuning,
+                        debug.ix = debug.ix)
+    }
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -8035,7 +8060,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## prep glm input matrix
     if(verbose) message("Prepping GLM input matrix")
-    glm.in = melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+    glm.in = melt.data.table(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
     glm.in[, ix := 1:.N, by=leix]
     rel2 = copy(glm.in)
     setnames(glm.in, "leix", "leix2")
