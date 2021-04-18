@@ -1013,7 +1013,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         verbose = verbose,
                         ab.exclude = ab.exclude,
                         ab.force = ab.force,
-                        max.na = max.na)
+                        max.na = max.na,
+                        lp = lp)
     } else {
         jwarning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -1683,7 +1684,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            max.na = -1,
                            ## subsample = NULL,
                            ab.exclude = NULL,
-                           ab.force = NULL){
+                           ab.force = NULL,
+                           lp = FALSE){
     loose.ends = GRanges()
 
     if (!is.null(ra)){
@@ -1943,7 +1945,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
                                      verbose = verbose,
-                                     max.na = max.na)
+                                     max.na = max.na,
+                                     lp = lp)
     } else {
         this.kag$segstats = segstats(this.kag$tile,
                                      this.cov,
@@ -1953,7 +1956,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      ## subsample = subsample,
                                      mc.cores = mc.cores,
                                      verbose = verbose,
-                                     max.na = max.na)
+                                     max.na = max.na,
+                                     lp = lp)
     }
 
     this.kag$segstats$ncn = 2
@@ -2558,6 +2562,7 @@ ramip_stub = function(kag.file,
 #' @param afields length 2 character vector meta data fields of asignal GRanges that will be used to get allele counts (default is ref.count, alt.count)
 #' ## @param subsample number between 0 and 1 with which to subsample per segment for coverage (useful for superdense coverage eg 50 bases to avoid correlations between samples due to read overlap)
 #' @param mc.cores number of cores to run on (default 1)
+#' @param lp (logical) if running LP use binstats-style loess smoothing
 ###########################################
 segstats = function(target,
                     signal = NULL,
@@ -2576,7 +2581,8 @@ segstats = function(target,
                     ## subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
-                    ksamp_prior = 100  ## size of data samples to estimate alpha / beta prior values
+                    ksamp_prior = 100, ## size of data samples to estimate alpha / beta prior values
+                    lp = FALSE
                     )
 {
     if (!is.null(asignal))
@@ -2871,9 +2877,16 @@ segstats = function(target,
         ## get the bayesian point estimator (expectation of posterior distribution)
         ## with conjugate prior of scaled inverse chi-sq
         ## min allowable var
-        loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
-        loe = loe.middle.i
-        utarget$loess.var = predict(loe, utarget$mean)
+        if (lp) {
+            min.var = pmax(0.1, min(tmp$var, na.rm = TRUE)) ## hard-coded min
+            loe.middle.i = tmp[!is.na(var) & !is.na(mean), loess(var ~ mean, weights = nbins)]
+            loe = loe.middle.i
+            utarget$loess.var = pmax(min.var, predict(loe, utarget$mean))
+        } else {
+            loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
+            loe = loe.middle.i
+            utarget$loess.var = predict(loe, utarget$mean)
+        }
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
         ## neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
