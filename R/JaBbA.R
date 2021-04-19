@@ -2878,16 +2878,9 @@ segstats = function(target,
         ## with conjugate prior of scaled inverse chi-sq
         ## min allowable var
 
-        if (lp) {
-            min.var = pmax(0.1, min(tmp$var, na.rm = TRUE)) ## hard-coded min
-            loe.middle.i = tmp[!is.na(var) & !is.na(mean), loess(var ~ mean, weights = nbins)]
-            loe = loe.middle.i
-            utarget$loess.var = pmax(min.var, predict(loe, utarget$mean))
-        } else {
-            loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
-            loe = loe.middle.i
-            utarget$loess.var = predict(loe, utarget$mean)
-        }
+        loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
+        loe = loe.middle.i
+        utarget$loess.var = predict(loe, utarget$mean)
         ## hyperparameter neu, same unit as sample size,
         ## the larger the more weight is put on prior
         ## neu = median(target$nbins, na.rm=T)## neu = 5 ## let's start with this
@@ -2934,6 +2927,13 @@ segstats = function(target,
         utarget$var[utarget$mean>=rrm[2]] = rrv[2]
         ## no negative var!
         utarget$var[utarget$var<=0] = rrv[1]
+
+        ## if running LP, update loess.var as well
+        if (lp) {
+            utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
+            utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
+            utarget$loess.var[utarget$var<=0] = rrv[1]
+        }
 
         pdf("var.mean.loess.pdf")
         ## all points training

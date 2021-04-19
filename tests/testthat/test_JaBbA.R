@@ -154,6 +154,30 @@ jab.reiterate = JaBbA(junctions = jj,
                       epgap = 0.01,
                       dyn.tuning = FALSE)
 
+## LP unit testing
+## this test verfies consistency between LP and QP solutions
+jab.lp = suppressWarnings(
+    JaBbA(junctions = jj,
+          coverage = cf,
+          whitelist.junctions = whitelist.junctions,
+          blacklist.coverage = blacklist.coverage,
+          slack.penalty = 10,
+          hets = ht,
+          tilim = 60,
+          cfield = 'nudge',
+          verbose = 2,
+          outdir = './JaBbA.lp',
+          overwrite = TRUE,
+          ploidy=4.5,## preset HCC1954
+          purity=1,
+          epgap = 0.01,
+          all.in = TRUE,
+          tfield = 'nothing',
+          nudge.balanced = TRUE,
+          dyn.tuning = FALSE,
+          lp = TRUE)
+)
+
 ## for testing purposes, print out the exact output
 print('jab cn')
 print(list.expr(
@@ -170,6 +194,9 @@ print(list.expr(
 
 print('jab.reiterate junctions cn')
 print(list.expr(values(jab.reiterate$junctions$grl)$cn))
+
+print('jab.lp junctions cn')
+print(list.expr(values(jab.lp$junctions$grl)$cn))
 
 ## print('jab.reiterate purity ploidy')
 ## print(paste(jab.reiterate$purity, jab.reiterate$ploidy))
@@ -251,4 +278,7 @@ test_that("JaBbA", {
     ##         values(jab.reiterate$junctions$grl)$cn,
     ##         c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4, 5, 4, 4, 5, 5, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 28, 26, 6, 26, 31, 22, 19, 22, 31, 1, 31, 27, 5, 3, 24, 4, 3, 1, 3, 4, 3, 3, 3, 3, 10, 5, 10, 0, 0)),
     ##     info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
+    print("Comparing results from LP mode with L0 penalty")
+    expect_true(identical(jab.lp$nodes$dt[!is.na(cn) & cn > 0, cn], c(5, 3, 2, 4, 5, 3, 5, 3, 2, 3, 5)))
+    expect_true(identical(jab.lp$junctions$dt$cn, c(3, 2, 2, 1, 2, 4, 3, 2, 3, 3, 2, 2, 1, 2, 3)))
 })

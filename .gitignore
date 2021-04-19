@@ -14,6 +14,7 @@ man/
 raw.prm
 raw.sols.rds
 src/
+tests/testthat/JaBbA.lp/
 tests/testthat/JaBbA.reiterate/
 tests/testthat/JaBbA/
 tests/testthat/raw.prm
