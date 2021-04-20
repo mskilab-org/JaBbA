@@ -2929,11 +2929,17 @@ segstats = function(target,
         utarget$var[utarget$var<=0] = rrv[1]
 
         ## if running LP, update loess.var as well
-        if (lp) {
-            utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
-            utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
-            utarget$loess.var[utarget$var<=0] = rrv[1]
-        }
+        ## if (lp) {
+        ##     jmessage("Running LP mode, filling in loess.var")
+        ##     utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
+        ##     utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
+        ##     utarget$loess.var[utarget$var<=0] = rrv[1]
+        ## }
+
+        ## fill in loess.var generally
+        utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
+        utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
+        utarget$loess.var[utarget$var<=0] = rrv[1]
 
         pdf("var.mean.loess.pdf")
         ## all points training
