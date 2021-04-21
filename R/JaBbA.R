@@ -2107,8 +2107,12 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 ## only running w/ chr1-22 and X
                 sites = sites[which(chromosome %in% seqlevels(ss.tmp))]
             }
-            sites[, Af := 1-Bf] ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
+            sites[, Af := 1-Bf]
+            ## zchoo Wednesday, Apr 21, 2021 02:02:54 PM
+            ## re-factor sites chromosome column to exclude Y as empty factor level
+            sites[, chromosome = factor(chromosome)]
 
+            ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
             ## twalradt Thursday, Apr 26, 2018 02:58:23 PM They wrote '10e6' in their documentation
             seg.filtered  = seg.s1[(seg.s1$end.pos - seg.s1$start.pos) > 1e6, ]
