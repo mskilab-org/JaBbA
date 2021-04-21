@@ -158,9 +158,12 @@ jab.reiterate = JaBbA(junctions = jj,
 ## this test verfies consistency between LP and QP solutions
 jab.lp = suppressWarnings(
     JaBbA(junctions = jj,
-          coverage = cf,
+                    coverage = cf,
           whitelist.junctions = whitelist.junctions,
           blacklist.coverage = blacklist.coverage,
+          ## seg = segs,
+          ## nseg = nsegs,
+          ## strict = TRUE,
           slack.penalty = 10,
           hets = ht,
           tilim = 60,
@@ -172,9 +175,10 @@ jab.lp = suppressWarnings(
           purity=1,
           epgap = 0.01,
           all.in = TRUE,
+          ## juncs.uf = juncs.fn,
           tfield = 'nothing',
           nudge.balanced = TRUE,
-          dyn.tuning = FALSE,
+          dyn.tuning = TRUE,
           lp = TRUE)
 )
 
