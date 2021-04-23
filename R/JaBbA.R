@@ -801,22 +801,22 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
-            if (length(gap.seg)>0){
-                bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
-            } else {
-                bps = gr.start(seg)[, c()]
-            }
+            ## gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
+            ## if (length(gap.seg)>0){
+            ##     bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+            ## } else {
+            ##     bps = gr.start(seg)[, c()]
+            ## }
             
-            ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
-            new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
-            names(new.segs) = NULL
-            seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+            ## ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
+            ## new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+            ## names(new.segs) = NULL
+            ## seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
 
-            if (verbose)
-            {
-                jmessage(length(seg), ' segments produced')
-            }
+            ## if (verbose)
+            ## {
+            ##     jmessage(length(seg), ' segments produced')
+            ## }
         }
         else
         {
@@ -836,10 +836,40 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    saveRDS(seg, seg.fn)
-
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
+
+    ## zchoo Friday, Apr 23, 2021 10:39:19 AM
+    ## make gap filtering a general preprocessing step
+
+    ## filter small gaps between segments containing less than ten bins
+    binw = median(sample(width(coverage), 30), na.rm = TRUE)
+    all.gaps = IRanges::gaps(seg)
+    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
+
+    if (verbose) {
+        n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
+        jmessage("Number of gaps with nonzero width: ", n.gaps)
+        jmessage("Number of segments before gap filtering: ", n.gaps + length(seg))
+    }
+    
+    if (length(gap.seg)>0){
+        bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+    } else {
+        bps = gr.start(seg)[, c()]
+    }
+
+    ## create new segments from the breakpoints of the old segments plus big gaps
+    new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+    names(new.segs) = NULL
+    seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+
+    if (verbose)
+    {
+        jmessage(length(seg), ' segments produced after gap filtering')
+    }
+
+    saveRDS(seg, seg.fn)
 
     if (!is.null(hets))
     {
@@ -8035,7 +8065,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## prep glm input matrix
     if(verbose) message("Prepping GLM input matrix")
-    glm.in = melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+    glm.in = melt.data.table(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
     glm.in[, ix := 1:.N, by=leix]
     rel2 = copy(glm.in)
     setnames(glm.in, "leix", "leix2")
