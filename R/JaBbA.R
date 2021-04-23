@@ -2519,8 +2519,7 @@ ramip_stub = function(kag.file,
                        tilim = tilim,
                        epgap = epgap,
                        lambda = 1/slack.prior,
-                       ism = ism,
-                       postprocess = FALSE)
+                       ism = ism)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -2881,6 +2880,19 @@ segstats = function(target,
                          mean = utarget$mean,
                          nbins = utarget$nbins,
                          bad = utarget$bad)[var>0 & nbins>MINBIN & !bad, ]
+
+        ## if (lp) {
+        ##     browser()
+        ##     bins.gr = gr.tile(signal, 5e5)
+        ##     bins.gr$id = 1:length(bins.gr)
+        ##     bins.dt = as.data.table(signal %$% bins.gr) %>% setnames(field, "cn")
+        ##     tmp = bins.dt[, .(mean = mean(cn, na.rm = TRUE),
+        ##                           var = var(cn, na.rm = TRUE),
+        ##                           nbins = sum(!is.na(cn), na.rm = TRUE))][nbins > MINBIN & var > 0,]
+        ## }
+            
+                                  
+            
 
         ## xtYao ## Thursday, Feb 18, 2021 02:07:22 PM
         ## To prevent extreme outlying variances, limit traing data to variance between 0.05 and 0.95 quantile
