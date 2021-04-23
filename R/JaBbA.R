@@ -345,6 +345,15 @@ JaBbA = function(## Two required inputs
                 jmessage("Using ploidy ", ploidy,
                          " and purity ", purity,
                          " consistent with the initial iteration")
+
+                if (lp) {
+                    jmessage("Using segments from JaBbA output of previous iteration")
+                    seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
+                    seg = readRDS(seg.fn)$segstats[, c()]
+                    seg = seg %Q% (strand(seg) == "+")
+                    seg = gr.stripstrand(seg)
+                }
+                
             }
 
             this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
@@ -813,17 +822,19 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
-            if (length(gap.seg)>0){
-                bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
-            } else {
-                bps = gr.start(seg)[, c()]
-            }
+            ## zchoo Thursday, Apr 22, 2021 06:40:40 PM
+            ## Removed this block as it should be caught below.
+            ## gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
+            ## if (length(gap.seg)>0){
+            ##     bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+            ## } else {
+            ##     bps = gr.start(seg)[, c()]
+            ## }
             
-            ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
-            new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
-            names(new.segs) = NULL
-            seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+            ## ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
+            ## new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+            ## names(new.segs) = NULL
+            ## seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
 
             if (verbose)
             {
@@ -848,10 +859,42 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    saveRDS(seg, seg.fn)
-
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
+
+    if (verbose) {
+        jmessage('Checking segments and removing small gaps < 1kbp')
+    }
+
+    #' zchoo Thursday, Apr 22, 2021 07:05:18 PM
+    ## apply preprocessing to remove small gaps between segments (< 1kbp)
+    ## compute bin width
+    binw = median(sample(width(coverage), 30), na.rm=T)
+
+    ## find gaps with less than ten bins
+    all.gaps = IRanges::gaps(seg)
+    gap.seg = all.gaps[which(as.character(strand(all.gaps))=="*" & width(all.gaps) > (10 * binw))]
+    
+    if (length(gap.seg)>0){
+        bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+    } else {
+        bps = gr.start(seg)[, c()]
+    }
+
+    new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+    names(new.segs) = NULL
+    seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+
+    if (verbose)
+    {
+        jmessage('Number of gaps with nonzero width: ',
+                 length(all.gaps[width(all.gaps) > 0 & strand(all.gaps) == "*"]))
+        jmessage('Number of gaps with width > 10 * binw: ',
+                 length(all.gaps[width(all.gaps) > 1e3 & strand(all.gaps) == "*"]))
+        jmessage(length(seg), ' segments produced')
+    }
+
+    saveRDS(seg, seg.fn)
 
     if (!is.null(hets))
     {
@@ -2110,7 +2153,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             sites[, Af := 1-Bf]
             ## zchoo Wednesday, Apr 21, 2021 02:02:54 PM
             ## re-factor sites chromosome column to exclude Y as empty factor level
-            sites[, chromosome = factor(chromosome)]
+            sites[, chromosome := factor(as.character(chromosome))]
+            sqz.seg$chromosome = factor(as.character(sqz.seg$chromosome))
 
             ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
@@ -2478,7 +2522,9 @@ ramip_stub = function(kag.file,
                        tilim = tilim,
                        epgap = epgap,
                        lambda = 1/slack.prior,
-                       ism = ism)
+                       ism = ism,
+                       postprocess = FALSE)
+
     } else {
         ra.sol = jbaMIP(this.kag$adj,
                         this.kag$segstats,
