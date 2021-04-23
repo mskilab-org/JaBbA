@@ -2848,7 +2848,7 @@ segstats = function(target,
         {
             warning(sprintf('Could not find enough (>=10) segments with more than %s bins for modeling mean to variance relationship in data.  Data might be hypersegmented.', MINBIN))
         }
-
+        
         ## overdispersion correction
         ##lmd = tmp[, lm(var ~ mean)]
         ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2)]
@@ -2877,6 +2877,8 @@ segstats = function(target,
         ## with conjugate prior of scaled inverse chi-sq
         ## min allowable var
         loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
+
+        ## loe.middle.i = tmp[middle.mean, loess(var ~ mean, weights = nbins, span = 5)]
         loe = loe.middle.i
         utarget$loess.var = predict(loe, utarget$mean)
         ## hyperparameter neu, same unit as sample size,
@@ -2975,6 +2977,114 @@ segstats = function(target,
         {
             warning('Ratio of highest and lowest segment variances exceed 1e7. This could result from very noisy bin data and/or extreme hypersegmentation.  Downstream optimization results may be unstable.')
         }
+
+        ## browser()
+        ## ## debug
+        ## library(ggplot2)
+        ## tdt = gr2dt(utarget)
+        ## tdt[, in.tmp := raw.var>0 & nbins>MINBIN & !bad]
+        ## tdt = tdt[order(raw.mean)]
+
+        ## ppdf({
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp, shape = bad)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") + 
+        ##         scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[(in.tmp)] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp, shape = bad)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") + 
+        ##         scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[(in.tmp)] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[raw.mean>25 & nbins>2] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.var, y = var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp)) +
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ## })
 
         ## finally copy all metadata from utarget to target
         values(target) = values(utarget)[gr.match(target, utarget), ]
@@ -6446,14 +6556,6 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
-    ## =======
-    ##     stopifnot(inherits(ra, "GRangesList"))
-    ##     if (length(ra)>0){
-    ##         stopifnot(all(elementNROWS(ra)==2))
-    ##         stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
-    ##         stopifnot(all(as.numeric(width(unlist(ra)))==1))
-    ##     }
-    ## >>>>>>> 0988b41049a833b592e36b402fb647f2b8e8f251
     return(ra)
 }
 
@@ -8003,6 +8105,8 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
     if(is.null(ploidy)) {
         ploidy = weighted.mean(gg$nodes$gr$cn, gg$nodes$gr %>% width, na.rm=T)
     }
+    ## remove bins with infinite values up front
+    cov = cov[which(is.finite(cov$ratio) & !is.na(cov$ratio))]
     ratios = cov$ratio
     beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
     segs = gg$nodes$gr
@@ -8026,6 +8130,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## gather coverage bins corresponding to fused & unfused sides of loose ends
     if(verbose) jmessage("Overlapping coverage with loose end fused and unfused sides")
+
     rel = gr.findoverlaps(cov, sides)
     values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
     qq = 0.05

@@ -43,6 +43,7 @@ test_that("reciprocal.cycles", {
 })
 
 cov.gr = dt2gr(fread(cov.fn))
+cov.gr$read_depth = cov.gr$ratio
 hets.gr = dt2gr(fread(hets)[, ":="(mean_high = pmax(alt, ref), mean_low = pmin(alt, ref))])
 segs.gr = readRDS(segs) %$% cov.gr[, 'ratio'] %$% hets.gr[, c('mean_high', 'mean_low')]
 segs.gr$mean = segs.gr$ratio
@@ -138,6 +139,7 @@ jab = suppressWarnings(
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = jj,
                       coverage = cf,
+                      field = "ratio2",
                       blacklist.junctions = blacklist.junctions,
                       hets = hr,
                       slack.penalty = 10,
