@@ -822,8 +822,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            ## zchoo Thursday, Apr 22, 2021 06:40:40 PM
-            ## Removed this block as it should be caught below.
             ## gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
             ## if (length(gap.seg)>0){
             ##     bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
@@ -836,10 +834,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             ## names(new.segs) = NULL
             ## seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
 
-            if (verbose)
-            {
-                jmessage(length(seg), ' segments produced')
-            }
+            ## if (verbose)
+            ## {
+            ##     jmessage(length(seg), ' segments produced')
+            ## }
         }
         else
         {
@@ -862,18 +860,19 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
 
-    if (verbose) {
-        jmessage('Checking segments and removing small gaps < 1kbp')
-    }
+    ## zchoo Friday, Apr 23, 2021 10:39:19 AM
+    ## make gap filtering a general preprocessing step
 
-    #' zchoo Thursday, Apr 22, 2021 07:05:18 PM
-    ## apply preprocessing to remove small gaps between segments (< 1kbp)
-    ## compute bin width
-    binw = median(sample(width(coverage), 30), na.rm=T)
-
-    ## find gaps with less than ten bins
+    ## filter small gaps between segments containing less than ten bins
+    binw = median(sample(width(coverage), 30), na.rm = TRUE)
     all.gaps = IRanges::gaps(seg)
-    gap.seg = all.gaps[which(as.character(strand(all.gaps))=="*" & width(all.gaps) > (10 * binw))]
+    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
+
+    if (verbose) {
+        n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
+        jmessage("Number of gaps with nonzero width: ", n.gaps)
+        jmessage("Number of segments before gap filtering: ", n.gaps + length(seg))
+    }
     
     if (length(gap.seg)>0){
         bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
@@ -881,17 +880,15 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         bps = gr.start(seg)[, c()]
     }
 
+
+   ## create new segments from the breakpoints of the old segments plus big gaps
     new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
     names(new.segs) = NULL
     seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
 
     if (verbose)
     {
-        jmessage('Number of gaps with nonzero width: ',
-                 length(all.gaps[width(all.gaps) > 0 & strand(all.gaps) == "*"]))
-        jmessage('Number of gaps with width > 10 * binw: ',
-                 length(all.gaps[width(all.gaps) > 1e3 & strand(all.gaps) == "*"]))
-        jmessage(length(seg), ' segments produced')
+        jmessage(length(seg), ' segments produced after gap filtering')
     }
 
     saveRDS(seg, seg.fn)
@@ -6619,14 +6616,6 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
-    ## =======
-    ##     stopifnot(inherits(ra, "GRangesList"))
-    ##     if (length(ra)>0){
-    ##         stopifnot(all(elementNROWS(ra)==2))
-    ##         stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
-    ##         stopifnot(all(as.numeric(width(unlist(ra)))==1))
-    ##     }
-    ## >>>>>>> 0988b41049a833b592e36b402fb647f2b8e8f251
     return(ra)
 }
 
@@ -8241,7 +8230,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## prep glm input matrix
     if(verbose) message("Prepping GLM input matrix")
-    glm.in = data.table::melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+    glm.in = melt.data.table(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
     glm.in[, ix := 1:.N, by=leix]
     rel2 = copy(glm.in)
     setnames(glm.in, "leix", "leix2")
