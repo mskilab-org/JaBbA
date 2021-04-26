@@ -1,7 +1,7 @@
 #' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
-#' @importFrom gGnome gG
+#' @importFrom gGnome gG balance
 #' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
 #' @importFrom gTrack gTrack
 #' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
@@ -2536,7 +2536,8 @@ ramip_stub = function(kag.file,
 }
 
 ##############################
-#' @name .ramip_stub
+#' @name segstats
+#' @title segstats
 #' @rdname internal
 #' segstats is a step in the JaBbA pipeline
 #'
@@ -3107,7 +3108,155 @@ jwarning = function(..., pre = 'JaBbA', call. = FALSE)
 jerror = function(..., pre = 'JaBbA', call. = TRUE)
     stop(paste0(pre, ' ', paste0(as.character(Sys.time()), ': '), ...), call. = call.)
 
+#' @name jbaLP
+#' @title jbaLP
+#' @rdname internal
+#' jbaLP
+#' 
+#' @details 
+#'
+#' LP analog of jbaMIP
+#'
+#' @param kag.file (character)
+#' @param kag (karyograph object)
+#' @param cn.field (character) column in karyograph with CN guess, default cnmle
+#' @param var.field (character) column in karyograph with node variance estimate, default loess.var
+#' @param bins.field (character) column in karyograph containing number of bins, default nbins
+#' @param min.var (numeric) min allowable variance default 1e-3
+#' @param min.bins (numeric) min allowable bins default 1
+#' @param lambda (numeric) slack penalty, default 100
+#' @param L0 (logical) default TRUE
+#' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP
+#' @param tilim (numeric) default 1e3
+#' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
+#' @param epgap (numeric) default 1e-3
+#'
+#' @return
+#' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
+#' 
+#' @author Marcin Imielinski, Zi-Ning Choo
+jbaLP = function(kag.file = NULL,
+                 kag = NULL,
+                 cn.field = "cnmle",
+                 var.field = "loess.var",
+                 bins.field = "nbins",
+                 min.var = 1e-3,
+                 min.bins = 1,
+                 lambda = 100,
+                 L0 = TRUE,
+                 verbose = 2,
+                 tilim = 1e3,
+                 ism = TRUE,
+                 epgap = 1e-3)
+{
+    if (is.null(kag.file) & is.null(kag)) {
+        stop("one of kag or kag.file must be supplied")
+    }
+    if (!is.null(kag.file) & !is.null(kag)) {
+        warning("both kag.file and kag supplied. using kag.")
+    }
+    if (!is.null(kag)) {
+        if (verbose) {
+            message("using supplied karyograph")
+        }
+    } else {
+        if (file.exists(kag.file)) {
+            if (verbose) {
+                message("reading karyograph from file")
+            }
+            kag = readRDS(kag.file)
+        } else {
+            stop("kag.file does not exist and kag not supplied")
+        }
+    }
+    kag.gg = gG(jabba = kag)
+
+    if (verbose) {
+        message("Marking nodes with cn contained in column: ", cn.field)
+    }
+    
+    if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
+        stop("karyograph must have field specified in cn.field")
+    }
+    kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+
+    if (verbose) {
+        message("Computing node weights using variance contained in column: ", var.field)
+    }
+    
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]]) | is.null(values(kag.gg$nodes$gr)[[bins.field]])) {
+        warning("karyograph missing var.field. setting weights to node widths")
+        wts = width(kag.gg$nodes$gr)
+    } else {
+        
+        ## process variances
+        vars = values(kag.gg$nodes$gr)[[var.field]]
+        vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
+        sd = sqrt(vars) * kag$beta ## rel2abs the standard deviation
+
+        ## process bins
+        bins = values(kag.gg$nodes$gr)[[bins.field]]
+        bins = ifelse(bins < min.bins, NA, bins)
+
+        ## compute node weights
+        wts = bins / (sd / sqrt(2)) ## for consistency with Laplace distribution
+        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
+    }
+    kag.gg$nodes$mark(weight = wts)
+    
+    ## no edge CNs
+    kag.gg$edges$mark(cn = NULL)
+    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
+    if (verbose) {
+        message("Starting LP balance on gGraph with...")
+        message("Number of nodes: ", length(kag.gg$nodes))
+        message("Number of edges: ", length(kag.gg$edges))
+    }
+
+    res = balance(kag.gg,
+                  debug = TRUE,
+                  lambda = lambda,
+                  L0 = L0,
+                  verbose = verbose,
+                  tilim = tilim,
+                  epgap = epgap,
+                  lp = TRUE,
+                  ism = ism)
+    
+    bal.gg = res$gg
+    sol = res$sol
+    
+    ## just replace things in the outputs
+    ## this can create weird errors if the order of kag and bal.gg isn't the same
+    out = copy(kag)
+    new.segstats = bal.gg$gr
+    nnodes = length(new.segstats)
+
+    new.segstats$cl = 1 ## everything same cluster
+    new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
+    
+    ## weighted adjacency
+    adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                       x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    ## add the necessary columns
+    new.segstats$ecn.in = Matrix::colSums(adj)
+    new.segstats$ecn.out = Matrix::rowSums(adj)
+    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    out$adj = adj
+
+    ## add metadata
+    out$segstats = new.segstats
+    out$status = sol$status
+    out$epgap = sol$epgap
+    return(out)
+}
+
 #' @name jbaMIP
+#' @title jbaMIP
 #' @rdname internal
 #' jbaMIP
 #'
@@ -4552,6 +4701,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
 ####################################################################
 #' @name JaBbA.digest
+#' @title JaBbA.digest
 #' @rdname internal
 #' JaBbA.digest
 #'
@@ -6560,6 +6710,7 @@ verify.junctions = function(ra){
 }
 
 #' @name karyograph
+#' @title karyograph
 #' @rdname internal
 #' karyograph
 #'
