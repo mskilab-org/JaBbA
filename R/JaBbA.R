@@ -3198,6 +3198,7 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param min.bins (numeric) min allowable bins default 1
 #' @param lambda (numeric) slack penalty, default 100
 #' @param L0 (logical) default TRUE
+#' @param M (numeric) max copy number, default 1e3
 #' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
@@ -3216,6 +3217,7 @@ jbaLP = function(kag.file = NULL,
                  min.bins = 1,
                  lambda = 100,
                  L0 = TRUE,
+                 M = 1e3,
                  verbose = 2,
                  tilim = 1e3,
                  ism = TRUE,
