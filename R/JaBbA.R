@@ -1,7 +1,7 @@
 #' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
-#' @importFrom gGnome gG
+#' @importFrom gGnome gG balance
 #' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
 #' @importFrom gTrack gTrack
 #' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
@@ -109,6 +109,8 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param verbose logical whether to print out the most verbose version of progress log
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param dyn.tuning logical whether to let JaBbA dynamically tune the convergence criteria, default TRUE
+#' @param lp logical indicating whether to run as linear program, default FALSE
+#' @param ism logical indicating wehther to add ism constraints. default FALSE. only used if lp = TRUE
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -156,7 +158,9 @@ JaBbA = function(## Two required inputs
                  overwrite = FALSE,
                  verbose = TRUE,
                  init = NULL,
-                 dyn.tuning = TRUE)
+                 dyn.tuning = TRUE,
+                 lp = FALSE,
+                 ism = FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -341,6 +345,15 @@ JaBbA = function(## Two required inputs
                 jmessage("Using ploidy ", ploidy,
                          " and purity ", purity,
                          " consistent with the initial iteration")
+
+                if (lp) {
+                    jmessage("Using segments from JaBbA output of previous iteration")
+                    seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
+                    seg = readRDS(seg.fn)$segstats[, c()]
+                    seg = seg %Q% (strand(seg) == "+")
+                    seg = gr.stripstrand(seg)
+                }
+                
             }
 
             this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
@@ -381,7 +394,9 @@ JaBbA = function(## Two required inputs
                 verbose = as.numeric(verbose),
                 dyn.tuning = dyn.tuning,
                 geno = geno,
-                cn.signif = cn.signif)
+                cn.signif = cn.signif,
+                lp = lp,
+                ism = ism)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -546,7 +561,9 @@ JaBbA = function(## Two required inputs
             verbose = as.numeric(verbose),
             dyn.tuning = dyn.tuning,
             geno = geno,
-            cn.signif = cn.signif)
+            cn.signif = cn.signif,
+            lp = lp,
+            ism = ism)
     }
     setwd(cdir)
     return(jab)
@@ -602,6 +619,8 @@ JaBbA = function(## Two required inputs
 #' @param slack.penalty  penalty to put on every loose.end copy, should be calibrated with respect to 1/(k*sd)^2 for each segment, i.e. that we are comfortable with junction balance constraints introducing k copy number deviation from a segments MLE copy number assignment (the assignment in the absence of junction balance constraints)
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
+#' @param lp whether to run as linear program (default FALSE)
+#' @param ism logical whether to add ISM constraints default FALSE
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -636,6 +655,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       indel = "exclude", ## default should be nothing
                       min.nbins = 5, ## default to 5, if larger bin can reduce
                       overwrite = F, ## whether to overwrite existing output in outdir
+                      lp = FALSE, ## whether to run as linear program
+                      ism = FALSE, ## add ISM constraints (only used if lp = TRUE)
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
@@ -801,22 +822,22 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             names(seg) = NULL
 
             ## Filter out small gaps in CBS output (<=1e3)
-            gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
-            if (length(gap.seg)>0){
-                bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
-            } else {
-                bps = gr.start(seg)[, c()]
-            }
+            ## gap.seg = IRanges::gaps(seg)[which(as.character(strand(seg))=="*" & width(seg) > (5 * binw))]
+            ## if (length(gap.seg)>0){
+            ##     bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+            ## } else {
+            ##     bps = gr.start(seg)[, c()]
+            ## }
             
-            ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
-            new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
-            names(new.segs) = NULL
-            seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+            ## ## keep the breakpoints of the big enough gaps (>10*binwidth), they may contain bad regions
+            ## new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+            ## names(new.segs) = NULL
+            ## seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
 
-            if (verbose)
-            {
-                jmessage(length(seg), ' segments produced')
-            }
+            ## if (verbose)
+            ## {
+            ##     jmessage(length(seg), ' segments produced')
+            ## }
         }
         else
         {
@@ -836,10 +857,41 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    saveRDS(seg, seg.fn)
-
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
+
+    ## zchoo Friday, Apr 23, 2021 10:39:19 AM
+    ## make gap filtering a general preprocessing step
+
+    ## filter small gaps between segments containing less than ten bins
+    binw = median(sample(width(coverage), 30), na.rm = TRUE)
+    all.gaps = IRanges::gaps(seg)
+    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
+
+    if (verbose) {
+        n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
+        jmessage("Number of gaps with nonzero width: ", n.gaps)
+        jmessage("Number of segments before gap filtering: ", n.gaps + length(seg))
+    }
+    
+    if (length(gap.seg)>0){
+        bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+    } else {
+        bps = gr.start(seg)[, c()]
+    }
+
+
+   ## create new segments from the breakpoints of the old segments plus big gaps
+    new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+    names(new.segs) = NULL
+    seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
+
+    if (verbose)
+    {
+        jmessage(length(seg), ' segments produced after gap filtering')
+    }
+
+    saveRDS(seg, seg.fn)
 
     if (!is.null(hets))
     {
@@ -1001,7 +1053,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                         verbose = verbose,
                         ab.exclude = ab.exclude,
                         ab.force = ab.force,
-                        max.na = max.na)
+                        max.na = max.na,
+                        lp = lp)
     } else {
         jwarning("Skipping over karyograph creation because file already exists and overwrite = FALSE")
     }
@@ -1127,7 +1180,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ploidy.max = ploidy,
                    slack.prior = 1/slack.penalty,
                    loose.penalty.mode = loose.penalty.mode,
-                   dyn.tuning = dyn.tuning)
+                   dyn.tuning = dyn.tuning,
+                   lp = lp,
+                   ism = ism)
     }
 
 
@@ -1669,7 +1724,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                            max.na = -1,
                            ## subsample = NULL,
                            ab.exclude = NULL,
-                           ab.force = NULL){
+                           ab.force = NULL,
+                           lp = FALSE){
     loose.ends = GRanges()
 
     if (!is.null(ra)){
@@ -1929,7 +1985,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      afields = c('ref', 'alt'),
                                      mc.cores = mc.cores,
                                      verbose = verbose,
-                                     max.na = max.na)
+                                     max.na = max.na,
+                                     lp = lp)
     } else {
         this.kag$segstats = segstats(this.kag$tile,
                                      this.cov,
@@ -1939,7 +1996,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                                      ## subsample = subsample,
                                      mc.cores = mc.cores,
                                      verbose = verbose,
-                                     max.na = max.na)
+                                     max.na = max.na,
+                                     lp = lp)
     }
 
     this.kag$segstats$ncn = 2
@@ -2089,8 +2147,13 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                 ## only running w/ chr1-22 and X
                 sites = sites[which(chromosome %in% seqlevels(ss.tmp))]
             }
-            sites[, Af := 1-Bf] ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
+            sites[, Af := 1-Bf]
+            ## zchoo Wednesday, Apr 21, 2021 02:02:54 PM
+            ## re-factor sites chromosome column to exclude Y as empty factor level
+            sites[, chromosome := factor(as.character(chromosome))]
+            sqz.seg$chromosome = factor(as.character(sqz.seg$chromosome))
 
+            ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
             ## twalradt Thursday, Apr 26, 2018 02:58:23 PM They wrote '10e6' in their documentation
             seg.filtered  = seg.s1[(seg.s1$end.pos - seg.s1$start.pos) > 1e6, ]
@@ -2248,7 +2311,9 @@ ramip_stub = function(kag.file,
                       ab.exclude = NULL,
                       loose.penalty.mode = "boolean",
                       dyn.tuning = TRUE,
-                      debug.ix = NULL)
+                      debug.ix = NULL,
+                      lp = FALSE,
+                      ism = FALSE)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2448,26 +2513,36 @@ ramip_stub = function(kag.file,
                                 dims = dim(this.kag$adj))
     }
 
-    ra.sol = jbaMIP(this.kag$adj,
-                    this.kag$segstats,
-                    beta = this.kag$beta,
-                    gamma = this.kag$gamma,
-                    tilim = tilim,
-                    slack.prior = slack.prior,
-                    mipemphasis = 0,
-                    mipstart = mipstart, ## make mipstart if not provided
-                    adj.lb = adj.lb,
-                    epgap = epgap,
-                    adj.ub = adj.ub,
-                    use.gurobi = use.gurobi,
-                    mc.cores = mc.cores,
-                    adj.nudge = adj.nudge,
-                    outdir = outdir,
-                    cn.ub = rep(500, length(this.kag$segstats)),
-                    use.L0 = loose.penalty.mode == 'boolean',
-                    verbose = verbose,
-                    dyn.tuning = dyn.tuning,
-                    debug.ix = debug.ix)
+    if (lp) {
+        ra.sol = jbaLP(kag.file = kag.file,
+                       verbose = verbose,
+                       tilim = tilim,
+                       epgap = epgap,
+                       lambda = 1/slack.prior,
+                       ism = ism)
+
+    } else {
+        ra.sol = jbaMIP(this.kag$adj,
+                        this.kag$segstats,
+                        beta = this.kag$beta,
+                        gamma = this.kag$gamma,
+                        tilim = tilim,
+                        slack.prior = slack.prior,
+                        mipemphasis = 0,
+                        mipstart = mipstart, ## make mipstart if not provided
+                        adj.lb = adj.lb,
+                        epgap = epgap,
+                        adj.ub = adj.ub,
+                        use.gurobi = use.gurobi,
+                        mc.cores = mc.cores,
+                        adj.nudge = adj.nudge,
+                        outdir = outdir,
+                        cn.ub = rep(500, length(this.kag$segstats)),
+                        use.L0 = loose.penalty.mode == 'boolean',
+                        verbose = verbose,
+                        dyn.tuning = dyn.tuning,
+                        debug.ix = debug.ix)
+    }
     saveRDS(ra.sol, out.file)
 
     ## ## report the optimization status
@@ -2506,7 +2581,8 @@ ramip_stub = function(kag.file,
 }
 
 ##############################
-#' @name .ramip_stub
+#' @name segstats
+#' @title segstats
 #' @rdname internal
 #' segstats is a step in the JaBbA pipeline
 #'
@@ -2533,6 +2609,7 @@ ramip_stub = function(kag.file,
 #' @param afields length 2 character vector meta data fields of asignal GRanges that will be used to get allele counts (default is ref.count, alt.count)
 #' ## @param subsample number between 0 and 1 with which to subsample per segment for coverage (useful for superdense coverage eg 50 bases to avoid correlations between samples due to read overlap)
 #' @param mc.cores number of cores to run on (default 1)
+#' @param lp (logical) if running LP use binstats-style loess smoothing
 ###########################################
 segstats = function(target,
                     signal = NULL,
@@ -2551,7 +2628,8 @@ segstats = function(target,
                     ## subsample = NULL, ## number between 0 and 1 to subsample per segment for coverage (useful for dense coverage)
                     mc.cores = 1,
                     nsamp_prior = 1e3, ## number of data samples to estimate alpha / beta prior value
-                    ksamp_prior = 100  ## size of data samples to estimate alpha / beta prior values
+                    ksamp_prior = 100, ## size of data samples to estimate alpha / beta prior values
+                    lp = FALSE
                     )
 {
     if (!is.null(asignal))
@@ -2804,6 +2882,19 @@ segstats = function(target,
                          nbins = utarget$nbins,
                          bad = utarget$bad)[var>0 & nbins>MINBIN & !bad, ]
 
+        ## if (lp) {
+        ##     browser()
+        ##     bins.gr = gr.tile(signal, 5e5)
+        ##     bins.gr$id = 1:length(bins.gr)
+        ##     bins.dt = as.data.table(signal %$% bins.gr) %>% setnames(field, "cn")
+        ##     tmp = bins.dt[, .(mean = mean(cn, na.rm = TRUE),
+        ##                           var = var(cn, na.rm = TRUE),
+        ##                           nbins = sum(!is.na(cn), na.rm = TRUE))][nbins > MINBIN & var > 0,]
+        ## }
+            
+                                  
+            
+
         ## xtYao ## Thursday, Feb 18, 2021 02:07:22 PM
         ## To prevent extreme outlying variances, limit traing data to variance between 0.05 and 0.95 quantile
         middle.mean = tmp[, which(between(mean, quantile(mean, 0.05), quantile(mean, 0.95)))]
@@ -2818,7 +2909,7 @@ segstats = function(target,
         {
             warning(sprintf('Could not find enough (>=10) segments with more than %s bins for modeling mean to variance relationship in data.  Data might be hypersegmented.', MINBIN))
         }
-
+        
         ## overdispersion correction
         ##lmd = tmp[, lm(var ~ mean)]
         ## loe = tmp[, loess(var ~ mean, weights = nbins, span = 2)]
@@ -2846,6 +2937,7 @@ segstats = function(target,
         ## get the bayesian point estimator (expectation of posterior distribution)
         ## with conjugate prior of scaled inverse chi-sq
         ## min allowable var
+
         loe.middle.i = tmp[intersect(middle.var, middle.mean), loess(var ~ mean, weights = nbins, span = 5)]
         loe = loe.middle.i
         utarget$loess.var = predict(loe, utarget$mean)
@@ -2895,6 +2987,19 @@ segstats = function(target,
         utarget$var[utarget$mean>=rrm[2]] = rrv[2]
         ## no negative var!
         utarget$var[utarget$var<=0] = rrv[1]
+
+        ## if running LP, update loess.var as well
+        ## if (lp) {
+        ##     jmessage("Running LP mode, filling in loess.var")
+        ##     utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
+        ##     utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
+        ##     utarget$loess.var[utarget$var<=0] = rrv[1]
+        ## }
+
+        ## fill in loess.var generally
+        utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
+        utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
+        utarget$loess.var[utarget$var<=0] = rrv[1]
 
         pdf("var.mean.loess.pdf")
         ## all points training
@@ -2946,6 +3051,114 @@ segstats = function(target,
             warning('Ratio of highest and lowest segment variances exceed 1e7. This could result from very noisy bin data and/or extreme hypersegmentation.  Downstream optimization results may be unstable.')
         }
 
+        ## browser()
+        ## ## debug
+        ## library(ggplot2)
+        ## tdt = gr2dt(utarget)
+        ## tdt[, in.tmp := raw.var>0 & nbins>MINBIN & !bad]
+        ## tdt = tdt[order(raw.mean)]
+
+        ## ppdf({
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp, shape = bad)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") + 
+        ##         scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[(in.tmp)] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp, shape = bad)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") + 
+        ##         scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[(in.tmp)] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt[raw.mean>25 & nbins>2] %>%
+        ##         ggplot(aes(x = raw.mean, y = raw.var)) +
+        ##         geom_point(aes(size = nbins)) +
+        ##         geom_line(aes(x = raw.mean, y = loess.var), color = "red") +
+        ##         geom_vline(xintercept = rrm[1], lty = "dashed") +
+        ##         geom_vline(xintercept = rrm[2], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[1], lty = "dashed") +
+        ##         geom_hline(yintercept = rrv[2], lty = "dashed") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.05)], lty = "dotted") +
+        ##         geom_vline(xintercept = tmp[, quantile(mean, 0.95)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.05)], lty = "dotted") +
+        ##         geom_hline(yintercept = tmp[, quantile(var, 0.95)], lty = "dotted") +
+        ##         ## scale_color_viridis(alpha = 0.5, discrete = TRUE, begin = 0.2, end = 0.8, option = "magma") + 
+        ##         ## scale_x_continuous(trans = "log10") +
+        ##         ## scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ##     print(
+        ##         tdt %>%
+        ##         ggplot(aes(x = raw.var, y = var)) +
+        ##         geom_point(aes(size = nbins, color = in.tmp)) +
+        ##         scale_x_continuous(trans = "log10") +
+        ##         scale_y_continuous(trans = "log10") +
+        ##         theme_pub()
+        ##     )
+        ## })
+
         ## finally copy all metadata from utarget to target
         values(target) = values(utarget)[gr.match(target, utarget), ]
     }
@@ -2967,7 +3180,157 @@ jwarning = function(..., pre = 'JaBbA', call. = FALSE)
 jerror = function(..., pre = 'JaBbA', call. = TRUE)
     stop(paste0(pre, ' ', paste0(as.character(Sys.time()), ': '), ...), call. = call.)
 
+#' @name jbaLP
+#' @title jbaLP
+#' @rdname internal
+#' jbaLP
+#' 
+#' @details 
+#'
+#' LP analog of jbaMIP
+#'
+#' @param kag.file (character)
+#' @param kag (karyograph object)
+#' @param cn.field (character) column in karyograph with CN guess, default cnmle
+#' @param var.field (character) column in karyograph with node variance estimate, default loess.var
+#' @param bins.field (character) column in karyograph containing number of bins, default nbins
+#' @param min.var (numeric) min allowable variance default 1e-3
+#' @param min.bins (numeric) min allowable bins default 1
+#' @param lambda (numeric) slack penalty, default 100
+#' @param L0 (logical) default TRUE
+#' @param M (numeric) max copy number, default 1e3
+#' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP
+#' @param tilim (numeric) default 1e3
+#' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
+#' @param epgap (numeric) default 1e-3
+#'
+#' @return
+#' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
+#' 
+#' @author Marcin Imielinski, Zi-Ning Choo
+jbaLP = function(kag.file = NULL,
+                 kag = NULL,
+                 cn.field = "cnmle",
+                 var.field = "loess.var",
+                 bins.field = "nbins",
+                 min.var = 1e-3,
+                 min.bins = 1,
+                 lambda = 100,
+                 L0 = TRUE,
+                 M = 1e3,
+                 verbose = 2,
+                 tilim = 1e3,
+                 ism = TRUE,
+                 epgap = 1e-3)
+{
+    if (is.null(kag.file) & is.null(kag)) {
+        stop("one of kag or kag.file must be supplied")
+    }
+    if (!is.null(kag.file) & !is.null(kag)) {
+        warning("both kag.file and kag supplied. using kag.")
+    }
+    if (!is.null(kag)) {
+        if (verbose) {
+            message("using supplied karyograph")
+        }
+    } else {
+        if (file.exists(kag.file)) {
+            if (verbose) {
+                message("reading karyograph from file")
+            }
+            kag = readRDS(kag.file)
+        } else {
+            stop("kag.file does not exist and kag not supplied")
+        }
+    }
+    kag.gg = gG(jabba = kag)
+
+    if (verbose) {
+        message("Marking nodes with cn contained in column: ", cn.field)
+    }
+    
+    if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
+        stop("karyograph must have field specified in cn.field")
+    }
+    kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+
+    if (verbose) {
+        message("Computing node weights using variance contained in column: ", var.field)
+    }
+    
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]]) | is.null(values(kag.gg$nodes$gr)[[bins.field]])) {
+        warning("karyograph missing var.field. setting weights to node widths")
+        wts = width(kag.gg$nodes$gr)
+    } else {
+        
+        ## process variances
+        vars = values(kag.gg$nodes$gr)[[var.field]]
+        vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
+        sd = sqrt(vars) * kag$beta ## rel2abs the standard deviation
+
+        ## process bins
+        bins = values(kag.gg$nodes$gr)[[bins.field]]
+        bins = ifelse(bins < min.bins, NA, bins)
+
+        ## compute node weights
+        wts = bins / (sd / sqrt(2)) ## for consistency with Laplace distribution
+        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
+    }
+    kag.gg$nodes$mark(weight = wts)
+    
+    ## no edge CNs
+    kag.gg$edges$mark(cn = NULL)
+    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
+    if (verbose) {
+        message("Starting LP balance on gGraph with...")
+        message("Number of nodes: ", length(kag.gg$nodes))
+        message("Number of edges: ", length(kag.gg$edges))
+    }
+
+    res = balance(kag.gg,
+                  debug = TRUE,
+                  lambda = lambda,
+                  L0 = L0,
+                  verbose = verbose,
+                  tilim = tilim,
+                  epgap = epgap,
+                  lp = TRUE,
+                  ism = ism)
+    
+    bal.gg = res$gg
+    sol = res$sol
+    
+    ## just replace things in the outputs
+    ## this can create weird errors if the order of kag and bal.gg isn't the same
+    out = copy(kag)
+    new.segstats = bal.gg$gr
+    nnodes = length(new.segstats)
+
+    new.segstats$cl = 1 ## everything same cluster
+    new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
+    
+    ## weighted adjacency
+    adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                       x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    ## add the necessary columns
+    new.segstats$ecn.in = Matrix::colSums(adj)
+    new.segstats$ecn.out = Matrix::rowSums(adj)
+    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    out$adj = adj
+
+    ## add metadata
+    out$segstats = new.segstats
+    out$status = sol$status
+    out$epgap = sol$epgap
+    return(out)
+}
+
 #' @name jbaMIP
+#' @title jbaMIP
 #' @rdname internal
 #' jbaMIP
 #'
@@ -4412,6 +4775,7 @@ jbaMIP = function(adj, # binary n x n adjacency matrix ($adj output of karyograp
 
 ####################################################################
 #' @name JaBbA.digest
+#' @title JaBbA.digest
 #' @rdname internal
 #' JaBbA.digest
 #'
@@ -6416,18 +6780,11 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
-    ## =======
-    ##     stopifnot(inherits(ra, "GRangesList"))
-    ##     if (length(ra)>0){
-    ##         stopifnot(all(elementNROWS(ra)==2))
-    ##         stopifnot(all(as.character(strand(unlist(ra))) %in% c("+", "-")))
-    ##         stopifnot(all(as.numeric(width(unlist(ra)))==1))
-    ##     }
-    ## >>>>>>> 0988b41049a833b592e36b402fb647f2b8e8f251
     return(ra)
 }
 
 #' @name karyograph
+#' @title karyograph
 #' @rdname internal
 #' karyograph
 #'
@@ -7973,6 +8330,8 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
     if(is.null(ploidy)) {
         ploidy = weighted.mean(gg$nodes$gr$cn, gg$nodes$gr %>% width, na.rm=T)
     }
+    ## remove bins with infinite values up front
+    cov = cov[which(is.finite(cov$ratio) & !is.na(cov$ratio))]
     ratios = cov$ratio
     beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
     segs = gg$nodes$gr
@@ -7996,6 +8355,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## gather coverage bins corresponding to fused & unfused sides of loose ends
     if(verbose) jmessage("Overlapping coverage with loose end fused and unfused sides")
+
     rel = gr.findoverlaps(cov, sides)
     values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
     qq = 0.05
@@ -8035,7 +8395,7 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     ## prep glm input matrix
     if(verbose) message("Prepping GLM input matrix")
-    glm.in = melt(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
+    glm.in = melt.data.table(rel[(in.quant.r),], id.vars=c("leix", "fused"), measure.vars=c("tum.counts", "norm.counts"), value.name="counts")[, tumor := variable=="tum.counts"]
     glm.in[, ix := 1:.N, by=leix]
     rel2 = copy(glm.in)
     setnames(glm.in, "leix", "leix2")

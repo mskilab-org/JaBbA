@@ -43,6 +43,7 @@ test_that("reciprocal.cycles", {
 })
 
 cov.gr = dt2gr(fread(cov.fn))
+cov.gr$read_depth = cov.gr$ratio
 hets.gr = dt2gr(fread(hets)[, ":="(mean_high = pmax(alt, ref), mean_low = pmin(alt, ref))])
 segs.gr = readRDS(segs) %$% cov.gr[, 'ratio'] %$% hets.gr[, c('mean_high', 'mean_low')]
 segs.gr$mean = segs.gr$ratio
@@ -138,6 +139,7 @@ jab = suppressWarnings(
 ## with iteration, linear penalty, no dynamic tuning
 jab.reiterate = JaBbA(junctions = jj,
                       coverage = cf,
+                      field = "ratio2",
                       blacklist.junctions = blacklist.junctions,
                       hets = hr,
                       slack.penalty = 10,
@@ -151,6 +153,34 @@ jab.reiterate = JaBbA(junctions = jj,
                       loose.penalty.mode = 'linear',
                       epgap = 0.01,
                       dyn.tuning = FALSE)
+
+## LP unit testing
+## this test verfies consistency between LP and QP solutions
+jab.lp = suppressWarnings(
+    JaBbA(junctions = jj,
+                    coverage = cf,
+          whitelist.junctions = whitelist.junctions,
+          blacklist.coverage = blacklist.coverage,
+          ## seg = segs,
+          ## nseg = nsegs,
+          ## strict = TRUE,
+          slack.penalty = 10,
+          hets = ht,
+          tilim = 60,
+          cfield = 'nudge',
+          verbose = 2,
+          outdir = './JaBbA.lp',
+          overwrite = TRUE,
+          ploidy=4.5,## preset HCC1954
+          purity=1,
+          epgap = 0.01,
+          all.in = TRUE,
+          ## juncs.uf = juncs.fn,
+          tfield = 'nothing',
+          nudge.balanced = TRUE,
+          dyn.tuning = TRUE,
+          lp = TRUE)
+)
 
 ## for testing purposes, print out the exact output
 print('jab cn')
@@ -168,6 +198,9 @@ print(list.expr(
 
 print('jab.reiterate junctions cn')
 print(list.expr(values(jab.reiterate$junctions$grl)$cn))
+
+print('jab.lp junctions cn')
+print(list.expr(values(jab.lp$junctions$grl)$cn))
 
 ## print('jab.reiterate purity ploidy')
 ## print(paste(jab.reiterate$purity, jab.reiterate$ploidy))
@@ -249,4 +282,7 @@ test_that("JaBbA", {
     ##         values(jab.reiterate$junctions$grl)$cn,
     ##         c(2, 3, 3, 3, 4, 3, 4, 3, 4, 4, 4, 4, 4, 4, 3, 4, 2, 2, 3, 4, 5, 4, 4, 5, 5, 4, 3, 2, 1, 2, 3, 3, 13, 11, 13, 13, 23, 28, 26, 6, 26, 31, 22, 19, 22, 31, 1, 31, 27, 5, 3, 24, 4, 3, 1, 3, 4, 3, 3, 3, 3, 10, 5, 10, 0, 0)),
     ##     info = print(list.expr(values(jab.reiterate$junctions$grl)$cn)))
+    print("Comparing results from LP mode with L0 penalty")
+    expect_true(identical(jab.lp$nodes$dt[!is.na(cn) & cn > 0, cn], c(5, 3, 2, 4, 5, 3, 5, 3, 2, 3, 5)))
+    expect_true(identical(jab.lp$junctions$dt$cn, c(3, 2, 2, 1, 2, 4, 3, 2, 3, 3, 2, 2, 1, 2, 3)))
 })

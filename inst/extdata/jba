@@ -168,6 +168,16 @@ if (!exists("opt"))
             type = "integer",
             default = 1,
             help = "Number of cores for JaBBa MIP"),
+        make_option(
+            c("--lp"),
+            type = "logical",
+            default = FALSE,
+            help = "Whether to run optimization as LP"),
+        make_option(
+            c("--ism"),
+            type = "logical",
+            default = FALSE,
+            help = "Add ISM constraints? (only valid if LP = TRUE)"),
         ## make_option(c("--gurobi"),
         ##             type = 'character',
         ##             default = 'FALSE',
@@ -299,6 +309,8 @@ suppressPackageStartupMessages(
         outdir = opt$outdir,
         name = opt$name,
         mc.cores = opt$cores,
+        lp = opt$lp,
+        ism = opt$ism,
         verbose = 2
         ## TODO init, dyn.tuning
     )
