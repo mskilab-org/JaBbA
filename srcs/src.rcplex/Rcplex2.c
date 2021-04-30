@@ -1,8 +1,6 @@
 // The actual solving procedure is called using the function Rcplex 
 #include "Rcplex2.h"
 
-int max_numcalls;
-
 SEXP Rcplex2(SEXP numcols_p,
 	     SEXP numrows_p,
 	     SEXP objsen_p,

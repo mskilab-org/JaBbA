@@ -10,11 +10,11 @@
 #define my_error(x) { forceCplxClose = 1; error x; }
 
 /* Global Variables */
-extern CPXENVptr env;
-extern CPXLPptr lp;
-extern int numcalls;
-extern int max_numcalls;
-extern int forceCplxClose;
+CPXENVptr env;
+CPXLPptr lp;
+int numcalls;
+int max_numcalls;
+int forceCplxClose;
 
 /* Function definitions */
 SEXP getListElement( SEXP, char* );

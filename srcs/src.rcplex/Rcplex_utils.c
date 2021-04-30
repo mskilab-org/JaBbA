@@ -4,11 +4,6 @@
 #include "Rcplex2.h"
 #include <time.h>
 
-CPXENVptr env;
-CPXLPptr lp;
-int numcalls;
-int forceCplxClose;
-
 void Rcplex_wait (int seconds) {
   clock_t endwait;
   endwait = clock() + seconds * CLOCKS_PER_SEC;
