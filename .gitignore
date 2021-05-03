@@ -8,12 +8,14 @@ _build*
 *.log
 *.synctex.gz
 *.tex
+*.o
+*.so
 JaBbA.reiterate/
 JaBbA/
 man/
+src/
 raw.prm
 raw.sols.rds
-src/
 tests/testthat/JaBbA.lp/
 tests/testthat/JaBbA.reiterate/
 tests/testthat/JaBbA.lp/
