@@ -169,6 +169,12 @@ Options:
 
 	--cores=CORES
 		Number of cores for JaBBa MIP
+		
+	--lp
+		Run as LP
+	
+	--ism
+		Include infinite sites constraints
 
 	-v, --verbose
 		verbose output
