@@ -1182,7 +1182,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    loose.penalty.mode = loose.penalty.mode,
                    dyn.tuning = dyn.tuning,
                    lp = lp,
-                   ism = ism)
+                   ism = ism,
+                   tfield = tfield)
     }
 
 
@@ -2313,7 +2314,8 @@ ramip_stub = function(kag.file,
                       dyn.tuning = TRUE,
                       debug.ix = NULL,
                       lp = FALSE,
-                      ism = FALSE)
+                      ism = FALSE,
+                      tfield = NULL)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2519,7 +2521,8 @@ ramip_stub = function(kag.file,
                        tilim = tilim,
                        epgap = epgap,
                        lambda = 1/slack.prior,
-                       ism = ism)
+                       ism = ism,
+                       tfield = tfield)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3194,7 +3197,8 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
 #' @param var.field (character) column in karyograph with node variance estimate, default loess.var
 #' @param bins.field (character) column in karyograph containing number of bins, default nbins
-#' @param min.var (numeric) min allowable variance default 1e-3
+#' @param tfield (character) column in junction metadata containing junction tier (default tier)
+#' @param min.var (numeric) min allowable variance default 1e-5
 #' @param min.bins (numeric) min allowable bins default 1
 #' @param lambda (numeric) slack penalty, default 100
 #' @param L0 (logical) default TRUE
@@ -3213,7 +3217,8 @@ jbaLP = function(kag.file = NULL,
                  cn.field = "cnmle",
                  var.field = "loess.var",
                  bins.field = "nbins",
-                 min.var = 1e-3,
+                 tfield = "tier",
+                 min.var = 1e-5,
                  min.bins = 1,
                  lambda = 100,
                  L0 = TRUE,
@@ -3281,6 +3286,10 @@ jbaLP = function(kag.file = NULL,
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
+    ## add lower bounds depending on ALT junction tier
+    lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
+    kag.gg$edges$mark(lb = lbs)
 
     if (verbose) {
         message("Starting LP balance on gGraph with...")
