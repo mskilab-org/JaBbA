@@ -3323,12 +3323,28 @@ jbaLP = function(kag.file = NULL,
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
                        x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
     ## add the necessary columns
-    new.segstats$ecn.in = Matrix::colSums(adj)
-    new.segstats$ecn.out = Matrix::rowSums(adj)
-    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
-    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
-    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
-    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    ## new.segstats$ecn.in = Matrix::colSums(adj)
+    ## new.segstats$ecn.out = Matrix::rowSums(adj)
+    ## target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    ## source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    ## new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    ## new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+
+    new.segstats$ecn.in = Matrix::colSums(adj, na.rm = TRUE)
+    new.segstats$ecn.out = Matrix::rowSums(adj, na.rm = TRUE)
+    new.segstats$eslack.in = new.segstats$cn - new.segstats$ecn.in
+    new.segstats$eslack.out = new.segstats$cn - new.segstats$ecn.out
+
+    ## NA the telomeric segments?
+    qtips = gr.end(si2gr(seqlengths(bal.gg$nodes))) ## location of q arm tips
+    term.in = c(which(start(bal.gg$nodes$gr) == 1), ## beginning of chromosome
+                -which(bal.gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+    term.out = -term.in ## out is reciprocal of in
+    telo.in = which(new.segstats$snode.id %in% term.in)
+    telo.out = which(new.segstats$snode.id %in% term.out)
+    new.segstats$eslack.in[telo.in] = NA
+    new.segstats$eslack.out[telo.out] = NA
+    
     out$adj = adj
 
     ## add metadata
