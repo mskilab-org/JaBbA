@@ -1861,6 +1861,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     }
 
     this.ra = gr.fix(this.ra, sl, drop = T)
+
+    #' zchoo Friday, May 21, 2021 12:02:30 PM
+    ## fail if negative indices in ra?
+    valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
+    this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
     
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
@@ -2151,8 +2156,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             sites[, Af := 1-Bf]
             ## zchoo Wednesday, Apr 21, 2021 02:02:54 PM
             ## re-factor sites chromosome column to exclude Y as empty factor level
-            sites[, chromosome := factor(as.character(chromosome))]
-            sqz.seg$chromosome = factor(as.character(sqz.seg$chromosome))
+            common.chr = intersect(as.character(sites$chromosome), as.character(sqz.seg$chrom))
+
+            sites = sites[as.character(chromosome) %in% common.chr,]
+            sqz.seg = sqz.seg[as.character(chrom) %in% common.chr,]
+            
+            sites[, chromosome := factor(as.character(chromosome), levels = common.chr)]
+            sqz.seg[, chrom := factor(as.character(chrom), levels = common.chr)]
+            sqz.seg[, chromosome := chrom]
 
             ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
