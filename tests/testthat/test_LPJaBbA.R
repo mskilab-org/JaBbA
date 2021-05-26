@@ -156,3 +156,32 @@ jab.empty = suppressWarnings(
 )
 
 expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
+
+message("Testing JaBbA LP with empty junctions file and tiers in juncs.uf")
+jab.empty.2 = suppressWarnings(
+    JaBbA(junctions = empty.jj,
+          juncs.uf = tier.jj,
+          reiterate = 1,
+          coverage = cf,
+          whitelist.junctions = whitelist.junctions,
+          blacklist.coverage = blacklist.coverage,
+          slack.penalty = 10,
+          rescue.window = 1e4,
+          hets = ht,
+          tilim = 60,
+          cfield = 'nudge',
+          verbose = 2,
+          outdir = 'JaBbA.empty.jj',
+          overwrite = TRUE,
+          ploidy=4.5,## preset HCC1954
+          purity=1,
+          epgap = 0.01,
+          all.in = TRUE,
+          tfield = 'tier',
+          nudge.balanced = TRUE,
+          dyn.tuning = TRUE,
+          lp = TRUE,
+          ism = FALSE)
+)
+
+expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)

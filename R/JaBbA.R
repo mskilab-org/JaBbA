@@ -262,6 +262,10 @@ JaBbA = function(## Two required inputs
         } else {
             values(ra.all.uf)[, tfield] = 3
         }
+
+        ## mark any NA tier junctions as tier 3
+        values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)[, tfield]))] = 3
+        
         ## the rest will be tier 3
         ra.all = ra.all.uf
         ## FIXME: ra.merge still gives duplicates
