@@ -44,7 +44,7 @@ test_that("reciprocal.cycles", {
 
 cov.gr = dt2gr(fread(cov.fn))
 cov.gr$read_depth = cov.gr$ratio
-hets.gr = dt2gr(fread(hets)[, ":="(mean_high = pmax(alt, ref), mean_low = pmin(alt, ref))])
+hets.gr = dt2gr(fread(hets)[, ":="(mean_high = pmax(alt.count.t, ref.count.t), mean_low = pmin(alt.count.t, ref.count.t))])
 segs.gr = readRDS(segs) %$% cov.gr[, 'ratio'] %$% hets.gr[, c('mean_high', 'mean_low')]
 segs.gr$mean = segs.gr$ratio
 segs.gr$sd_high = segs.gr$sd_low = segs.gr$sd = 1
