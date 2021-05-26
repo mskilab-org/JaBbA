@@ -2539,7 +2539,8 @@ ramip_stub = function(kag.file,
                        epgap = epgap,
                        lambda = 1/slack.prior,
                        ism = ism,
-                       tfield = tfield)
+                       tfield = tfield,
+                       max.mem = mem)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3243,7 +3244,8 @@ jbaLP = function(kag.file = NULL,
                  verbose = 2,
                  tilim = 1e3,
                  ism = TRUE,
-                 epgap = 1e-3)
+                 epgap = 1e-3,
+                 max.mem = 16)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -3324,7 +3326,8 @@ jbaLP = function(kag.file = NULL,
                   tilim = tilim,
                   epgap = epgap,
                   lp = TRUE,
-                  ism = ism)
+                  ism = ism,
+                  trelim = max.mem * 1e3)
     
     bal.gg = res$gg
     sol = res$sol
