@@ -255,10 +255,14 @@ JaBbA = function(## Two required inputs
         ## ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
         ra.all.uf = ra.merge(ra.all, ra.uf, pad=1000, ind=TRUE) ## soft merge
         ## those match a record in junction, will be assigned to the tier in junction
-        values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
-            values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+        if (tfield %in% names(values(ra.all.uf))) {
+            values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
+                values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+            values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
+        } else {
+            values(ra.all.uf)[, tfield] = 3
+        }
         ## the rest will be tier 3
-        values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
         ra.all = ra.all.uf
         ## FIXME: ra.merge still gives duplicates
         ## FIXME: substitute these ra.xx fuctions to Junction class in gGnome
@@ -1865,7 +1869,9 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     #' zchoo Friday, May 21, 2021 12:02:30 PM
     ## fail if negative indices in ra?
     valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
-    this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
+    if (length(this.ra) > 0) {
+        this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
+    }
     
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
@@ -3299,8 +3305,10 @@ jbaLP = function(kag.file = NULL,
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
 
     ## add lower bounds depending on ALT junction tier
-    lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
-    kag.gg$edges$mark(lb = lbs)
+    if (tfield %in% colnames(kag.gg$edges$dt)) {
+        lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
+        kag.gg$edges$mark(lb = lbs)
+    }
 
     if (verbose) {
         message("Starting LP balance on gGraph with...")
@@ -7939,6 +7947,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
     ra = list(...)
     ra = ra[which(!sapply(ra, is.null))]
+    ra = ra[which(!sapply(ra, function(x) {length(x)==0}))] ## filter zero length junctions
     nm = names(ra)
     if (is.null(nm)){
         nm = paste('ra', seq_along(ra), sep = '')
