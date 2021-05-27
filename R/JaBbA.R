@@ -255,10 +255,18 @@ JaBbA = function(## Two required inputs
         ## ra.all.uf = ra.merge(ra.all, ra.uf, pad=0, ind=TRUE) ## hard merge
         ra.all.uf = ra.merge(ra.all, ra.uf, pad=1000, ind=TRUE) ## soft merge
         ## those match a record in junction, will be assigned to the tier in junction
-        values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
-            values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+        if (tfield %in% names(values(ra.all.uf))) {
+            values(ra.all.uf)[, tfield][which(!is.na(values(ra.all.uf)$seen.by.ra1))] =
+                values(ra.all)[, tfield][values(ra.all.uf)$seen.by.ra1]
+            values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
+        } else {
+            values(ra.all.uf)[, tfield] = 3
+        }
+
+        ## mark any NA tier junctions as tier 3
+        values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)[, tfield]))] = 3
+        
         ## the rest will be tier 3
-        values(ra.all.uf)[, tfield][which(is.na(values(ra.all.uf)$seen.by.ra1))] = 3
         ra.all = ra.all.uf
         ## FIXME: ra.merge still gives duplicates
         ## FIXME: substitute these ra.xx fuctions to Junction class in gGnome
@@ -1861,6 +1869,13 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     }
 
     this.ra = gr.fix(this.ra, sl, drop = T)
+
+    #' zchoo Friday, May 21, 2021 12:02:30 PM
+    ## fail if negative indices in ra?
+    valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
+    if (length(this.ra) > 0) {
+        this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
+    }
     
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
@@ -2151,8 +2166,14 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             sites[, Af := 1-Bf]
             ## zchoo Wednesday, Apr 21, 2021 02:02:54 PM
             ## re-factor sites chromosome column to exclude Y as empty factor level
-            sites[, chromosome := factor(as.character(chromosome))]
-            sqz.seg$chromosome = factor(as.character(sqz.seg$chromosome))
+            common.chr = intersect(as.character(sites$chromosome), as.character(sqz.seg$chrom))
+
+            sites = sites[as.character(chromosome) %in% common.chr,]
+            sqz.seg = sqz.seg[as.character(chrom) %in% common.chr,]
+            
+            sites[, chromosome := factor(as.character(chromosome), levels = common.chr)]
+            sqz.seg[, chrom := factor(as.character(chrom), levels = common.chr)]
+            sqz.seg[, chromosome := chrom]
 
             ## xtYao Tuesday, Nov 26, 2019 04:43:57 PM: new sequenza expectation, we should freeze their code at this version
             seg.s1 = sequenza::segment.breaks(sites, breaks = sqz.seg, weighted.mean = FALSE)
@@ -2522,7 +2543,8 @@ ramip_stub = function(kag.file,
                        epgap = epgap,
                        lambda = 1/slack.prior,
                        ism = ism,
-                       tfield = tfield)
+                       tfield = tfield,
+                       max.mem = mem)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3226,7 +3248,8 @@ jbaLP = function(kag.file = NULL,
                  verbose = 2,
                  tilim = 1e3,
                  ism = TRUE,
-                 epgap = 1e-3)
+                 epgap = 1e-3,
+                 max.mem = 16)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -3288,8 +3311,10 @@ jbaLP = function(kag.file = NULL,
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
 
     ## add lower bounds depending on ALT junction tier
-    lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
-    kag.gg$edges$mark(lb = lbs)
+    if (tfield %in% colnames(kag.gg$edges$dt)) {
+        lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
+        kag.gg$edges$mark(lb = lbs)
+    }
 
     if (verbose) {
         message("Starting LP balance on gGraph with...")
@@ -3305,7 +3330,8 @@ jbaLP = function(kag.file = NULL,
                   tilim = tilim,
                   epgap = epgap,
                   lp = TRUE,
-                  ism = ism)
+                  ism = ism,
+                  trelim = max.mem * 1e3)
     
     bal.gg = res$gg
     sol = res$sol
@@ -3323,12 +3349,28 @@ jbaLP = function(kag.file = NULL,
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
                        x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
     ## add the necessary columns
-    new.segstats$ecn.in = Matrix::colSums(adj)
-    new.segstats$ecn.out = Matrix::rowSums(adj)
-    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
-    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
-    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
-    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    ## new.segstats$ecn.in = Matrix::colSums(adj)
+    ## new.segstats$ecn.out = Matrix::rowSums(adj)
+    ## target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    ## source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    ## new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    ## new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+
+    new.segstats$ecn.in = Matrix::colSums(adj, na.rm = TRUE)
+    new.segstats$ecn.out = Matrix::rowSums(adj, na.rm = TRUE)
+    new.segstats$eslack.in = new.segstats$cn - new.segstats$ecn.in
+    new.segstats$eslack.out = new.segstats$cn - new.segstats$ecn.out
+
+    ## NA the telomeric segments?
+    qtips = gr.end(si2gr(seqlengths(bal.gg$nodes))) ## location of q arm tips
+    term.in = c(which(start(bal.gg$nodes$gr) == 1), ## beginning of chromosome
+                -which(bal.gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+    term.out = -term.in ## out is reciprocal of in
+    telo.in = which(new.segstats$snode.id %in% term.in)
+    telo.out = which(new.segstats$snode.id %in% term.out)
+    new.segstats$eslack.in[telo.in] = NA
+    new.segstats$eslack.out[telo.out] = NA
+    
     out$adj = adj
 
     ## add metadata
@@ -7912,6 +7954,7 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
     ra = list(...)
     ra = ra[which(!sapply(ra, is.null))]
+    ra = ra[which(!sapply(ra, function(x) {length(x)==0}))] ## filter zero length junctions
     nm = names(ra)
     if (is.null(nm)){
         nm = paste('ra', seq_along(ra), sep = '')
