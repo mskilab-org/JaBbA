@@ -169,6 +169,11 @@ if (!exists("opt"))
             default = 1,
             help = "Number of cores for JaBBa MIP"),
         make_option(
+            c("--mem"),
+            type = "numeric",
+            default = 16,
+            help = "(uncompressed) tree memory limit for CPLEX"),
+        make_option(
             c("--lp"),
             type = "logical",
             default = FALSE,
@@ -306,6 +311,7 @@ suppressPackageStartupMessages(
         ## TODO use.gurobi = opt$gurobi,
         ## TODO max.threads = Inf, max.mem = 16
         ## below are general options
+        max.mem = opt$mem,
         outdir = opt$outdir,
         name = opt$name,
         mc.cores = opt$cores,
