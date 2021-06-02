@@ -329,7 +329,7 @@ JaBbA = function(## Two required inputs
         if (any(t2)){
             values(ra.all)[t2, tfield] = 1
             jmessage("All-in mode: ", length(t2),
-                     "tier 2 junctions forced into the model")
+                     " tier 2 junctions forced into the model")
         }
     }
 
@@ -858,7 +858,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         else
         {
-            browser()
             if (is.character(seg))
             {                
                 if (grepl('\\.rds$', seg))
@@ -879,39 +878,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     if (!inherits(seg, 'GRanges'))
         seg = dt2gr(seg, GenomeInfoDb::seqlengths(coverage))
-
-    ## zchoo Friday, Apr 23, 2021 10:39:19 AM
-    ## make gap filtering a general preprocessing step
-
-    ## filter small gaps between segments containing less than ten bins
-    binw = median(sample(width(coverage), 30), na.rm = TRUE)
-    all.gaps = IRanges::gaps(seg)
-    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
-
-    if (verbose) {
-        n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
-        jmessage("Number of gaps with nonzero width: ", n.gaps)
-        jmessage("Number of segments before gap filtering: ", n.gaps + length(seg))
-    }
-    
-    if (length(gap.seg)>0){
-        bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
-    } else {
-        bps = gr.start(seg)[, c()]
-    }
-
-
-   ## create new segments from the breakpoints of the old segments plus big gaps
-    new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
-    names(new.segs) = NULL
-    seg = gUtils::gr.fix(new.segs, GenomeInfoDb::seqlengths(coverage), drop = T)
-
-    if (verbose)
-    {
-        jmessage(length(seg), ' segments produced after gap filtering')
-    }
-
-    saveRDS(seg, seg.fn)
 
     if (!is.null(hets))
     {
@@ -1057,6 +1023,42 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     seqlevels(ra) = seqlevels(ra)[which(is.element(seqlevels(ra), names(union.sl)))]
     jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
              paste0("\t", names(union.sl), ":", union.sl, collapse = "\n"))
+
+
+    ## xtYao #' Wednesday, Jun 02, 2021 02:43:35 PM
+    ## Move the gap filling step after the correction of seqlengths
+    ## zchoo Friday, Apr 23, 2021 10:39:19 AM
+    ## make gap filtering a general preprocessing step
+    ## filter small gaps between segments containing less than ten bins
+    binw = median(sample(width(coverage), 30), na.rm = TRUE)
+    all.gaps = IRanges::gaps(seg)
+    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
+
+    if (verbose) {
+        n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
+        jmessage("Number of gaps with nonzero width: ", n.gaps)
+        jmessage("Number of segments before gap filtering: ", n.gaps + length(seg))
+    }
+
+    if (length(gap.seg)>0){
+        bps = c(gr.start(seg)[, c()], gr.start(gap.seg)[, c()])
+    } else {
+        bps = gr.start(seg)[, c()]
+    }
+
+
+   ## create new segments from the breakpoints of the old segments plus big gaps
+    new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
+    names(new.segs) = NULL
+    seg = gUtils::gr.fix(new.segs, union.sl, drop = T)
+
+    if (verbose)
+    {
+        jmessage(length(seg), ' segments produced after gap filtering')
+    }
+
+    saveRDS(seg, seg.fn)
+
     
     if (overwrite | !file.exists(kag.file)){
         karyograph_stub(seg,
