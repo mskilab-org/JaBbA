@@ -1980,11 +1980,18 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             jmessage("hets is neither data.table nor GRanges, ignore.")
         }
 
-        if (!is.null(hets.gr)){
+
+        hets.gr = hets.gr[which(hets.gr %^% this.kag$tile)]
+        if (!is.null(hets.gr) & length(hets.gr)>0){
             ## save hets object for later
             saveRDS(hets.gr, paste(dirname(out.file), 'hets.gr.rds', sep = '/'))
+        } else {
+            if (verbose){
+                jmessage("None of the provided (if any) germline heterozygosity site overlap the segments, ignore hets.")
+            }
         }
     }
+
 
     if (length(hets.gr)>0){
         ## pretend we don't have hets at all
@@ -2140,13 +2147,15 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                      old = c("seqnames", "start", "end"),
                      new = c("chrom", "start.pos", "end.pos"))
 
-            sites = gr2dt(hets.gr)
+            sites = gr2dt(hets.gr)           
+            
             ## prepare input file to run w/ segment.breaks
             sites[, adjusted.ratio := ((ref.count.t + alt.count.t) / (ref.count.n + alt.count.n))]
             sites[, depth.normal := (ref.count.n + alt.count.n)]
             sites[, depth.tumor := (ref.count.t + alt.count.t)]
             sites[, good.reads := 2]
             sites[, zygosity.normal := "het"]
+            sites[, alt.frac.t := alt.count.t / (ref.count.t + alt.count.t)]
             setnames(sites,
                      old = c("seqnames", "start", "alt.frac.t"),
                      new = c("chromosome", "position", "Bf"))
