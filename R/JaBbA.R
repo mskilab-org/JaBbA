@@ -294,9 +294,35 @@ JaBbA = function(## Two required inputs
         if (!all(unique(values(ra.all)[, tfield]) %in% 1:3)){
             jerror('Tiers in tfield can only have values 1,2,or 3')
         }
-        jmessage("There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctions; ",
+        jmessage("In the input, There are ", sum(values(ra.all)[, tfield]==1), " tier 1 junctions; ",
                  sum(values(ra.all)[, tfield]==2), " tier 2 junctions; ",
                  sum(values(ra.all)[, tfield]==3), " tier 3 junctions.")
+    }
+
+
+    ## big change tonight, I'm gonna start with all of the tiers in the first round
+    ## and then in each of following iterations keep the ones incorporated
+    ## plus the ones that didn't but fall inside the range of a lo
+    if (all.in & length(ra.all)>0){
+        t3 = values(ra.all)[, tfield]==3
+
+        if (any(t3)){
+            ## save every t3 except small indel
+            t3.indel = which.indel(ra.all[which(t3)])
+            t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+            values(ra.all)[t3.non.indel, tfield] = 2
+            jmessage('All-in mode: ', length(t3.non.indel),
+                     ' tier 3 junctions being included yielding ',
+                     sum(values(ra.all)[, tfield]==2), ' total junctions\n')
+        }
+
+        ## and then bump t2 to t1
+        t2 = values(ra.all)[, tfield]==2
+        if (any(t2)){
+            values(ra.all)[t2, tfield] = 1
+            jmessage("All-in mode: ", length(t2),
+                     "tier 2 junctions forced into the model")
+        }
     }
 
     ## if we are iterating more than once
@@ -306,23 +332,6 @@ JaBbA = function(## Two required inputs
 
         values(ra.all)$id = seq_along(ra.all)
         saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
-
-        ## big change tonight, I'm gonna start with all of the tiers in the first round
-        ## and then in each of following iterations keep the ones incorporated
-        ## plus the ones that didn't but fall inside the range of a lo
-        if (all.in & length(ra.all)>0){
-            t3 = values(ra.all)[, tfield]==3
-
-            if (any(t3)){
-                ## save every t3 except small indel
-                t3.indel = which.indel(ra.all[which(t3)])
-                t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
-                values(ra.all)[t3.non.indel, tfield] = 2
-                jmessage('All-in mode: ', length(t3.non.indel),
-                         ' tier 3 junctions being included yielding ',
-                         sum(values(ra.all)[, tfield]==2), ' total junctions\n')
-            }
-        }
 
         last.ra = ra.all[values(ra.all)[, tfield]<3]
 
@@ -512,20 +521,20 @@ JaBbA = function(## Two required inputs
         jmessage('Done Iterating')
     } else {
         ## if all.in, convert all tier 3 to tier 2
-        if (tfield %in% colnames(values(ra.all))){
-            t3 = (values(ra.all)[, tfield] == 3)
-            if (all.in & length(ra.all)>0){
-                if (any(t3)){
-                    ## save every t3 except small indel
-                    t3.indel = which.indel(ra.all[which(t3)])
-                    t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
-                    values(ra.all)[t3.non.indel, tfield] = 2
-                    t3 = values(ra.all)[, tfield] == 3
-                }
-            }
-            ## if not all.in, only use t2 or t1
-            ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
-        }
+        ## if (tfield %in% colnames(values(ra.all))){
+        ##     t3 = (values(ra.all)[, tfield] == 3)
+        ##     if (all.in & length(ra.all)>0){
+        ##         if (any(t3)){
+        ##             ## save every t3 except small indel
+        ##             t3.indel = which.indel(ra.all[which(t3)])
+        ##             t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+        ##             values(ra.all)[t3.non.indel, tfield] = 2
+        ##             t3 = values(ra.all)[, tfield] == 3
+        ##         }
+        ##     }
+        ##     ## if not all.in, only use t2 or t1
+        ##     ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
+        ## }
         jab = jabba_stub(
             junctions = ra.all,
             seg = seg,
@@ -711,7 +720,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         else
         {
-            jmessage('Importing seg from UCSC format')
+            jmessage('Importing coverage from UCSC format')
             coverage = rtracklayer::import(coverage)
             field = 'score';
             coverage = gr.fix(coverage)
@@ -841,11 +850,14 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
         else
         {
+            browser()
             if (is.character(seg))
             {                
                 if (grepl('\\.rds$', seg))
                 {
                     seg = readRDS(seg)
+                } else if (grepl("\\.txt(.gz)?$", seg)){
+                    seg = dt2gr(fread(seg))
                 }
                 else
                 {
@@ -1353,7 +1365,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     ## start building the model
     ## gather loose ends from sample
-    gg = tryCatch(gG(jabba = jabd), error=function(e) readRDS(jabba.rds.file))
+    gg = gG(jabba = jabd)
     ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
     lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
 
