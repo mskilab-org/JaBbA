@@ -19,6 +19,45 @@ blacklist.coverage = system.file("extdata", "hg19.blacklist.coverage.rds", packa
 
 expected.cns = c(5,3,2,4,5,3,5,3,2,3,5)
 
+dup.juncs = readRDS(system.file("testing", "duplicate.juncs.rds", package = "JaBbA"))
+dup.juncs.gg = system.file("testing", "duplicate.juncs.gg.rds", package = "JaBbA")
+dup.juncs.grl = system.file("testing", "duplicate.juncs.grl.rds", package = "JaBbA")
+
+message("Testing duplicate breakpoint detection")
+vanilla.op = detect_duplicate_breakpoints(dup.juncs, tfield = "tier")
+
+expect_setequal(vanilla.op$dt$edge.id, c(306, 374)) ## test that correct edges are found
+
+message("Testing duplicate breakpoints without tier field")
+no.tier = detect_duplicate_breakpoints(dup.juncs, tfield = "dummy")
+
+expect_equal(length(no.tier), 0)
+
+message("Testing duplicate breakpoint detection with only REF edges")
+ref.only = detect_duplicate_breakpoints(dup.juncs[type == "REF"], tfield = "tier")
+
+expect_equal(length(ref.only), 0)
+
+## check that all junctions are incorporated even with garbage coverage
+
+message("Testing incorporation of Tier 1 junctions even with ISM = TRUE")
+
+dup.juncs.lp = suppressWarnings(
+    jbaLP(gg.file = dup.juncs.gg,
+         tilim = 60,
+         tfield = "tier",
+         cn.field = "cn",
+         ism = TRUE,
+         epgap = 1e-2,
+         verbose = 2,
+         return.type = "gGraph")
+)
+
+inp.juncs = readRDS(dup.juncs.grl)
+
+## all should be incorporated
+expect_equal(length(dup.juncs.lp$edges$dt[type == "ALT" & cn > 0, edge.id]),
+             length(inp.juncs))
 
 message("Testing vanilla JaBbA LP")
 jab.lp = suppressWarnings(
