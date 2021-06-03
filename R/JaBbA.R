@@ -3237,8 +3237,10 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #'
 #' LP analog of jbaMIP
 #'
-#' @param kag.file (character)
-#' @param kag (karyograph object)
+#' @param kag.file (character) path to karyograph
+#' @param gg.file (character) path to gGraph 
+#' @param kag (karyograph object) karyograph (list)
+#' @param gg (gGraph object) gGraph
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
 #' @param var.field (character) column in karyograph with node variance estimate, default loess.var
 #' @param bins.field (character) column in karyograph containing number of bins, default nbins
@@ -3252,13 +3254,17 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
 #' @param epgap (numeric) default 1e-3
+#' @param max.mem (numeric) maximum memory in GB
+#' @param return.type (character) either "gGraph" or "karyograph"
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
 #' 
 #' @author Marcin Imielinski, Zi-Ning Choo
 jbaLP = function(kag.file = NULL,
+                 gg.file = NULL,
                  kag = NULL,
+                 gg = NULL,
                  cn.field = "cnmle",
                  var.field = "loess.var",
                  bins.field = "nbins",
@@ -3272,10 +3278,11 @@ jbaLP = function(kag.file = NULL,
                  tilim = 1e3,
                  ism = TRUE,
                  epgap = 1e-3,
-                 max.mem = 16)
+                 max.mem = 16,
+                 return.type = "karyograph")
 {
-    if (is.null(kag.file) & is.null(kag)) {
-        stop("one of kag or kag.file must be supplied")
+    if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
+        stop("one of kag, kag.file, gg.file, gg must be supplied")
     }
     if (!is.null(kag.file) & !is.null(kag)) {
         warning("both kag.file and kag supplied. using kag.")
@@ -3283,18 +3290,29 @@ jbaLP = function(kag.file = NULL,
     if (!is.null(kag)) {
         if (verbose) {
             message("using supplied karyograph")
+            kag.gg = gG(jabba = kag)
         }
     } else {
-        if (file.exists(kag.file)) {
+        if (!is.null(kag.file) && file.exists(kag.file)) {
             if (verbose) {
                 message("reading karyograph from file")
             }
             kag = readRDS(kag.file)
+            kag.gg = gG(jabba = kag)
+        } else if (!is.null(gg)) {
+            if (verbose) {
+                message("using supplied gGraph")
+            }
+            kag.gg = gg$copy
+        } else if (!is.null(gg.file) && file.exists(gg.file)) {
+            if (verbose) {
+                message("reading gGraph from provided file")
+            }
+            kag.gg = readRDS(file = gg.file)
         } else {
             stop("kag.file does not exist and kag not supplied")
         }
     }
-    kag.gg = gG(jabba = kag)
 
     if (verbose) {
         message("Marking nodes with cn contained in column: ", cn.field)
@@ -3345,6 +3363,24 @@ jbaLP = function(kag.file = NULL,
         message("Number of edges: ", length(kag.gg$edges))
     }
 
+    ## check for duplicate breakpoints in karyograph junctions
+    dup.junctions = detect_duplicate_breakpoints(kag.gg$junctions, tfield = tfield, verbose = verbose)
+
+    ## reset ISM if there are duplicate breakpoints
+    if (length(dup.junctions)) {
+        if (verbose) {
+            message("Number of overlapping Tier 1 junctions: ", length(dup.junctions))
+        }
+        if (ism) {
+            warning("ISM set to TRUE with duplicate Tier 1 junctions, resetting to FALSE to avoid infeasibility")
+            ism = FALSE
+        }
+    } else {
+        if (verbose) {
+            message("No duplicate Tier 1 junctions detected")
+        }
+    }
+
     res = balance(kag.gg,
                   debug = TRUE,
                   lambda = lambda,
@@ -3358,6 +3394,10 @@ jbaLP = function(kag.file = NULL,
     
     bal.gg = res$gg
     sol = res$sol
+
+    if (return.type == "gGraph") {
+        return(bal.gg)
+    }
     
     ## just replace things in the outputs
     ## this can create weird errors if the order of kag and bal.gg isn't the same
@@ -3371,14 +3411,8 @@ jbaLP = function(kag.file = NULL,
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
                        x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    
     ## add the necessary columns
-    ## new.segstats$ecn.in = Matrix::colSums(adj)
-    ## new.segstats$ecn.out = Matrix::rowSums(adj)
-    ## target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
-    ## source.less = (Matrix::colSums(adj, na.rm = T) == 0)
-    ## new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
-    ## new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
-
     new.segstats$ecn.in = Matrix::colSums(adj, na.rm = TRUE)
     new.segstats$ecn.out = Matrix::rowSums(adj, na.rm = TRUE)
     new.segstats$eslack.in = new.segstats$cn - new.segstats$ecn.in
@@ -3402,6 +3436,72 @@ jbaLP = function(kag.file = NULL,
     out$epgap = sol$epgap
     return(out)
 }
+
+#' @name detect_duplicate_breakpoints
+#' @title detect_duplicate_breakpoints
+#'
+#' @details
+#'
+#' Identifies tier 1 junctions sharing breakpoints
+#' These will cause MIP to be infeasible if ISM = TRUE
+#' 
+#' @param juncs (Junction) junction object
+#' @param tfield (character) tier field default 'tier'
+#' @param verbose (logical) default FALSE
+#'
+#' @return Junction containing junctions with overlapping breakpoints
+#'
+#' if tfield is not in junction metadata or all are tier 2 then empty junctions are returned
+detect_duplicate_breakpoints = function(juncs, tfield = "tier", verbose = FALSE) {
+
+    if (!tfield %in% colnames(juncs$dt)) {
+        warning("tfield missing from metadata")
+        return (jJ())
+    }
+
+    if (all(is.na(juncs$dt[, ..tfield]))) {
+        warning("all entries in tfield NA")
+        return (jJ())
+    }
+
+    if (all(juncs$dt[, ..tfield] >= 2)) {
+        if (verbose) {
+            message("detected no tier 1 junctions")
+        }
+        return (jJ())
+    }
+
+    if (all(juncs$dt$type != "ALT")) {
+        if (verbose) {
+            message("no ALT junctions detected!")
+        }
+        return (jJ())
+    }
+
+    cols = c(tfield, "seqnames", "start", "end", "strand", "type", "edge.id")
+    juncs.dt = as.data.table(stack(juncs$grl))[, ..cols]
+
+    ## select just tier 1 alt edges
+    t1.dt = juncs.dt[which(juncs.dt[, ..tfield]==1),][type == "ALT"]
+
+    if (nrow(t1.dt)==0) {
+        return (jJ())
+    }
+
+    ## add breakpoint and n.unique annotations
+    t1.dt[, bp := paste0(seqnames, ":", start, "-", end, strand)]
+    t1.dt[, n.unique := length(unique(edge.id)), by = bp]
+
+    ## check if no conflicts
+    if (all(t1.dt$n.unique <= 1)) {
+        return (jJ())
+    }
+
+    ## identify conflicts
+    conflict.dt = t1.dt[n.unique > 1,]
+    return(juncs[edge.id %in% conflict.dt$edge.id])
+}
+
 
 #' @name jbaMIP
 #' @title jbaMIP
