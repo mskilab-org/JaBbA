@@ -3464,7 +3464,7 @@ detect_duplicate_breakpoints = function(juncs, tfield = "tier", verbose = FALSE)
         return (jJ())
     }
 
-    if (all(juncs$dt[, ..tfield] >= 2)) {
+    if (!any(juncs$dt[, ..tfield] == 1, na.rm = TRUE)) {
         if (verbose) {
             message("detected no tier 1 junctions")
         }
