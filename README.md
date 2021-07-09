@@ -19,16 +19,16 @@ JaBbA builds a genome graph based on junctions and read depth from whole genome 
 If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structural Variation Uncovered across Thousands of Cancer Genome Graphs](https://doi.org/10.1016/j.cell.2020.08.006)
 
 ## Table of contents
-	- [Table of contents](#table-of-contents)
-	- [Installation](#installation)
-	- [Usage](#usage)
-	- [Output](#output)
-	- [Best practice](#best-practice)
-	- [FAQ](#faq)
-	- [The design of JaBbA](#the-design-of-jabba)
-	- [Attributions](#attributions)
-	- [Funding sources](#funding-sources)
-	- [Fun fact](#fun-fact)
+- [Table of contents](#table-of-contents)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Output](#output)
+- [Best practice](#best-practice)
+- [FAQ](#faq)
+- [The design of JaBbA](#the-design-of-jabba)
+- [Attributions](#attributions)
+- [Funding sources](#funding-sources)
+- [Fun fact](#fun-fact)
 
 ## Installation
 1. Install IBM ILOG
