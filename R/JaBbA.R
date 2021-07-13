@@ -3342,7 +3342,7 @@ jbaLP = function(kag.file = NULL,
         bins = ifelse(bins < min.bins, NA, bins)
 
         ## compute node weights
-        wts = bins / (sd / sqrt(2)) ## for consistency with Laplace distribution
+        wts = bins / (sd * sqrt(2)) ## for consistency with Laplace distribution
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)
