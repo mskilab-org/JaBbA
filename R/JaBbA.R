@@ -1886,10 +1886,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     #' zchoo Friday, May 21, 2021 12:02:30 PM
     ## fail if negative indices in ra?
-    valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
-    if (length(this.ra) > 0) {
-        this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
-    }
+    ## valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
+    ## if (length(this.ra) > 0) {
+    ##     this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
+    ## }
     
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
