@@ -80,7 +80,8 @@ jab.lp = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns)
@@ -107,7 +108,8 @@ jab.mem = suppressWarnings(
           dyn.tuning = TRUE,
           lp = TRUE,
           ism = FALSE,
-          max.mem = 4)
+          max.mem = 4,
+          max.na = 1)
 )
 
 expect_equal(jab.mem$nodes$dt[cn > 0, cn], expected.cns)
@@ -133,7 +135,8 @@ jab.ism = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = TRUE)
+          ism = TRUE,
+          max.na = 1)
 )
 
 expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns)
@@ -161,7 +164,8 @@ jab.tier = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = TRUE)
+          ism = TRUE,
+          max.na = 1)
 )
 
 ## expect five ALT junctions
@@ -191,7 +195,8 @@ jab.empty = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
@@ -220,7 +225,8 @@ jab.empty.2 = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)

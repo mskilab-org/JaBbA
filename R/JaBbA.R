@@ -2739,6 +2739,7 @@ segstats = function(target,
         ## start mapping signal to segments
         map = gr2dt(gr.findoverlaps(utarget, signal))
         map[, target.name := names(utarget)[query.id]]
+        map[, target.width := width(utarget)[query.id]]
         setkey(map, "target.name")
         mapped = unique(map[, target.name])
         ## these are the segments without a overlapping coverage point
@@ -2804,7 +2805,8 @@ segstats = function(target,
                   nbins = sum(good.bin),
                   nbins.tot = .N,
                   nbins.nafrac = 1 - sum(good.bin)/.N,
-                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
+                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1]),
+                  ## wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
                 keyby = target.name]
             values(utarget) = cbind(
                 values(utarget),
