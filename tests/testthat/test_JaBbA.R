@@ -130,7 +130,8 @@ jab = suppressWarnings(
           ## juncs.uf = juncs.fn,
           tfield = 'nothing',
           nudge.balanced = TRUE,
-          dyn.tuning = TRUE)
+          dyn.tuning = TRUE,
+          max.na = 1)
 )
 
 ## wj = readRDS(whitelist.junctions)
@@ -152,7 +153,8 @@ jab.reiterate = JaBbA(junctions = jj,
                       purity=0.99,
                       loose.penalty.mode = 'linear',
                       epgap = 0.01,
-                      dyn.tuning = FALSE)
+                      dyn.tuning = FALSE,
+                      max.na = 1)
 
 ## LP unit testing
 ## this test verfies consistency between LP and QP solutions
@@ -179,7 +181,8 @@ jab.lp = suppressWarnings(
           tfield = 'nothing',
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
-          lp = TRUE)
+          lp = TRUE,
+          max.na = 1)
 )
 
 ## for testing purposes, print out the exact output

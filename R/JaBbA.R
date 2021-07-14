@@ -1886,10 +1886,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     #' zchoo Friday, May 21, 2021 12:02:30 PM
     ## fail if negative indices in ra?
-    valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
-    if (length(this.ra) > 0) {
-        this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
-    }
+    ## valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
+    ## if (length(this.ra) > 0) {
+    ##     this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
+    ## }
     
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
@@ -2739,6 +2739,7 @@ segstats = function(target,
         ## start mapping signal to segments
         map = gr2dt(gr.findoverlaps(utarget, signal))
         map[, target.name := names(utarget)[query.id]]
+        map[, target.width := width(utarget)[query.id]]
         setkey(map, "target.name")
         mapped = unique(map[, target.name])
         ## these are the segments without a overlapping coverage point
@@ -2804,7 +2805,8 @@ segstats = function(target,
                   nbins = sum(good.bin),
                   nbins.tot = .N,
                   nbins.nafrac = 1 - sum(good.bin)/.N,
-                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
+                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1]),
+                  ## wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
                 keyby = target.name]
             values(utarget) = cbind(
                 values(utarget),
@@ -3342,7 +3344,7 @@ jbaLP = function(kag.file = NULL,
         bins = ifelse(bins < min.bins, NA, bins)
 
         ## compute node weights
-        wts = bins / (sd / sqrt(2)) ## for consistency with Laplace distribution
+        wts = bins / (sd * sqrt(2)) ## for consistency with Laplace distribution
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)

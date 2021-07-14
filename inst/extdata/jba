@@ -261,7 +261,7 @@ suppressPackageStartupMessages(
   }
 
 
-    library(JaBbA)
+    require(JaBbA)
     jmessage = function(..., pre = 'JaBbA'){
         message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
     }

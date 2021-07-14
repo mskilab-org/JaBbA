@@ -59,7 +59,55 @@ inp.juncs = readRDS(dup.juncs.grl)
 expect_equal(length(dup.juncs.lp$edges$dt[type == "ALT" & cn > 0, edge.id]),
              length(inp.juncs))
 
+message("Testing LP JaBbA without input junctions")
+
+expect_warning(JaBbA(
+    junctions = "",
+    coverage = cf,
+    slack.penalty = 10,
+    tilim = 60,
+    cfield = 'ratio',
+    verbose = 2,
+    outdir = 'JaBbA.lp',
+    overwrite = TRUE,
+    ploidy=4.5,## preset HCC1954
+    purity=1,
+    epgap = 0.01,
+    all.in = TRUE,
+    tfield = 'nothing',
+    nudge.balanced = TRUE,
+    dyn.tuning = TRUE,
+    lp = TRUE,
+    ism = FALSE,
+    max.na = 1),
+    regexp = "no junction file is given")
+
+message("Testing LP JaBbA with wrong coverage field")
+
+expect_warning(JaBbA(
+    junctions = "",
+    coverage = cf,
+    slack.penalty = 10,
+    tilim = 60,
+    cfield = 'ratio',
+    field = "bad.coverage.field",
+    verbose = 2,
+    outdir = 'JaBbA.lp',
+    overwrite = TRUE,
+    ploidy=4.5,## preset HCC1954
+    purity=1,
+    epgap = 0.01,
+    all.in = TRUE,
+    tfield = 'nothing',
+    nudge.balanced = TRUE,
+    dyn.tuning = TRUE,
+    lp = TRUE,
+    ism = FALSE,
+    max.na = 1),
+    regexp = "bad.coverage.field not found in coverage GRanges metadata")
+
 message("Testing vanilla JaBbA LP")
+
 jab.lp = suppressWarnings(
     JaBbA(junctions = jj,
           coverage = cf,
@@ -80,7 +128,8 @@ jab.lp = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns)
@@ -107,7 +156,8 @@ jab.mem = suppressWarnings(
           dyn.tuning = TRUE,
           lp = TRUE,
           ism = FALSE,
-          max.mem = 4)
+          max.mem = 4,
+          max.na = 1)
 )
 
 expect_equal(jab.mem$nodes$dt[cn > 0, cn], expected.cns)
@@ -133,7 +183,8 @@ jab.ism = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = TRUE)
+          ism = TRUE,
+          max.na = 1)
 )
 
 expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns)
@@ -161,7 +212,8 @@ jab.tier = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = TRUE)
+          ism = TRUE,
+          max.na = 1)
 )
 
 ## expect five ALT junctions
@@ -191,7 +243,8 @@ jab.empty = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
@@ -220,7 +273,8 @@ jab.empty.2 = suppressWarnings(
           nudge.balanced = TRUE,
           dyn.tuning = TRUE,
           lp = TRUE,
-          ism = FALSE)
+          ism = FALSE,
+          max.na = 1)
 )
 
 expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)
