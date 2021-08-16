@@ -1929,6 +1929,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
     ## }
     
     if (is.null(nseg.file)){
+        warning('No normal copy number values supplied so defaulting to 2 for all segments.')
         this.kag$segstats$ncn = 2
     }
 
@@ -2041,7 +2042,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     if (!is.null(nseg.file)){
         if (is.null(nseg$cn)){
-            warning('Normal seg file does not have "ncn" met data field. USING the default 2!!')
+            warning('Normal seg file does not have "cn" met data field. USING the default 2!!')
             this.kag$segstats$ncn = 2
         } else {
             this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
