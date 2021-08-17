@@ -108,8 +108,9 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param verbose logical whether to print out the most verbose version of progress log
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param dyn.tuning logical whether to let JaBbA dynamically tune the convergence criteria, default TRUE
-#' @param lp logical indicating whether to run as linear program, default FALSE
-#' @param ism logical indicating wehther to add ism constraints. default FALSE. only used if lp = TRUE
+#' @param lp (logical) whether to run as linear program, default FALSE
+#' @param ism (logical) wehther to add ism constraints. default FALSE. only used if lp = TRUE
+#' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -159,7 +160,8 @@ JaBbA = function(## Two required inputs
                  init = NULL,
                  dyn.tuning = TRUE,
                  lp = FALSE,
-                 ism = FALSE)
+                 ism = FALSE,
+                 fix.thres = FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -412,7 +414,8 @@ JaBbA = function(## Two required inputs
                 geno = geno,
                 cn.signif = cn.signif,
                 lp = lp,
-                ism = ism)
+                ism = ism,
+                fix.thres = fix.thres)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -579,7 +582,8 @@ JaBbA = function(## Two required inputs
             geno = geno,
             cn.signif = cn.signif,
             lp = lp,
-            ism = ism)
+            ism = ism,
+            fix.thres = fix.thres)
     }
     setwd(cdir)
     return(jab)
@@ -637,6 +641,7 @@ JaBbA = function(## Two required inputs
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param lp whether to run as linear program (default FALSE)
 #' @param ism logical whether to add ISM constraints default FALSE
+#' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -673,6 +678,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       overwrite = F, ## whether to overwrite existing output in outdir
                       lp = FALSE, ## whether to run as linear program
                       ism = FALSE, ## add ISM constraints (only used if lp = TRUE)
+                      fix.thres = -1,
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
@@ -1204,7 +1210,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    dyn.tuning = dyn.tuning,
                    lp = lp,
                    ism = ism,
-                   tfield = tfield)
+                   tfield = tfield,
+                   fix.thres = fix.thres)
     }
 
 
@@ -2359,7 +2366,8 @@ ramip_stub = function(kag.file,
                       debug.ix = NULL,
                       lp = FALSE,
                       ism = FALSE,
-                      tfield = NULL)
+                      tfield = NULL,
+                      fix.thres = -1)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2567,7 +2575,8 @@ ramip_stub = function(kag.file,
                        lambda = 1/slack.prior,
                        ism = ism,
                        tfield = tfield,
-                       max.mem = mem)
+                       max.mem = mem,
+                       fix.thres = fix.thres)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3232,8 +3241,6 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 
 #' @name jbaLP
 #' @title jbaLP
-#' @rdname internal
-#' jbaLP
 #' 
 #' @details 
 #'
@@ -3257,6 +3264,7 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
 #' @param epgap (numeric) default 1e-3
 #' @param max.mem (numeric) maximum memory in GB
+#' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 #' @param return.type (character) either "gGraph" or "karyograph"
 #'
 #' @return
@@ -3281,6 +3289,7 @@ jbaLP = function(kag.file = NULL,
                  ism = TRUE,
                  epgap = 1e-3,
                  max.mem = 16,
+                 fix.thres = -1,
                  return.type = "karyograph")
 {
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
@@ -3293,6 +3302,7 @@ jbaLP = function(kag.file = NULL,
         if (verbose) {
             message("using supplied karyograph")
             kag.gg = gG(jabba = kag)
+            beta = kag$beta
         }
     } else {
         if (!is.null(kag.file) && file.exists(kag.file)) {
@@ -3301,16 +3311,19 @@ jbaLP = function(kag.file = NULL,
             }
             kag = readRDS(kag.file)
             kag.gg = gG(jabba = kag)
+            beta = kag$beta
         } else if (!is.null(gg)) {
             if (verbose) {
                 message("using supplied gGraph")
             }
             kag.gg = gg$copy
+            beta = gg$meta$beta
         } else if (!is.null(gg.file) && file.exists(gg.file)) {
             if (verbose) {
                 message("reading gGraph from provided file")
             }
             kag.gg = readRDS(file = gg.file)
+            beta = gg$meta$beta
         } else {
             stop("kag.file does not exist and kag not supplied")
         }
@@ -3337,7 +3350,15 @@ jbaLP = function(kag.file = NULL,
         ## process variances
         vars = values(kag.gg$nodes$gr)[[var.field]]
         vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
-        sd = sqrt(vars) * kag$beta ## rel2abs the standard deviation
+        if (is.null(beta)) {
+            warning("no $beta provided in karyograph/gg metadata")
+            sd = sqrt(vars) 
+        } else if (is.na(beta)) {
+            warning("NA value for $beta provided in karyograph/gg metadata")
+            sd = sqrt(vars) 
+        } else {
+            sd = sqrt(vars) & beta
+        }
 
         ## process bins
         bins = values(kag.gg$nodes$gr)[[bins.field]]
@@ -3352,6 +3373,8 @@ jbaLP = function(kag.file = NULL,
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
+    ## browser()
 
     ## add lower bounds depending on ALT junction tier
     if (tfield %in% colnames(kag.gg$edges$dt)) {
@@ -3383,6 +3406,74 @@ jbaLP = function(kag.file = NULL,
         }
     }
 
+    ## check for heavy nodes to fix
+    if (fix.thres > 0) {
+
+        if (fix.thres < 4) {
+            warning("Small value for fix.thres selected. Resetting to 4, the minimum recommended value")
+            fix.thres = 4
+        }
+        
+        if (verbose) {
+            message("Checking for heavy nodes to fix")
+        }
+
+        penalty.dt = kag.gg$nodes$dt[, .(node.id, cn, weight)]
+
+        ## compute the difference between 'optimal' CN and 'next-best' CN
+        penalty.dt[, penalty := weight * abs(1 - 2 * (cn - floor(cn)))]
+
+        ## compute the 'best' CN - this is just CNMLE
+        penalty.dt[, best.cn := round(cn)]
+
+        ## get node ids and CNs of nodes with penalty > lambda * fix.thres
+        penalty.dt[, fixed := ((penalty > fix.thres * lambda) & (best.cn >= 0))]
+        penalty.dt[fixed == TRUE, lb := best.cn]
+        penalty.dt[fixed == TRUE, ub := best.cn]
+        penalty.dt[, new.cn := cn]
+        penalty.dt[fixed == TRUE, new.cn := best.cn]
+        penalty.dt[, new.weight := weight]
+        penalty.dt[fixed == TRUE, new.weight := NA]
+
+        if (verbose) {
+            message("Number of fixed heavy nodes: ", penalty.dt[fixed == TRUE, .N])
+        }
+
+        kag.gg$nodes$mark(cn = penalty.dt$new.cn,
+                          unfixed.cn = penalty.dt$cn,
+                          weight = penalty.dt$new.weight,
+                          unfixed.weight = penalty.dt$weight,
+                          fixed = penalty.dt$fixed)
+
+        nfix = penalty.dt[fixed == TRUE, node.id]
+    } else {
+
+        nfix = NULL
+
+    }
+
+    if (verbose) {
+        message("Grabbing available memory...")
+    }
+
+    gc.dat = gc()
+    mem.mb = sum(gc.dat[, 2])
+
+    tm = (max.mem * 1e3 - mem.mb) - 1e3 ## 1 gb buffer
+
+    if (verbose) {
+        message("Currently used: ", mem.mb, " Mb")
+        message("Allowed: ", max.mem * 1e3, " Mb")
+    }
+
+    if (tm <= 0) {
+        stop("Not enough memory to continue")
+    }
+
+    if (verbose) {
+        message("Treemem: ", tm, " Mb")
+    }
+
     res = balance(kag.gg,
                   debug = TRUE,
                   lambda = lambda,
@@ -3392,7 +3483,8 @@ jbaLP = function(kag.file = NULL,
                   epgap = epgap,
                   lp = TRUE,
                   ism = ism,
-                  trelim = max.mem * 1e3)
+                  trelim = tm, ## max.mem * 1e3,
+                  nfix = nfix)
     
     bal.gg = res$gg
     sol = res$sol
@@ -3409,6 +3501,7 @@ jbaLP = function(kag.file = NULL,
 
     new.segstats$cl = 1 ## everything same cluster
     new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
+    new.segstats$status = sol$status ## solution status to node metadata
     
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
