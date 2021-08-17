@@ -38,243 +38,334 @@ ref.only = detect_duplicate_breakpoints(dup.juncs[type == "REF"], tfield = "tier
 
 expect_equal(length(ref.only), 0)
 
+## check that fix.thres works as expected for jbaLP
+kag.sg = readRDS(system.file("testing", "fix.thres.kag.rds", package = "JaBbA"))
+
+test_that(desc = "test that treemem works as expected",
+          code = {
+              expect_error(
+                  object = { JaBbA:::jbaLP(gg = kag.sg,
+                                          cn.field = "cnmle",
+                                          var.field = "loess.var",
+                                          bins.field = "nbins",
+                                          epgap = 1e-6,
+                                          tilim = 100,
+                                          fix.thres = 10,
+                                          lambda = 100,
+                                          max.mem = 1)
+                  },
+                  regexp = "Not enough memory")
+          })
+
+test_that(desc = "fit.thres in jbaLP",
+          code = {
+              res = JaBbA:::jbaLP(gg = kag.sg,
+                    cn.field = "cnmle",
+                    var.field = "loess.var",
+                    bins.field = "nbins",
+                    epgap = 1e-6,
+                    tilim = 100,
+                    fix.thres = 10,
+                    lambda = 100)
+              res.dt = as.data.table(res$segstats)[fixed == TRUE,]
+
+              ## test that cn is fixed to cnmle
+              expect_equal(res.dt$cn, res.dt$cn.old)
+
+              ## test that weights are greater than fix.thres
+              expect_true(all(res.dt$unfixed.weight > 1e3))
+          })
+
+test_that(desc = "minimum fit.thres warning",
+          code = {
+              expect_warning(
+              object = {
+                  JaBbA:::jbaLP(gg = kag.sg,
+                    cn.field = "cnmle",
+                    var.field = "loess.var",
+                    bins.field = "nbins",
+                    epgap = 1e-6,
+                    tilim = 100,
+                    fix.thres = 1,
+                    lambda = 100)
+              },
+              regexp = "Small value for fix.thres selected")
+          })
+
+test_that(desc = "fit.thres default setting",
+          code = {
+              res = JaBbA:::jbaLP(gg = kag.sg,
+                                  cn.field = "cnmle",
+                                  var.field = "loess.var",
+                                  bins.field = "nbins",
+                                  epgap = 1e-6,
+                                  tilim = 100,
+                                  fix.thres = -1,
+                                  lambda = 100)
+              expect_false("fixed" %in% names(values(res$segstats)))
+              expect_false("unfixed.weight" %in% names(values(res$segstats)))
+              expect_false("unfixed.cn" %in% names(values(res$segstats)))
+          })
+
+
+
 ## check that all junctions are incorporated even with garbage coverage
 
-message("Testing incorporation of Tier 1 junctions even with ISM = TRUE")
+test_that(desc = "Test incorporation of Tier 1 junctions even with ISM = TRUE",
+          code = {
 
-dup.juncs.lp = suppressWarnings(
-    jbaLP(gg.file = dup.juncs.gg,
-         tilim = 60,
-         tfield = "tier",
-         cn.field = "cn",
-         ism = TRUE,
-         epgap = 1e-2,
-         verbose = 2,
-         return.type = "gGraph")
-)
+              dup.juncs.lp = suppressWarnings(
+                  jbaLP(gg.file = dup.juncs.gg,
+                        tilim = 60,
+                        tfield = "tier",
+                        cn.field = "cn",
+                        ism = TRUE,
+                        epgap = 1e-2,
+                        verbose = 2,
+                        return.type = "gGraph")
+              )
 
-inp.juncs = readRDS(dup.juncs.grl)
+              inp.juncs = readRDS(dup.juncs.grl)
 
-## all should be incorporated
-expect_equal(length(dup.juncs.lp$edges$dt[type == "ALT" & cn > 0, edge.id]),
-             length(inp.juncs))
+              ## all should be incorporated
+              expect_equal(length(dup.juncs.lp$edges$dt[type == "ALT" & cn > 0, edge.id]),
+                           length(inp.juncs))
 
-message("Testing LP JaBbA without input junctions")
+          })
 
-expect_warning(JaBbA(
-    junctions = "",
-    coverage = cf,
-    slack.penalty = 10,
-    tilim = 60,
-    cfield = 'ratio',
-    verbose = 2,
-    outdir = 'JaBbA.lp',
-    overwrite = TRUE,
-    ploidy=4.5,## preset HCC1954
-    purity=1,
-    epgap = 0.01,
-    all.in = TRUE,
-    tfield = 'nothing',
-    nudge.balanced = TRUE,
-    dyn.tuning = TRUE,
-    lp = TRUE,
-    ism = FALSE,
-    max.na = 1),
-    regexp = "no junction file is given")
+test_that(desc = "Testing LP JaBbA without input junctions",
+          code = {
 
-message("Testing LP JaBbA with wrong coverage field")
+              expect_warning(JaBbA(
+                  junctions = "",
+                  coverage = cf,
+                  slack.penalty = 10,
+                  tilim = 60,
+                  cfield = 'ratio',
+                  verbose = 2,
+                  outdir = 'JaBbA.lp',
+                  overwrite = TRUE,
+                  ploidy=4.5,## preset HCC1954
+                  purity=1,
+                  epgap = 0.01,
+                  all.in = TRUE,
+                  tfield = 'nothing',
+                  nudge.balanced = TRUE,
+                  dyn.tuning = TRUE,
+                  lp = TRUE,
+                  ism = FALSE,
+                  max.na = 1),
+                  regexp = "no junction file is given")
+          })
 
-expect_warning(JaBbA(
-    junctions = "",
-    coverage = cf,
-    slack.penalty = 10,
-    tilim = 60,
-    cfield = 'ratio',
-    field = "bad.coverage.field",
-    verbose = 2,
-    outdir = 'JaBbA.lp',
-    overwrite = TRUE,
-    ploidy=4.5,## preset HCC1954
-    purity=1,
-    epgap = 0.01,
-    all.in = TRUE,
-    tfield = 'nothing',
-    nudge.balanced = TRUE,
-    dyn.tuning = TRUE,
-    lp = TRUE,
-    ism = FALSE,
-    max.na = 1),
-    regexp = "bad.coverage.field not found in coverage GRanges metadata")
+test_that(desc = "Testing LP JaBbA with wrong coverage field",
+          code = {
 
-message("Testing vanilla JaBbA LP")
+              expect_warning(JaBbA(
+                  junctions = "",
+                  coverage = cf,
+                  slack.penalty = 10,
+                  tilim = 60,
+                  cfield = 'ratio',
+                  field = "bad.coverage.field",
+                  verbose = 2,
+                  outdir = 'JaBbA.lp',
+                  overwrite = TRUE,
+                  ploidy=4.5,## preset HCC1954
+                  purity=1,
+                  epgap = 0.01,
+                  all.in = TRUE,
+                  tfield = 'nothing',
+                  nudge.balanced = TRUE,
+                  dyn.tuning = TRUE,
+                  lp = TRUE,
+                  ism = FALSE,
+                  max.na = 1),
+                  regexp = "bad.coverage.field not found in coverage GRanges metadata")
+          })
 
-jab.lp = suppressWarnings(
-    JaBbA(junctions = jj,
-          coverage = cf,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          hets = ht,
-          tilim = 60,
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.lp',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'nothing',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = FALSE,
-          max.na = 1)
-)
+test_that(desc = "Testing vanilla JaBbA LP",
+          code = {
 
-expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns)
+              jab.lp = suppressWarnings(
+                  JaBbA(junctions = jj,
+                        coverage = cf,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        hets = ht,
+                        tilim = 60,
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.lp',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'nothing',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = FALSE,
+                        max.na = 1)
+              )
 
-message("Testing set max.mem parameter")
-jab.mem = suppressWarnings(
-    JaBbA(junctions = jj,
-          coverage = cf,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          hets = ht,
-          tilim = 60,
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.mem',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'nothing',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = FALSE,
-          max.mem = 4,
-          max.na = 1)
-)
+              expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns)
 
-expect_equal(jab.mem$nodes$dt[cn > 0, cn], expected.cns)
+          })
 
-message("Testing JaBbA LP with ISM")
-jab.ism = suppressWarnings(
-    JaBbA(junctions = jj,
-          coverage = cf,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          hets = ht,
-          tilim = 60,
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.mem',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'nothing',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = TRUE,
-          max.na = 1)
-)
+test_that(desc = "Testing set max.mem parameter",
+          code = {
+              jab.mem = suppressWarnings(
+                  JaBbA(junctions = jj,
+                        coverage = cf,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        hets = ht,
+                        tilim = 60,
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.mem',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'nothing',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = FALSE,
+                        max.mem = 4,
+                        max.na = 1)
+              )
 
-expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns)
+              expect_equal(jab.mem$nodes$dt[cn > 0, cn], expected.cns)
+          })
 
-message("Testing JaBbA LP with tier 1 junctions and uniformly random coverage")
-jab.tier = suppressWarnings(
-    JaBbA(junctions = tier.jj,
-          coverage = empty.cf,
-          seg = sg,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          hets = ht,
-          tilim = 60,
-          field = 'empty.ratio', ## random uniform
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.tier',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'tier',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = TRUE,
-          max.na = 1)
-)
+test_that(desc = "Testing JaBbA LP with ISM",
+          code = {
+              jab.ism = suppressWarnings(
+                  JaBbA(junctions = jj,
+                        coverage = cf,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        hets = ht,
+                        tilim = 60,
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.mem',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'nothing',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = TRUE,
+                        max.na = 1)
+              )
 
-## expect five ALT junctions
-expect_equal(jab.tier$edges$dt[type == "ALT" & cn > 0, .N], 5)
+              expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns)
+          })
 
-message("Testing JaBbA LP with reiteration and empty junctions file")
-jab.empty = suppressWarnings(
-    JaBbA(junctions = empty.jj,
-          juncs.uf = jj,
-          reiterate = 1,
-          coverage = cf,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          rescue.window = 1e4,
-          hets = ht,
-          tilim = 60,
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.empty.jj',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'nothing',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = FALSE,
-          max.na = 1)
-)
+test_that("Testing JaBbA LP with tier 1 junctions and uniformly random coverage",
+          code = {
+              jab.tier = suppressWarnings(
+                  JaBbA(junctions = tier.jj,
+                        coverage = empty.cf,
+                        seg = sg,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        hets = ht,
+                        tilim = 60,
+                        field = 'empty.ratio', ## random uniform
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.tier',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'tier',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = TRUE,
+                        max.na = 1)
+              )
 
-expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
+              ## expect five ALT junctions
+              expect_equal(jab.tier$edges$dt[type == "ALT" & cn > 0, .N], 5)
+          })
 
-message("Testing JaBbA LP with empty junctions file and tiers in juncs.uf")
-jab.empty.2 = suppressWarnings(
-    JaBbA(junctions = empty.jj,
-          juncs.uf = tier.jj,
-          reiterate = 1,
-          coverage = cf,
-          whitelist.junctions = whitelist.junctions,
-          blacklist.coverage = blacklist.coverage,
-          slack.penalty = 10,
-          rescue.window = 1e4,
-          hets = ht,
-          tilim = 60,
-          cfield = 'nudge',
-          verbose = 2,
-          outdir = 'JaBbA.empty.jj',
-          overwrite = TRUE,
-          ploidy=4.5,## preset HCC1954
-          purity=1,
-          epgap = 0.01,
-          all.in = TRUE,
-          tfield = 'tier',
-          nudge.balanced = TRUE,
-          dyn.tuning = TRUE,
-          lp = TRUE,
-          ism = FALSE,
-          max.na = 1)
-)
+test_that("Testing JaBbA LP with reiteration and empty junctions file",
+          code = {
+              jab.empty = suppressWarnings(
+                  JaBbA(junctions = empty.jj,
+                        juncs.uf = jj,
+                        reiterate = 1,
+                        coverage = cf,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        rescue.window = 1e4,
+                        hets = ht,
+                        tilim = 60,
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.empty.jj',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'nothing',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = FALSE,
+                        max.na = 1)
+              )
 
-expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)
+              expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
+          })
+
+test_that("Testing JaBbA LP with empty junctions file and tiers in juncs.uf",
+          code = {
+              jab.empty.2 = suppressWarnings(
+                  JaBbA(junctions = empty.jj,
+                        juncs.uf = tier.jj,
+                        reiterate = 1,
+                        coverage = cf,
+                        whitelist.junctions = whitelist.junctions,
+                        blacklist.coverage = blacklist.coverage,
+                        slack.penalty = 10,
+                        rescue.window = 1e4,
+                        hets = ht,
+                        tilim = 60,
+                        cfield = 'nudge',
+                        verbose = 2,
+                        outdir = 'JaBbA.empty.jj',
+                        overwrite = TRUE,
+                        ploidy=4.5,## preset HCC1954
+                        purity=1,
+                        epgap = 0.01,
+                        all.in = TRUE,
+                        tfield = 'tier',
+                        nudge.balanced = TRUE,
+                        dyn.tuning = TRUE,
+                        lp = TRUE,
+                        ism = FALSE,
+                        max.na = 1)
+              )
+
+              expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)
+          })
