@@ -101,7 +101,6 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param max.mem maximum memory CPLEX/Gurobi is allowed to use
 #' @param epgap relative optimality gap tolerated by the solver
 #' @param use.gurobi logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE). Default FALSE.
-#'
 #' @param outdir  out directory to dump into, default `./`
 #' @param name  sample name
 #' @param mc.cores integer how many cores to use to fork subgraphs generation. Default 1. CAUTION as more cores will multiply the number of max threads used by CPLEX.
