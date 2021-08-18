@@ -161,7 +161,7 @@ JaBbA = function(## Two required inputs
                  dyn.tuning = TRUE,
                  lp = FALSE,
                  ism = FALSE,
-                 fix.thres = FALSE)
+                 fix.thres = -1)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -2350,7 +2350,7 @@ ramip_stub = function(kag.file,
                       slack.prior = 0.001,
                       gamma = NA,
                       beta = NA,
-                      customparams = T,
+                      customparams = F,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -3290,7 +3290,8 @@ jbaLP = function(kag.file = NULL,
                  epgap = 1e-3,
                  max.mem = 16,
                  fix.thres = -1,
-                 return.type = "karyograph")
+                 return.type = "karyograph",
+                 nodefileind = 3)
 {
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
         stop("one of kag, kag.file, gg.file, gg must be supplied")
@@ -3459,7 +3460,7 @@ jbaLP = function(kag.file = NULL,
     gc.dat = gc()
     mem.mb = sum(gc.dat[, 2])
 
-    tm = (max.mem * 1e3 - mem.mb) - 1e3 ## 1 gb buffer
+    tm = (max.mem * 1e3 - 2 * mem.mb) - 1e3 ## 1 gb buffer
 
     if (verbose) {
         message("Currently used: ", mem.mb, " Mb")
@@ -3484,7 +3485,8 @@ jbaLP = function(kag.file = NULL,
                   lp = TRUE,
                   ism = ism,
                   trelim = tm, ## max.mem * 1e3,
-                  nfix = nfix)
+                  nfix = nfix,
+                  nodefileind = 3)
     
     bal.gg = res$gg
     sol = res$sol
