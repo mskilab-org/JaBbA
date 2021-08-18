@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 library(optparse)
+library(devtools)
+devtools::load_all("~/git/JaBbA") ## remember to remove this!!
 jbastr = "
  _____         ___    _      _____ 
 (___  )       (  _`\\ ( )    (  _  )
@@ -174,6 +176,11 @@ if (!exists("opt"))
             default = 16,
             help = "(uncompressed) tree memory limit for CPLEX"),
         make_option(
+            c("--fix.thres"),
+            type = "numeric",
+            default = -1,
+            help = "fix nodes above a threshold multiple of lambda"),
+        make_option(
             c("--lp"),
             type = "logical",
             default = FALSE,
@@ -317,8 +324,8 @@ suppressPackageStartupMessages(
         mc.cores = opt$cores,
         lp = opt$lp,
         ism = opt$ism,
-        verbose = 2
-        ## TODO init, dyn.tuning
+        verbose = 2,
+        fix.thres = opt$fix.thres
     )
 })
 
