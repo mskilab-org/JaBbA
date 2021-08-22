@@ -111,6 +111,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param lp (logical) whether to run as linear program, default FALSE
 #' @param ism (logical) wehther to add ism constraints. default FALSE. only used if lp = TRUE
 #' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
+#' @param min.bins (numeric) minimum number of bins needed for a valid segment CN estimate (default 5)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -161,7 +162,8 @@ JaBbA = function(## Two required inputs
                  dyn.tuning = TRUE,
                  lp = FALSE,
                  ism = FALSE,
-                 fix.thres = -1)
+                 fix.thres = -1,
+                 min.bins = 5)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -415,7 +417,8 @@ JaBbA = function(## Two required inputs
                 cn.signif = cn.signif,
                 lp = lp,
                 ism = ism,
-                fix.thres = fix.thres)
+                fix.thres = fix.thres,
+                min.bins = min.bins)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -583,7 +586,8 @@ JaBbA = function(## Two required inputs
             cn.signif = cn.signif,
             lp = lp,
             ism = ism,
-            fix.thres = fix.thres)
+            fix.thres = fix.thres,
+            min.bins = min.bins)
     }
     setwd(cdir)
     return(jab)
@@ -642,6 +646,7 @@ JaBbA = function(## Two required inputs
 #' @param lp whether to run as linear program (default FALSE)
 #' @param ism logical whether to add ISM constraints default FALSE
 #' @param fix.thres (numeric) multiple of lambda above which to fix nodes
+#' @param min.bins (numeric) min number of coverage bins for a valid CN estimate
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -679,6 +684,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       lp = FALSE, ## whether to run as linear program
                       ism = FALSE, ## add ISM constraints (only used if lp = TRUE)
                       fix.thres = -1,
+                      min.bins = 5,
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
@@ -1211,7 +1217,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    lp = lp,
                    ism = ism,
                    tfield = tfield,
-                   fix.thres = fix.thres)
+                   fix.thres = fix.thres,
+                   min.bins = min.bins)
     }
 
 
@@ -2367,7 +2374,8 @@ ramip_stub = function(kag.file,
                       lp = FALSE,
                       ism = FALSE,
                       tfield = NULL,
-                      fix.thres = -1)
+                      fix.thres = -1,
+                      min.bins = 5)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2576,6 +2584,7 @@ ramip_stub = function(kag.file,
                        ism = ism,
                        tfield = tfield,
                        max.mem = mem,
+                       min.bins = min.bins,
                        fix.thres = fix.thres)
 
     } else {
@@ -3353,13 +3362,14 @@ jbaLP = function(kag.file = NULL,
         vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
         if (is.null(beta)) {
             warning("no $beta provided in karyograph/gg metadata")
-            sd = sqrt(vars) 
         } else if (is.na(beta)) {
             warning("NA value for $beta provided in karyograph/gg metadata")
-            sd = sqrt(vars) 
         } else {
-            sd = sqrt(vars) & beta
+            vars = beta * beta * vars
         }
+
+        vars = pmax(vars, kag.gg$nodes$dt$cn)
+        sd = sqrt(vars)
 
         ## process bins
         bins = values(kag.gg$nodes$gr)[[bins.field]]
@@ -3460,7 +3470,7 @@ jbaLP = function(kag.file = NULL,
     gc.dat = gc()
     mem.mb = sum(gc.dat[, 2])
 
-    tm = (max.mem * 1e3 - 2 * mem.mb) - 1e3 ## 1 gb buffer
+    tm = (max.mem * 1e3 - 2 * mem.mb) - 1e3 ## 1 gb buffer - better is to call in balance
 
     if (verbose) {
         message("Currently used: ", mem.mb, " Mb")
@@ -3494,6 +3504,7 @@ jbaLP = function(kag.file = NULL,
     if (return.type == "gGraph") {
         return(bal.gg)
     }
+
     
     ## just replace things in the outputs
     ## this can create weird errors if the order of kag and bal.gg isn't the same
@@ -3504,6 +3515,7 @@ jbaLP = function(kag.file = NULL,
     new.segstats$cl = 1 ## everything same cluster
     new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
     new.segstats$status = sol$status ## solution status to node metadata
+    new.segstats$obj = bal.gg$meta$obj ## objective
     
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
@@ -3531,6 +3543,8 @@ jbaLP = function(kag.file = NULL,
     out$segstats = new.segstats
     out$status = sol$status
     out$epgap = sol$epgap
+    out$obj = bal.gg$meta$obj
+    
     return(out)
 }
 

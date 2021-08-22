@@ -215,36 +215,6 @@ test_that(desc = "Testing vanilla JaBbA LP",
 
           })
 
-test_that(desc = "Testing set max.mem parameter",
-          code = {
-              jab.mem = suppressWarnings(
-                  JaBbA(junctions = jj,
-                        coverage = cf,
-                        whitelist.junctions = whitelist.junctions,
-                        blacklist.coverage = blacklist.coverage,
-                        slack.penalty = 10,
-                        hets = ht,
-                        tilim = 60,
-                        cfield = 'nudge',
-                        verbose = 2,
-                        outdir = 'JaBbA.mem',
-                        overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
-                        purity=1,
-                        epgap = 0.01,
-                        all.in = TRUE,
-                        tfield = 'nothing',
-                        nudge.balanced = TRUE,
-                        dyn.tuning = TRUE,
-                        lp = TRUE,
-                        ism = FALSE,
-                        max.mem = 4,
-                        max.na = 1)
-              )
-
-              expect_equal(jab.mem$nodes$dt[cn > 0, cn], expected.cns)
-          })
-
 test_that(desc = "Testing JaBbA LP with ISM",
           code = {
               jab.ism = suppressWarnings(
