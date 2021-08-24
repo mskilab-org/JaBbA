@@ -8364,9 +8364,9 @@ ppgrid = function(segstats,
 
     dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
 
-  if (verbose)
-    cat('\n')
-
+  if (verbose) {
+      cat('\n')
+  }
     ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
     ## cix = as.numeric(colnames(NLL))>=ploidy.min & as.numeric(colnames(NLL))<=ploidy.max
     ## NLL = NLL[rix, cix, drop = FALSE]
@@ -8410,6 +8410,11 @@ ppgrid = function(segstats,
             C = hclust(d = dist(ix), method = 'single')
             cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
             minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
+        }
+        else if (nrow(ix) == 0) {
+            ## if NLL is monotonically increaing or dereasing, minima will not be found
+            ## in this case, return the local minimum of NLL over the tested grid
+            minima = Matrix::which(NLL == min(NLL, na.rm = T), arr.ind = T)
         }
         else
             minima = ix[1,, drop = FALSE]
@@ -8654,7 +8659,9 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
     variances = rel[(in.quant.r), var(ratio), keyby=.(fused, lxxx)]
     variances[, side := ifelse(fused, "f_std", "u_std")]
     variances[, std := sqrt(V1)]
-    vars = dcast.data.table(variances, lxxx ~ side, value.var="std")
+    ## if unfused loose ends are present, a column should still be made
+    variances[, side := factor(side, levels = c("f_std", "u_std"))]
+    vars = dcast.data.table(variances, lxxx ~ side, value.var="std", fill = NA, drop = FALSE)
     rel[is.na(in.quant.r), in.quant.r := FALSE]
     rel[, tum.median := median(tum.counts[in.quant.r]), by=.(lxxx)]
     rel[, norm.median := median(norm.counts[in.quant.r]), by=.(lxxx)]
