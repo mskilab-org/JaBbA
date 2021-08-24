@@ -7059,11 +7059,13 @@ filter_oob_junctions = function(ra) {
     end.oob = start(bp1) > sl[as.character(seqnames(bp1))] | start(bp2) > sl[as.character(seqnames(bp2))]
     names(end.oob) = NULL
     names(start.oob) = NULL
-    if (any(start.oob)) {
+    start.oob[which(is.na(start.oob))] = FALSE
+    end.oob[which(is.na(end.oob))] = FALSE
+    if (any(start.oob, na.rm = TRUE)) {
         jwarning("Some junction breakpoints are < 1 and will be removed")
         jwarning("Number of affected junctions: ", sum(start.oob, na.rm = T))
     }
-    if (any(end.oob)) {
+    if (any(end.oob, na.rm = TRUE)) {
         jwarning("Some junction breakpoints are > seqlength and will be removed")
         jwarning("Number of affected junctions: ", sum(end.oob, na.rm = T))
     }
