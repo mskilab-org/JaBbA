@@ -7038,6 +7038,39 @@ read.junctions = function(rafile,
     ## return(new("junctions", out))
 }
 
+#' @name filter_oob_junctions
+#' @rdname internal
+#' @details
+#'
+#' Remove any out-of-range junctions
+#'
+#' A junction will be removed if:
+#' - an endpoint exceeds seqlength of chromosome
+#' - the start point is less than 1
+#'
+#' @param ra GRangesList object to be verified
+#' @return GRangesList
+filter_oob_junctions = function(ra) {
+    pivoted.ra = grl.pivot(ra)
+    sl = seqlengths(ra)
+    bp1 = pivoted.ra[[1]]
+    bp2 = pivoted.ra[[2]]
+    start.oob = start(bp1) < 1 | start(bp2) < 1
+    end.oob = start(bp1) > sl[as.character(seqnames(bp1))] | start(bp2) > sl[as.character(seqnames(bp2))]
+    names(end.oob) = NULL
+    names(start.oob) = NULL
+    if (any(start.oob)) {
+        jwarning("Some junction breakpoints are < 1 and will be removed")
+        jwarning("Number of affected junctions: ", sum(start.oob, na.rm = T))
+    }
+    if (any(end.oob)) {
+        jwarning("Some junction breakpoints are > seqlength and will be removed")
+        jwarning("Number of affected junctions: ", sum(end.oob, na.rm = T))
+    }
+    return(ra[which(start.oob == FALSE & end.oob == FALSE, useNames = FALSE)])
+}
+
+
 #' @name verify.junctions
 #' @rdname internal
 #' @details
@@ -7065,6 +7098,7 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
+    ra = filter_oob_junctions(ra)
     return(ra)
 }
 
@@ -7121,15 +7155,16 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         bp2 = suppressWarnings(gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F))
 
 
-        #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
-        #' fix added to handle strange [0 0] junctions outputted
-        #' by Snowman ... which failed to match to any tile
-        #' todo: may want to also handle junctions that
-        #' fall off the other side of the chromosome
-        end(bp1) = pmax(1, end(bp1))
-        start(bp1) = pmax(1, start(bp1))
-        end(bp1) = pmax(1, end(bp1))
-        start(bp1) = pmax(1, start(bp1))
+        ## #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
+        ## #' fix added to handle strange [0 0] junctions outputted
+        ## #' by Snowman ... which failed to match to any tile
+        ## #' todo: may want to also handle junctions that
+        ## #' fall off the other side of the chromosome
+        #' this should now be unnecessary due to junction filtering
+        ## end(bp1) = pmax(1, end(bp1))
+        ## start(bp1) = pmax(1, start(bp1))
+        ## end(bp1) = pmax(1, end(bp1))
+        ## start(bp1) = pmax(1, start(bp1))
 
         if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
             jerror('bp1 and bp2 must be signed intervals (i.e. either + or -)')
