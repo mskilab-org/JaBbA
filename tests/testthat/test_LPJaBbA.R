@@ -92,6 +92,25 @@ test_that(desc = "minimum fit.thres warning",
               regexp = "Small value for fix.thres selected")
           })
 
+test_that(desc = "no beta in karyograph warning",
+          code = {
+              expect_warning(
+              object = {
+                  kag.nobeta = kag.gg$copy
+                  kag.nobeta$set(beta = NA)
+                  JaBbA:::jbaLP(gg = kag.sg,
+                    cn.field = "cnmle",
+                    var.field = "loess.var",
+                    bins.field = "nbins",
+                    epgap = 1e-6,
+                    tilim = 100,
+                    fix.thres = 1,
+                    lambda = 100)
+              },
+              regexp = "NA value for $beta")
+          })
+
+
 test_that(desc = "fit.thres default setting",
           code = {
               res = JaBbA:::jbaLP(gg = kag.sg,
