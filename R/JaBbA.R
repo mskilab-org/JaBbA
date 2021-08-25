@@ -101,7 +101,6 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param max.mem maximum memory CPLEX/Gurobi is allowed to use
 #' @param epgap relative optimality gap tolerated by the solver
 #' @param use.gurobi logical flag specifying whether to use gurobi (if TRUE) instead of CPLEX (if FALSE). Default FALSE.
-#'
 #' @param outdir  out directory to dump into, default `./`
 #' @param name  sample name
 #' @param mc.cores integer how many cores to use to fork subgraphs generation. Default 1. CAUTION as more cores will multiply the number of max threads used by CPLEX.
@@ -109,8 +108,10 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param verbose logical whether to print out the most verbose version of progress log
 #' @param init jabba object (list) or path to .rds file containing previous jabba object which to use to initialize solution, this object needs to have the identical aberrant junctions as the current jabba object (but may have different segments and loose ends, i.e. is from a previous iteration)
 #' @param dyn.tuning logical whether to let JaBbA dynamically tune the convergence criteria, default TRUE
-#' @param lp logical indicating whether to run as linear program, default FALSE
-#' @param ism logical indicating wehther to add ism constraints. default FALSE. only used if lp = TRUE
+#' @param lp (logical) whether to run as linear program, default FALSE
+#' @param ism (logical) wehther to add ism constraints. default FALSE. only used if lp = TRUE
+#' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
+#' @param min.bins (numeric) minimum number of bins needed for a valid segment CN estimate (default 5)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -160,7 +161,9 @@ JaBbA = function(## Two required inputs
                  init = NULL,
                  dyn.tuning = TRUE,
                  lp = FALSE,
-                 ism = FALSE)
+                 ism = FALSE,
+                 fix.thres = -1,
+                 min.bins = 5)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -413,7 +416,9 @@ JaBbA = function(## Two required inputs
                 geno = geno,
                 cn.signif = cn.signif,
                 lp = lp,
-                ism = ism)
+                ism = ism,
+                fix.thres = fix.thres,
+                min.bins = min.bins)
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -580,7 +585,9 @@ JaBbA = function(## Two required inputs
             geno = geno,
             cn.signif = cn.signif,
             lp = lp,
-            ism = ism)
+            ism = ism,
+            fix.thres = fix.thres,
+            min.bins = min.bins)
     }
     setwd(cdir)
     return(jab)
@@ -638,6 +645,8 @@ JaBbA = function(## Two required inputs
 #' @param overwrite  flag whether to overwrite existing output directory contents or just continue with existing files.
 #' @param lp whether to run as linear program (default FALSE)
 #' @param ism logical whether to add ISM constraints default FALSE
+#' @param fix.thres (numeric) multiple of lambda above which to fix nodes
+#' @param min.bins (numeric) min number of coverage bins for a valid CN estimate
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -674,6 +683,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       overwrite = F, ## whether to overwrite existing output in outdir
                       lp = FALSE, ## whether to run as linear program
                       ism = FALSE, ## add ISM constraints (only used if lp = TRUE)
+                      fix.thres = -1,
+                      min.bins = 5,
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
@@ -1205,7 +1216,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    dyn.tuning = dyn.tuning,
                    lp = lp,
                    ism = ism,
-                   tfield = tfield)
+                   tfield = tfield,
+                   fix.thres = fix.thres,
+                   min.bins = min.bins)
     }
 
 
@@ -2344,7 +2357,7 @@ ramip_stub = function(kag.file,
                       slack.prior = 0.001,
                       gamma = NA,
                       beta = NA,
-                      customparams = T,
+                      customparams = F,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -2360,7 +2373,9 @@ ramip_stub = function(kag.file,
                       debug.ix = NULL,
                       lp = FALSE,
                       ism = FALSE,
-                      tfield = NULL)
+                      tfield = NULL,
+                      fix.thres = -1,
+                      min.bins = 5)
 {
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
@@ -2568,7 +2583,9 @@ ramip_stub = function(kag.file,
                        lambda = 1/slack.prior,
                        ism = ism,
                        tfield = tfield,
-                       max.mem = mem)
+                       max.mem = mem,
+                       min.bins = min.bins,
+                       fix.thres = fix.thres)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3233,8 +3250,6 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 
 #' @name jbaLP
 #' @title jbaLP
-#' @rdname internal
-#' jbaLP
 #' 
 #' @details 
 #'
@@ -3258,6 +3273,7 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param ism (logical) whether to add infinite site assumption constraints. default TRUE
 #' @param epgap (numeric) default 1e-3
 #' @param max.mem (numeric) maximum memory in GB
+#' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 #' @param return.type (character) either "gGraph" or "karyograph"
 #'
 #' @return
@@ -3282,7 +3298,9 @@ jbaLP = function(kag.file = NULL,
                  ism = TRUE,
                  epgap = 1e-3,
                  max.mem = 16,
-                 return.type = "karyograph")
+                 fix.thres = -1,
+                 return.type = "karyograph",
+                 nodefileind = 3)
 {
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
         stop("one of kag, kag.file, gg.file, gg must be supplied")
@@ -3294,6 +3312,7 @@ jbaLP = function(kag.file = NULL,
         if (verbose) {
             message("using supplied karyograph")
             kag.gg = gG(jabba = kag)
+            beta = kag$beta
         }
     } else {
         if (!is.null(kag.file) && file.exists(kag.file)) {
@@ -3302,16 +3321,19 @@ jbaLP = function(kag.file = NULL,
             }
             kag = readRDS(kag.file)
             kag.gg = gG(jabba = kag)
+            beta = kag$beta
         } else if (!is.null(gg)) {
             if (verbose) {
                 message("using supplied gGraph")
             }
             kag.gg = gg$copy
+            beta = gg$meta$beta
         } else if (!is.null(gg.file) && file.exists(gg.file)) {
             if (verbose) {
                 message("reading gGraph from provided file")
             }
             kag.gg = readRDS(file = gg.file)
+            beta = gg$meta$beta
         } else {
             stop("kag.file does not exist and kag not supplied")
         }
@@ -3338,7 +3360,16 @@ jbaLP = function(kag.file = NULL,
         ## process variances
         vars = values(kag.gg$nodes$gr)[[var.field]]
         vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
-        sd = sqrt(vars) * kag$beta ## rel2abs the standard deviation
+        if (is.null(beta)) {
+            warning("no $beta provided in karyograph/gg metadata")
+        } else if (is.na(beta)) {
+            warning("NA value for $beta provided in karyograph/gg metadata")
+        } else {
+            vars = beta * beta * vars
+        }
+
+        vars = pmax(vars, kag.gg$nodes$dt$cn)
+        sd = sqrt(vars)
 
         ## process bins
         bins = values(kag.gg$nodes$gr)[[bins.field]]
@@ -3353,6 +3384,8 @@ jbaLP = function(kag.file = NULL,
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
+    ## browser()
 
     ## add lower bounds depending on ALT junction tier
     if (tfield %in% colnames(kag.gg$edges$dt)) {
@@ -3384,6 +3417,74 @@ jbaLP = function(kag.file = NULL,
         }
     }
 
+    ## check for heavy nodes to fix
+    if (fix.thres > 0) {
+
+        if (fix.thres < 4) {
+            warning("Small value for fix.thres selected. Resetting to 4, the minimum recommended value")
+            fix.thres = 4
+        }
+        
+        if (verbose) {
+            message("Checking for heavy nodes to fix")
+        }
+
+        penalty.dt = kag.gg$nodes$dt[, .(node.id, cn, weight)]
+
+        ## compute the difference between 'optimal' CN and 'next-best' CN
+        penalty.dt[, penalty := weight * abs(1 - 2 * (cn - floor(cn)))]
+
+        ## compute the 'best' CN - this is just CNMLE
+        penalty.dt[, best.cn := round(cn)]
+
+        ## get node ids and CNs of nodes with penalty > lambda * fix.thres
+        penalty.dt[, fixed := ((penalty > fix.thres * lambda) & (best.cn >= 0))]
+        penalty.dt[fixed == TRUE, lb := best.cn]
+        penalty.dt[fixed == TRUE, ub := best.cn]
+        penalty.dt[, new.cn := cn]
+        penalty.dt[fixed == TRUE, new.cn := best.cn]
+        penalty.dt[, new.weight := weight]
+        penalty.dt[fixed == TRUE, new.weight := NA]
+
+        if (verbose) {
+            message("Number of fixed heavy nodes: ", penalty.dt[fixed == TRUE, .N])
+        }
+
+        kag.gg$nodes$mark(cn = penalty.dt$new.cn,
+                          unfixed.cn = penalty.dt$cn,
+                          weight = penalty.dt$new.weight,
+                          unfixed.weight = penalty.dt$weight,
+                          fixed = penalty.dt$fixed)
+
+        nfix = penalty.dt[fixed == TRUE, node.id]
+    } else {
+
+        nfix = NULL
+
+    }
+
+    if (verbose) {
+        message("Grabbing available memory...")
+    }
+
+    gc.dat = gc()
+    mem.mb = sum(gc.dat[, 2])
+
+    tm = (max.mem * 1e3 - 2 * mem.mb) - 1e3 ## 1 gb buffer - better is to call in balance
+
+    if (verbose) {
+        message("Currently used: ", mem.mb, " Mb")
+        message("Allowed: ", max.mem * 1e3, " Mb")
+    }
+
+    if (tm <= 0) {
+        stop("Not enough memory to continue")
+    }
+
+    if (verbose) {
+        message("Treemem: ", tm, " Mb")
+    }
+
     res = balance(kag.gg,
                   debug = TRUE,
                   lambda = lambda,
@@ -3393,7 +3494,9 @@ jbaLP = function(kag.file = NULL,
                   epgap = epgap,
                   lp = TRUE,
                   ism = ism,
-                  trelim = max.mem * 1e3)
+                  trelim = tm, ## max.mem * 1e3,
+                  nfix = nfix,
+                  nodefileind = 3)
     
     bal.gg = res$gg
     sol = res$sol
@@ -3401,6 +3504,7 @@ jbaLP = function(kag.file = NULL,
     if (return.type == "gGraph") {
         return(bal.gg)
     }
+
     
     ## just replace things in the outputs
     ## this can create weird errors if the order of kag and bal.gg isn't the same
@@ -3410,6 +3514,8 @@ jbaLP = function(kag.file = NULL,
 
     new.segstats$cl = 1 ## everything same cluster
     new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
+    new.segstats$status = sol$status ## solution status to node metadata
+    new.segstats$obj = bal.gg$meta$obj ## objective
     
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
@@ -3437,6 +3543,8 @@ jbaLP = function(kag.file = NULL,
     out$segstats = new.segstats
     out$status = sol$status
     out$epgap = sol$epgap
+    out$obj = bal.gg$meta$obj
+    
     return(out)
 }
 
@@ -6930,6 +7038,41 @@ read.junctions = function(rafile,
     ## return(new("junctions", out))
 }
 
+#' @name filter_oob_junctions
+#' @rdname internal
+#' @details
+#'
+#' Remove any out-of-range junctions
+#'
+#' A junction will be removed if:
+#' - an endpoint exceeds seqlength of chromosome
+#' - the start point is less than 1
+#'
+#' @param ra GRangesList object to be verified
+#' @return GRangesList
+filter_oob_junctions = function(ra) {
+    pivoted.ra = grl.pivot(ra)
+    sl = seqlengths(ra)
+    bp1 = pivoted.ra[[1]]
+    bp2 = pivoted.ra[[2]]
+    start.oob = start(bp1) < 1 | start(bp2) < 1
+    end.oob = start(bp1) > sl[as.character(seqnames(bp1))] | start(bp2) > sl[as.character(seqnames(bp2))]
+    names(end.oob) = NULL
+    names(start.oob) = NULL
+    start.oob[which(is.na(start.oob))] = FALSE
+    end.oob[which(is.na(end.oob))] = FALSE
+    if (any(start.oob, na.rm = TRUE)) {
+        jwarning("Some junction breakpoints are < 1 and will be removed")
+        jwarning("Number of affected junctions: ", sum(start.oob, na.rm = T))
+    }
+    if (any(end.oob, na.rm = TRUE)) {
+        jwarning("Some junction breakpoints are > seqlength and will be removed")
+        jwarning("Number of affected junctions: ", sum(end.oob, na.rm = T))
+    }
+    return(ra[which(start.oob == FALSE & end.oob == FALSE, useNames = FALSE)])
+}
+
+
 #' @name verify.junctions
 #' @rdname internal
 #' @details
@@ -6957,6 +7100,7 @@ verify.junctions = function(ra){
         }
     }
     ## stopifnot(inherits(ra, "GRangesList"))
+    ra = filter_oob_junctions(ra)
     return(ra)
 }
 
@@ -7013,15 +7157,16 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         bp2 = suppressWarnings(gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F))
 
 
-        #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
-        #' fix added to handle strange [0 0] junctions outputted
-        #' by Snowman ... which failed to match to any tile
-        #' todo: may want to also handle junctions that
-        #' fall off the other side of the chromosome
-        end(bp1) = pmax(1, end(bp1))
-        start(bp1) = pmax(1, start(bp1))
-        end(bp1) = pmax(1, end(bp1))
-        start(bp1) = pmax(1, start(bp1))
+        ## #' mimielinski Sunday, Aug 06, 2017 06:46:15 PM
+        ## #' fix added to handle strange [0 0] junctions outputted
+        ## #' by Snowman ... which failed to match to any tile
+        ## #' todo: may want to also handle junctions that
+        ## #' fall off the other side of the chromosome
+        #' this should now be unnecessary due to junction filtering
+        ## end(bp1) = pmax(1, end(bp1))
+        ## start(bp1) = pmax(1, start(bp1))
+        ## end(bp1) = pmax(1, end(bp1))
+        ## start(bp1) = pmax(1, start(bp1))
 
         if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
             jerror('bp1 and bp2 must be signed intervals (i.e. either + or -)')
@@ -8256,9 +8401,9 @@ ppgrid = function(segstats,
 
     dimnames(NLL) = list(as.character(purity.guesses), as.character(ploidy.guesses))
 
-  if (verbose)
-    cat('\n')
-
+  if (verbose) {
+      cat('\n')
+  }
     ## rix = as.numeric(rownames(NLL))>=purity.min & as.numeric(rownames(NLL))<=purity.max
     ## cix = as.numeric(colnames(NLL))>=ploidy.min & as.numeric(colnames(NLL))<=ploidy.max
     ## NLL = NLL[rix, cix, drop = FALSE]
@@ -8302,6 +8447,11 @@ ppgrid = function(segstats,
             C = hclust(d = dist(ix), method = 'single')
             cl = cutree(C, h = min(c(nrow(NLL), ncol(NLL), 2)))
             minima = ix[vaggregate(1:nrow(ix), by = list(cl), function(x) x[which.min(NLL[ix[x, drop = FALSE]])]), , drop = FALSE]
+        }
+        else if (nrow(ix) == 0) {
+            ## if NLL is monotonically increaing or dereasing, minima will not be found
+            ## in this case, return the local minimum of NLL over the tested grid
+            minima = Matrix::which(NLL == min(NLL, na.rm = T), arr.ind = T)
         }
         else
             minima = ix[1,, drop = FALSE]
@@ -8546,7 +8696,9 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
     variances = rel[(in.quant.r), var(ratio), keyby=.(fused, lxxx)]
     variances[, side := ifelse(fused, "f_std", "u_std")]
     variances[, std := sqrt(V1)]
-    vars = dcast.data.table(variances, lxxx ~ side, value.var="std")
+    ## if unfused loose ends are present, a column should still be made
+    variances[, side := factor(side, levels = c("f_std", "u_std"))]
+    vars = dcast.data.table(variances, lxxx ~ side, value.var="std", fill = NA, drop = FALSE)
     rel[is.na(in.quant.r), in.quant.r := FALSE]
     rel[, tum.median := median(tum.counts[in.quant.r]), by=.(lxxx)]
     rel[, norm.median := median(norm.counts[in.quant.r]), by=.(lxxx)]
