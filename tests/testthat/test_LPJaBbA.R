@@ -96,18 +96,17 @@ test_that(desc = "no beta in karyograph warning",
           code = {
               expect_warning(
               object = {
-                  kag.nobeta = kag.gg$copy
+                  kag.nobeta = kag.sg$copy
                   kag.nobeta$set(beta = NA)
-                  JaBbA:::jbaLP(gg = kag.sg,
+                  JaBbA:::jbaLP(gg = kag.nobeta,
                     cn.field = "cnmle",
                     var.field = "loess.var",
                     bins.field = "nbins",
                     epgap = 1e-6,
                     tilim = 100,
-                    fix.thres = 1,
+                    fix.thres = 100,
                     lambda = 100)
-              },
-              regexp = "NA value for $beta")
+              })
           })
 
 
