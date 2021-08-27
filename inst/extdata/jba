@@ -174,6 +174,11 @@ if (!exists("opt"))
             default = 16,
             help = "(uncompressed) tree memory limit for CPLEX"),
         make_option(
+            c("--fix.thres"),
+            type = "numeric",
+            default = 5,
+            help = "fix nodes above a threshold multiple of lambda"),
+        make_option(
             c("--lp"),
             type = "logical",
             default = FALSE,
@@ -183,10 +188,6 @@ if (!exists("opt"))
             type = "logical",
             default = FALSE,
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
-        ## make_option(c("--gurobi"),
-        ##             type = 'character',
-        ##             default = 'FALSE',
-        ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = FALSE,
@@ -213,7 +214,6 @@ if (!exists("opt"))
         {
             message('Did not find junction file ', opt$junctions)
             message('Warning: will be running JaBbA without junctions')
-            ## print_help(parseobj); stop()
             opt$junctions = ""
         }
         if (!file.exists(opt$coverage))
@@ -317,8 +317,8 @@ suppressPackageStartupMessages(
         mc.cores = opt$cores,
         lp = opt$lp,
         ism = opt$ism,
-        verbose = 2
-        ## TODO init, dyn.tuning
+        verbose = 2,
+        fix.thres = opt$fix.thres
     )
 })
 
