@@ -8692,6 +8692,10 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
                    good.cov=sum(is.na(tum.counts))/.N < 0.1 & sum(is.na(norm.counts))/.N < 0.1 & sum(is.na(ratio))/.N < 0.1 & wid > 5e4
                ), by=.(subject.id, fused)]
 
+    # dealing with tiny flanking nodes
+    # if a flanking node has 2 or less bins then in.quant.r will be TRUE (unless ratio is NA)
+    rel[, in.quant.r := ifelse(.N > 2, in.quant.r, !is.na(ratio)), by = .(subject.id, fused)]
+
     rel[, lxxx := leix]
     variances = rel[(in.quant.r), var(ratio), keyby=.(fused, lxxx)]
     variances[, side := ifelse(fused, "f_std", "u_std")]
