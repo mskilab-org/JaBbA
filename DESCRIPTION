@@ -31,6 +31,7 @@ Imports:
   optparse,
   gplots,
   graphics,
+  loosends,
   sequenza
 Suggests: 
   testthat,

@@ -1,6 +1,7 @@
 #' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
+#' @importFrom loosends filter.loose
 #' @importFrom gGnome gG balance
 #' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
 #' @importFrom gTrack gTrack
@@ -368,10 +369,25 @@ JaBbA = function(## Two required inputs
 
                 if (lp) {
                     jmessage("Using segments from JaBbA output of previous iteration")
+                    loose.ends.fn = file.path(outdir,
+                                              paste0("iteration", this.iter - 1),
+                                              "loose.end.stats.rds")
+                    ## if (this.iter > 2) {
+                    ##     message("Using loose end information")
+                    ##     loose.ends.fn = file.path(outdir,
+                    ##                               paste0("iteration", this.iter - 1),
+                    ##                               "loose.end.stats.rds")
+                    ## } else {
+                    ##     message("Using JaBbA segmentation")
+                    ##     loose.ends.fn = "/dev/null"
+                    ## }
                     seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
+
+                    ## roll back temporarily
                     seg = readRDS(seg.fn)$segstats[, c()]
                     seg = seg %Q% (strand(seg) == "+")
                     seg = gr.stripstrand(seg)
+                    ## seg = loose_end_segs(seg.fn, loose.ends.fn)
                 }
                 
             }
@@ -881,7 +897,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 {
                     jmessage('Importing seg from UCSC format')
                     seg = rtracklayer::import(seg)
-                    field = 'score';
+                    ## field = 'score';
                 }
             }
         }
@@ -1035,6 +1051,16 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     jmessage("Conform the reference sequence length of: seg, coverage, and ra, to be: \n",
              paste0("\t", names(union.sl), ":", union.sl, collapse = "\n"))
 
+    
+    ## extend the end and start of the segmentation to the chromosome endpoints
+    bp.dt = as.data.table(seg)[as.character(seqnames) %in% names(union.sl)]
+    bp.dt[, first := (start == min(.SD$start, na.rm = TRUE)), by = seqnames]
+    bp.dt[, last := (end == max(.SD$end, na.rm = TRUE)), by = seqnames]
+    bp.dt[first == TRUE, start := 1]
+    bp.dt[last == TRUE, end := union.sl[seqnames]]
+
+    ## convert back to GRanges
+    seg = dt2gr(bp.dt[, .(seqnames, start, end, strand = "*")], seqlengths = union.sl)
 
     ## xtYao #' Wednesday, Jun 02, 2021 02:43:35 PM
     ## Move the gap filling step after the correction of seqlengths
@@ -1043,7 +1069,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## filter small gaps between segments containing less than ten bins
     binw = median(sample(width(coverage), 30), na.rm = TRUE)
     all.gaps = IRanges::gaps(seg)
-    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 10 * binw)]
+    gap.seg = all.gaps[which(as.character(strand(all.gaps)) == "*" & width(all.gaps) > 5 * binw)]
 
     if (verbose) {
         n.gaps = sum(width(all.gaps) > 0, na.rm = TRUE)
@@ -1057,8 +1083,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         bps = gr.start(seg)[, c()]
     }
 
-
-   ## create new segments from the breakpoints of the old segments plus big gaps
+    ## create new segments from the breakpoints of the old segments plus big gaps
     new.segs = gUtils::gr.stripstrand(gUtils::gr.breaks(bps, gUtils::si2gr(seqlengths(bps))))[, c()]
     names(new.segs) = NULL
     seg = gUtils::gr.fix(new.segs, union.sl, drop = T)
@@ -1404,7 +1429,24 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
         l[, leix := 1:.N]
         l = dt2gr(l)
-        le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
+        if (lp) {
+            ## TODO: not allowable by CRAN
+            l$epgap = NULL ## unset epgap for LP
+            ## dump coverage to temporary file
+            tmp.cov.file = paste0(outdir, "/", "tmp.coverage.rds")
+            saveRDS(coverage, tmp.cov.file)
+            le.class = loosends:::filter.loose(gg, ## this function is not exported!
+                                               cov = tmp.cov.file,
+                                               field = field,
+                                               l = l,
+                                               purity = gg$meta$purity,
+                                               ploidy = gg$meta$ploidy,
+                                               verbose = TRUE)
+            le.class[, passed := true.pos]
+            file.remove(tmp.cov.file)
+        } else {
+            le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
+        }
 
         ## ## load coverage and beta (coverage CN fit)
         ## if (is.character(coverage)){
@@ -1897,21 +1939,15 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
     this.ra = gr.fix(this.ra, sl, drop = T)
 
-    #' zchoo Friday, May 21, 2021 12:02:30 PM
-    ## fail if negative indices in ra?
-    ## valid.ra = sapply(this.ra, function(gr) {all(trim(gr) == gr)})
-    ## if (length(this.ra) > 0) {
-    ##     this.ra = this.ra[which(valid.ra)] ## include only full in-range indices
-    ## }
-    
     ## DONE: add segmentation to isolate the NA runs
     ## there were a lot of collateral damage because of bad segmentation
-    na.runs = streduce(
-        this.cov[which(is.na(values(this.cov)[, field]))], 1e4
-    ) %Q% (width>1e5)
+    ## na.runs = streduce(
+    ##     this.cov[which(is.na(values(this.cov)[, field]))], 1e4
+    ## ) %Q% (width>1e5)
 
     ## this.kag.old = karyograph(this.ra, this.seg)
-    this.kag = karyograph(this.ra, grbind(this.seg, na.runs))
+    ## this.kag = karyograph(this.ra, grbind(this.seg, na.runs))
+    this.kag = karyograph(this.ra, this.seg)
     if (length(this.kag$tile)>5e4){
         jmessage("WARNING: big karyograph > 50000 nodes, may take longer to finish.")
     }
@@ -3067,7 +3103,10 @@ segstats = function(target,
         ## fill in loess.var generally
         utarget$loess.var[utarget$mean<=rrm[1]] = rrv[1]
         utarget$loess.var[utarget$mean>=rrm[2]] = rrv[2]
-        utarget$loess.var[utarget$var<=0] = rrv[1]
+
+        #' zchoo Wednesday, Sep 22, 2021 10:05:59 AM
+        ## check specifically for loess.var < 0
+        utarget$loess.var[utarget$loess.var<=0] = rrv[1] 
 
         pdf("var.mean.loess.pdf")
         ## all points training
@@ -3359,7 +3398,7 @@ jbaLP = function(kag.file = NULL,
         
         ## process variances
         vars = values(kag.gg$nodes$gr)[[var.field]]
-        vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
+        ## vars = ifelse(vars < min.var, min.var, vars) ## filter negative variances
         if (is.null(beta)) {
             warning("no $beta provided in karyograph/gg metadata")
         } else if (is.na(beta)) {
@@ -3368,7 +3407,7 @@ jbaLP = function(kag.file = NULL,
             vars = beta * beta * vars
         }
 
-        vars = pmax(vars, kag.gg$nodes$dt$cn)
+        vars = pmax(pmax(vars, kag.gg$nodes$dt$cn), min.var)
         sd = sqrt(vars)
 
         ## process bins
@@ -3496,7 +3535,8 @@ jbaLP = function(kag.file = NULL,
                   ism = ism,
                   trelim = tm, ## max.mem * 1e3,
                   nfix = nfix,
-                  nodefileind = 3)
+                  nodefileind = 3,
+                  reduce.loose = TRUE) ## TODO: make this a flag
     
     bal.gg = res$gg
     sol = res$sol
@@ -8892,4 +8932,66 @@ dflm = function(x, last = FALSE, nm = '')
     mod = dt[, glm(counts ~ tumor + ix, family='gaussian')]
     res = dt$counts - predict(mod, dt, type='response')
     return(res)
+}
+
+#' @name loose_end_segs
+#'
+#' @param jabba.fn (jabba output)
+#' @param loose.ends.fn (.rds file with loose end analysis file name)
+loose_end_segs = function(jabba.fn, loose.ends.fn = "/dev/null") {
+    
+    if (!file.exists(jabba.fn)) {
+        stop("JaBbA file invalid")
+    }
+
+    segstats = readRDS(jabba.fn)$segstats
+    seg = segstats %Q% (strand(segstats) == "+")
+    seg = gr.stripstrand(seg)[, c()]
+
+    if (!file.exists(loose.ends.fn)) {
+        warning("Loose ends file invalid")
+        return(seg)
+    }
+
+    if (!file.info(loose.ends.fn)$size) {
+        message("Loose ends file not supplied")
+        return(seg)
+    }
+
+    
+    loose.ends.dt = readRDS(loose.ends.fn)
+
+    if (!("true.pos" %in% colnames(loose.ends.dt))) {
+        warning("Loose ends file must contain column true.pos")
+        return(seg)
+    }
+
+    loose.ends.dt = loose.ends.dt[true.pos == TRUE,]
+    if (nrow(loose.ends.dt)) {
+        ## le = dt2gr(loose.ends.dt[, .(seqnames, start, end, strand)],
+        ##            seqlengths = seqlengths(segstats),
+        ##            seqinfo = seqinfo(segstats))
+        ## le.pad = gr.stripstrand(resize(le, width = 2))
+        ## le.nodes = segstats
+        ## breaks = dt2gr(loose.ends.dt[, .(seqnames, start, end)],
+        ##                seqlengths = seqlengths(segstats),
+        ##                seqinfo = seqinfo(segstats))
+        le.gr = dt2gr(loose.ends.dt[, .(seqnames, start, end)])
+        gg = gG(jabba = jabba.fn)
+        nstarts = gr.start(gg$nodes$gr[, "node.id"]) %&% le.gr
+        nends = gr.end(gg$nodes$gr[, "node.id"]) %&% le.gr
+        nstart.ids = c(nstarts$node.id,
+                       pmax(nstarts$node.id - 1, 1),
+                       pmin(nstarts$node.id + 1, length(gg$nodes)))
+        nend.ids = c(nends$node.id,
+                       pmin(nends$node.id + 1, length(gg$nodes)),
+                       pmin(nends$node.id + 2, length(gg$nodes)))
+        selected.nodes = unique(c(nstart.ids, nend.ids))
+        breaks = gr.stripstrand(gr.start(gg$nodes[selected.nodes]$gr[, c()]))
+        seg = gr.breaks(breaks)
+    } else {
+        seg = si2gr(seqinfo(segstats))
+    }
+    names(seg) = NULL
+    return(seg)
 }
