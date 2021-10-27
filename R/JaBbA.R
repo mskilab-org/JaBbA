@@ -1429,218 +1429,49 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
         l[, leix := 1:.N]
         l = dt2gr(l)
-        if (lp) {
-            ## TODO: not allowable by CRAN
-            l$epgap = NULL ## unset epgap for LP
-            ## dump coverage to temporary file
-            tmp.cov.file = paste0(outdir, "/", "tmp.coverage.rds")
-            saveRDS(coverage, tmp.cov.file)
-            le.class = loosends:::filter.loose(gg, ## this function is not exported!
-                                               cov = tmp.cov.file,
-                                               field = field,
-                                               l = l,
-                                               purity = gg$meta$purity,
-                                               ploidy = gg$meta$ploidy,
-                                               verbose = TRUE)
-            le.class[, passed := true.pos]
-            file.remove(tmp.cov.file)
+        ## if (FALSE) { ## this used to be true if LP but now let's not use filter.loose
+        ##     ## TODO: not allowable by CRAN
+        ##     l$epgap = NULL ## unset epgap for LP
+        ##     ## dump coverage to temporary file
+        ##     tmp.cov.file = paste0(outdir, "/", "tmp.coverage.rds")
+        ##     saveRDS(coverage, tmp.cov.file)
+        ##     le.class = loosends:::filter.loose(gg, ## this function is not exported!
+        ##                                        cov = tmp.cov.file,
+        ##                                        field = field,
+        ##                                        l = l,
+        ##                                        purity = gg$meta$purity,
+        ##                                        ploidy = gg$meta$ploidy,
+        ##                                        verbose = TRUE)
+        ##     le.class[, passed := true.pos]
+        ##     file.remove(tmp.cov.file)
+        ## } else {
+        le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
+        ## }
+        ## only save non-empty data tables
+        if (nrow(le.class)) {
+            saveRDS(le.class, le.class.file.rds)
+            n.le = dt2gr(le.class)
+            jabd.simple$segstats =
+                grbind(
+                    jabd.simple$segstats %Q% (loose==FALSE),
+                    jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
+            jabd$segstats =
+                grbind(
+                    jabd$segstats %Q% (loose==FALSE),
+                    jabd$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
         } else {
-            le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
+            ## set true.pos and passed to FALSE for simplified graph
+            simple.loose = jabd.simple$segstats %Q% (loose == TRUE)
+            simple.loose$passed = FALSE
+            simple.loose$true.pos = FALSE
+            jabd.simple$segstats = grbind(jabd.simple$segstats %Q% (loose == FALSE), simple.loose)
+
+            ## set true.pos and passed to FALSE for raw graph
+            raw.loose = jabd$segstats %Q% (loose == TRUE)
+            raw.loose$passed = FALSE
+            raw.loose$true.pos = FALSE
+            jabd$segstats = grbind(jabd$segstats %Q% (loose == FALSE), raw.loose)
         }
-
-        ## ## load coverage and beta (coverage CN fit)
-        ## if (is.character(coverage)){
-        ##     if (grepl("rds$", coverage)){
-        ##         cov = readRDS(coverage)
-        ##     } else {
-        ##         cov = dt2gr(fread(coverage))
-        ##     }
-        ## } else if (inherits(coverage, "GRanges")){
-        ##     cov = coverage
-        ## }
-        
-        ## ## kag = readRDS(paste0(outdir, "/karyograph.rds"))
-        ## purity = as.numeric(kag$purity)
-        ## ploidy = as.numeric(kag$ploidy)
-        ## ratios = values(cov)[, field]
-        ## beta = mean(ratios[is.finite(ratios)], na.rm=T) * purity/(2*(1-purity) + purity * ploidy)
-        ## segs = gg$nodes$gr
-
-        ## ## identify nodes flanking each loose end, extending up to 100kb away
-        ## o = gr.findoverlaps(segs, l+1)
-        ## segs = segs[o$query.id]; segs$leix = l[o$subject.id]$leix
-        ## sides = gr.findoverlaps(segs, l+1e5, by="leix")
-        ## values(sides) = cbind(values(sides), values(l[sides$subject.id]))
-        ## sides$fused = !is.na(gr.match(sides, l, by="leix"))
-        ## sides$wid = width(sides)
-
-        ## .QQ = 0.05
-        ## ## gather coverage bins corresponding to fused & unfused sides of loose ends
-        ## rel = gr.findoverlaps(cov, sides)
-        ## values(rel) = cbind(values(cov[rel$query.id]), values(sides[rel$subject.id]))
-
-        ## ## the difference of coverage
-        ## field.val = values(rel)[, field]
-        ## lb = quantile(field.val, .QQ, na.rm=T)
-        ## ub = quantile(field.val, 1-.QQ, na.rm=T)
-        ## rel = gr2dt(rel)
-        ## rel[, field := field.val]
-        ## rel[, ":="(in.quant.r = between(field, lb, ub)),
-        ##     by=.(subject.id, fused)]
-
-        ## if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-        ##     rel[, ":="(in.quant.r = rep(field >= quantile(field, .QQ, na.rm=T) &
-        ##                                 field <= quantile(field, 1-.QQ, na.rm=T),
-        ##                                 length.out = .N),
-        ##                good.cov = rep(sum(is.na(tum.counts))/.N < 0.1 &
-        ##                               sum(is.na(norm.counts))/.N < 0.1 &
-        ##                               sum(is.na(field.val))/.N < 0.1 &
-        ##                               wid > 5e4, length.out = .N)),
-        ##         by=.(subject.id, fused)]
-        ##     rel[, ":="(
-        ##         tumor.mean.fused = mean(tum.counts[fused], na.rm=T),
-        ##         tumor.mean.unfused = mean(tum.counts[!fused], na.rm=T),
-        ##         normal.mean.fused = mean(norm.counts[fused], na.rm=T),
-        ##         normal.mean.unfused = mean(norm.counts[!fused], na.rm=T)
-        ##     ), by=leix]
-        ##     glm.in = melt(
-        ##         rel[(in.quant.r),],
-        ##         id.vars=c("leix", "fused"),
-        ##         measure.vars=c("tum.counts", "norm.counts"),
-        ##         value.name="counts")[, tumor := variable=="tum.counts"]
-        ##     ## some points are NA, remove
-        ##     glm.in = glm.in[!is.na(counts)]
-        ##     ## prep glm input matrix
-        ##     glm.in[, ix := seq_len(.N), by=leix]
-        ##     rel2 = copy(glm.in)
-        ##     setnames(glm.in, "leix", "leix2")
-        ##     ## calculate residuals from glm 
-        ##     rel2[, residual := tryCatch(.mod(glm.in[leix2==leix[1],]), error = function(e){return(as.double(NA))}), by=leix]
-        ##     ## evaluate KS-test on residuals and calculate effect size
-        ##     res = rel2[
-        ##         tumor==TRUE,
-        ##         .(p = tryCatch(.dflm(ks.test(residual[fused], residual[!fused]))$p,
-        ##                        error=function(e) return(as.double(NA)))),
-        ##         by=leix]
-        ##     est = rel2[
-        ##       , mean(counts),
-        ##         keyby=.(fused, tumor, leix)][
-        ##       , V1[tumor] / V1[!tumor], keyby=.(leix, fused)][
-        ##       , V1[fused]-V1[!fused], keyby=leix]
-        ##     res$leix = as.character(res$leix); setkey(res, leix)
-        ##     ## FIXME: sometimes estimate is NA!!
-        ##     res[as.character(est$leix), estimate := est$V1]
-        ##     ## also compare the significance on tumor versus normal
-        ##     test = rel2[
-        ##     (tumor),
-        ##     mean(counts),
-        ##     keyby=.(fused, leix)][
-        ##       , V1[fused]-V1[!fused], keyby=leix]
-        ##     setnames(test, "V1", "testimate")
-        ##     test$leix = as.character(test$leix)
-        ##     setkey(test, leix)
-        ##     nest = rel2[
-        ##         !(tumor),
-        ##         mean(counts),
-        ##         keyby=.(fused, leix)][
-        ##       , V1[fused]-V1[!fused],
-        ##         keyby=leix]
-        ##     setnames(nest, "V1", "nestimate")
-        ##     nest$leix = as.character(nest$leix)
-        ##     setkey(nest, leix)
-        ## } else {
-        ##     rel[, ":="(in.quant.r = field >= quantile(field, .QQ, na.rm=T) &
-        ##                    field <= quantile(field, 1-.QQ, na.rm=T),
-        ##                good.cov = sum(is.na(field))/.N < 0.1 &
-        ##                    wid > 5e4),
-        ##         by=.(subject.id, fused)]
-        ##     ## count the coverage on each side
-        ##     rel[, ":="(
-        ##         mean.fused = mean(field.val[fused], na.rm=T),
-        ##         mean.unfused = mean(field.val[!fused], na.rm=T)),
-        ##         by=leix]
-        ##     ## simple ks.test
-        ##     res = rel[, .(
-        ##         p = tryCatch(ks.test(field.val[fused], field.val[!fused])$`p.value`,
-        ##                      error = function(e){return(as.double(NA))})), keyby=leix]            
-        ## }
-
-        ## ## evaluate waviness across bins per loose end
-        ## rel[, good.cov := all(good.cov), by=subject.id]
-        ## rel[, waviness := max(.waviness(start[fused], field[fused]), .waviness(start[!fused], field[!fused]), na.rm=T), by=subject.id]
-        
-        ## ## don't call the loose ends around NA regions
-        ## .BADWIN = 1e5
-        ## bad.win = streduce(kag$segstats[which(is.na(kag$segstats$mean))], .BADWIN)
-        ## l$bad.l = gUtils::gr.in(l, bad.win)
-
-        ## ## combine relevant fields from each test
-        ## ## cnl = rev(rev(colnames(rel))[1:6])
-        ## cnl = c("waviness", "good.cov", "wid", "leix")
-
-        ## if (all(is.element(c("tum.counts", "norm.counts"), colnames(values(cov))))){
-        ##     ## we got rid of the columns from .dflm except `p` and `estimate`
-        ##     cns = colnames(res)[c(2:3)]
-        ##     ## combine all metrics
-        ##     le.class = cbind(
-        ##         gr2dt(l[rel[!duplicated(subject.id), leix]]),
-        ##         rel[!duplicated(subject.id), cnl, with=F],
-        ##         res[rel[!duplicated(subject.id), as.character(leix)], cns, with=F],
-        ##         nest[rel[!duplicated(subject.id), as.character(leix)], "nestimate"],
-        ##         test[rel[!duplicated(subject.id), as.character(leix)], "testimate"])[
-        ##       , effect.thresh := beta]
-
-        ##     ## final call
-        ##     ## needs columns: p, estimate
-        ##     le.class[, passed := !is.na(p) &
-        ##                    p < PTHRESH &
-        ##                    estimate > (0.6*effect.thresh) &
-        ##                    testimate > (0.6*effect.thresh) &
-        ##                    waviness < 2 &
-        ##                    nestimate < (0.6*effect.thresh) &
-        ##                    !bad.l]
-        ## } else {
-        ##     ## combine all metrics
-        ##     le.class = merge(
-        ##         gr2dt(l[rel[!duplicated(subject.id), leix]]),
-        ##         rel[!duplicated(subject.id), cnl, with=F],
-        ##         by = "leix", all.x = TRUE)[
-        ##       , effect.thresh := beta]
-
-        ##     le.class = merge(
-        ##         le.class, res,
-        ##         by="leix", all.x = TRUE)
-
-        ##     ## final call
-        ##     ## needs columns: p, estimate
-        ##     le.class[, passed := !is.na(p) &
-        ##                    p < PTHRESH &
-        ##                    waviness < 2 &
-        ##                    !bad.l]
-        ## }
-        
-        saveRDS(le.class, le.class.file.rds)
-        n.le = dt2gr(le.class)
-        jabd.simple$segstats =
-            grbind(
-                jabd.simple$segstats %Q% (loose==FALSE),
-                jabd.simple$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
-        jabd$segstats =
-            grbind(
-                jabd$segstats %Q% (loose==FALSE),
-                jabd$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
-
-        ## message("legacy code for plotting the loose end quality in gTrack")
-        ## values(l)$passed=le.class[order(leix), passed]
-        ## l$col = ifelse(l$passed, "green", "red")
-        ## l.gt = gTrack(l, circl = T)
-        ## bad.gt = gTrack(bad.win %Q% (seqnames %in% c(1:22, "X", "Y")), name = "NA")
-        ## win = streduce(l, 2e6)
-        ## cov.gt = gTrack(cov, y.field = field,
-        ##                 circl = T, lwd.bo = 0.1,
-        ##                 max.ra = 1e3, name = "cov")
-        ## ppdf(plot(c(cov.gt, bad.gt, gg$gt, l.gt), head(win)), width = 20)
-        
         jmessage("Loose end quality annotated")
     }   
 
@@ -2094,6 +1925,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             warning('Normal seg file does not have "cn" met data field. USING the default 2!!')
             this.kag$segstats$ncn = 2
         } else {
+            ## check if ncn has chr prefix that is inconsistent with coverage and seg
             this.kag$segstats$ncn = round(gr.val(this.kag$segstats, nseg, 'cn')$cn)
             this.kag$segstats$mean[is.na(this.kag$segstats$ncn)] = NA ## remove segments for which we have no normal copy number
         }
@@ -2277,6 +2109,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             purity = confint$max.cellularity)
         } else if (use.ppgrid){
             jmessage("Using ppgrid to estimate purity ploidy")
+            browser()
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
             if (!is.null(het.file))
             {
@@ -2964,7 +2797,7 @@ segstats = function(target,
             if (verbose)
             {
                 na.wid = sum(width(utarget[mapped] %Q% which(bad==TRUE)))/1e6
-                jmessage("Definining coverage good quality nodes as ", max.na*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
+                jmessage("Definining coverage good quality nodes as <", (1 - max.na)*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
                 jmessage("Hard setting ", na.wid,
                          " Mb of the genome to NA that didn't pass our quality threshold")
                 if (na.wid > (sum(as.double(seqlengths(target[mapped])/1e6))/2)){
@@ -3327,8 +3160,8 @@ jbaLP = function(kag.file = NULL,
                  var.field = "loess.var",
                  bins.field = "nbins",
                  tfield = "tier",
-                 min.var = 1e-5,
-                 min.bins = 1,
+                 min.var = 1,##1e-3, 
+                 min.bins = 3,
                  lambda = 100,
                  L0 = TRUE,
                  M = 1e3,
@@ -3398,7 +3231,7 @@ jbaLP = function(kag.file = NULL,
         
         ## process variances
         vars = values(kag.gg$nodes$gr)[[var.field]]
-        ## vars = ifelse(vars < min.var, min.var, vars) ## filter negative variances
+        
         if (is.null(beta)) {
             warning("no $beta provided in karyograph/gg metadata")
         } else if (is.na(beta)) {
@@ -3407,12 +3240,18 @@ jbaLP = function(kag.file = NULL,
             vars = beta * beta * vars
         }
 
+        ## make sure there are no negative variances and that variance is at least CN
+        ## this is because there are a larger number of points with low CN and few high CN points
+        ## resulting in low estimated variance for high CN nodes even if raw variance was high
         vars = pmax(pmax(vars, kag.gg$nodes$dt$cn), min.var)
         sd = sqrt(vars)
 
         ## process bins
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
+
+        ## use standard error
+        sd = sd / sqrt(bins)
 
         ## compute node weights
         wts = bins / (sd * sqrt(2)) ## for consistency with Laplace distribution
@@ -8738,6 +8577,11 @@ filter.loose = function(gg, cov, l, purity=NULL, ploidy=NULL, field="ratio", PTH
 
     rel[, lxxx := leix]
     variances = rel[(in.quant.r), var(ratio), keyby=.(fused, lxxx)]
+
+    ## only run if variances has > 0 rows:
+    if (!nrow(variances)) {
+        return(data.table())
+    }
     variances[, side := ifelse(fused, "f_std", "u_std")]
     variances[, std := sqrt(V1)]
     ## if unfused loose ends are present, a column should still be made
