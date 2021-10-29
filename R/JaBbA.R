@@ -741,7 +741,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         {
             jmessage('Importing coverage from UCSC format')
             coverage = rtracklayer::import(coverage)
-            field = 'score';
+            names(values(coverage)) = field ## reset name of coverage field
             coverage = gr.fix(coverage)
         }
     }
@@ -881,7 +881,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 {
                     jmessage('Importing seg from UCSC format')
                     seg = rtracklayer::import(seg)
-                    field = 'score';
+                    ## field = 'score';
                 }
             }
         }
