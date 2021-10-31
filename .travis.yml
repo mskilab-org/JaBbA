@@ -32,7 +32,6 @@ install:
 - ./travis-tool.sh install_github mskilab/gGnome
 script:
 - "Rscript -e 'devtools::install_bioc(\"copynumber\")'"
-- "Rscript -e 'devtools::install_bioc(\"sequenza\")'"
 - "Rscript -e 'devtools::install()'"
 - "./travis-tool.sh run_tests"
 after_failure:
