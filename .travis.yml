@@ -30,9 +30,9 @@ install:
 - ./travis-tool.sh install_github mskilab/gUtils
 - ./travis-tool.sh install_github mskilab/gTrack
 - ./travis-tool.sh install_github mskilab/gGnome
-- ./travis-tool.sh install_bioc copynumber
-- ./travis-tool.sh install_bioc sequenza
-script: 
+script:
+- "Rscript -e 'devtools::install_bioc(\"copynumber\")'"
+- "Rscript -e 'devtools::install_bioc(\"sequenza\")'"
 - "Rscript -e 'devtools::install()'"
 - "./travis-tool.sh run_tests"
 after_failure:
