@@ -10,7 +10,7 @@ Remotes:
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
   bioc::3.10/VariantAnnotation,
-  bioc::3.10/sequenza,
+  bioc::3.10/copynumber,
   github::mskilab/bamUtils,
   github::mskilab/gUtils,
   github::mskilab/gTrack,

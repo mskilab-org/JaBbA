@@ -1815,7 +1815,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         else
         {
             this.cov = rtracklayer::import(cov.file)
-            field = 'score';
+            names(values(this.cov)) = field
+            ## field = 'score';
         }
     }
     else {
