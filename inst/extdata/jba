@@ -181,7 +181,7 @@ if (!exists("opt"))
         make_option(
             c("--lp"),
             type = "logical",
-            default = FALSE,
+            default = TRUE,
             help = "Whether to run optimization as LP"),
         make_option(
             c("--ism"),
