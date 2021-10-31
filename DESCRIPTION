@@ -13,12 +13,13 @@ Remotes:
   github::mskilab/bamUtils,
   github::mskilab/gUtils,
   github::mskilab/gTrack,
+  github::mskilab/gChain,
   github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
   gUtils, 
   gTrack,
-  gGnome, 
+  gGnome,
   GenomicRanges
 Imports:
   data.table,
