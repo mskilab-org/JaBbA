@@ -15,11 +15,11 @@ Remotes:
   github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
+Imports:
   gUtils, 
   gTrack,
   gGnome, 
-  GenomicRanges
-Imports:
+  GenomicRanges,
   data.table,
   Matrix,
   VariantAnnotation,
