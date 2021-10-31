@@ -1,6 +1,8 @@
 library(JaBbA)
 library(gUtils)
+library(gGnome)
 library(testthat)
+
 jj = system.file("testing", "junctions.rds", package = "JaBbA")
 sg = system.file("testing", "segs.rds", package = "JaBbA")
 cf = system.file("testing", "coverage.txt", package = "JaBbA")
