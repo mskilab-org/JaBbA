@@ -151,7 +151,7 @@ if (!exists("opt"))
         make_option(
             c("--epgap"),
             type="numeric",
-            default = 0.01,
+            default = 1e-5,
             help = "threshold for calling convergence"),        
         make_option(
             c("-o", "--outdir"),
@@ -176,7 +176,7 @@ if (!exists("opt"))
         make_option(
             c("--fix.thres"),
             type = "numeric",
-            default = 5,
+            default = -1,
             help = "fix nodes above a threshold multiple of lambda"),
         make_option(
             c("--lp"),
@@ -186,7 +186,7 @@ if (!exists("opt"))
         make_option(
             c("--ism"),
             type = "logical",
-            default = FALSE,
+            action = "store_true",
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
