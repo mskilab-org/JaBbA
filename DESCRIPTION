@@ -17,10 +17,10 @@ Remotes:
   github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
-  gUtils, 
+  GenomicRanges,
+  gUtils,
   gTrack,
-  gGnome,
-  GenomicRanges
+  gGnome
 Imports:
   data.table,
   Matrix,
