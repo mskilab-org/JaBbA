@@ -10,16 +10,17 @@ Remotes:
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
   bioc::3.10/VariantAnnotation,
+  github::mskilab/bamUtils,
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/gGnome
 Depends:
   R (>= 3.6.0),
-Imports:
   gUtils, 
   gTrack,
   gGnome, 
-  GenomicRanges,
+  GenomicRanges
+Imports:
   data.table,
   Matrix,
   VariantAnnotation,
