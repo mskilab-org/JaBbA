@@ -323,7 +323,8 @@ suppressPackageStartupMessages(
         lp = opt$lp,
         ism = opt$ism,
         verbose = 2,
-        fix.thres = opt$fix.thres
+        fix.thres = opt$fix.thres,
+        filter_loose = opt$filter_loose
     )
 })
 
