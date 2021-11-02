@@ -342,7 +342,7 @@ JaBbA = function(## Two required inputs
     if (reiterate>1){
 
         ## important: rescue.all should always be TRUE if not running filter.loose
-        if ((!rescue.all) & (!filter.loose)) {
+        if ((!rescue.all) & (!filter_loose)) {
             jmessage("Resetting rescue.all to TRUE as filter.loose is FALSE")
             rescue.all = TRUE
         }
