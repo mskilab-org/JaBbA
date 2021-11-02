@@ -60,8 +60,7 @@ if (!exists("opt"))
         make_option(
             c("--rescue.all"),
             type = "logical",
-            default = FALSE,
-            action = "store_true",
+            default = TRUE,
             help = "Attempt to rescue all loose ends regardless of internal quality filter"
         ),
         make_option(

@@ -127,7 +127,7 @@ JaBbA = function(## Two required inputs
                  tfield = "tier",
                  reiterate = 0,
                  rescue.window = 1e3,
-                 rescue.all = FALSE,
+                 rescue.all = TRUE,
                  nudge.balanced = FALSE,
                  thresh.balanced = 500,
                  edgenudge = 0.1,
@@ -340,6 +340,13 @@ JaBbA = function(## Two required inputs
 
     ## if we are iterating more than once
     if (reiterate>1){
+
+        ## important: rescue.all should always be TRUE if not running filter.loose
+        if ((!rescue.all) & (!filter.loose)) {
+            jmessage("Resetting rescue.all to TRUE as filter.loose is FALSE")
+            rescue.all = TRUE
+        }
+        
         continue = TRUE
         this.iter = 1;
 
