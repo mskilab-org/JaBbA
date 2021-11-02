@@ -445,7 +445,7 @@ JaBbA = function(## Two required inputs
                     break
                 }
             } else {
-                jmessage("Rescuing all ", len(le), " loose ends, regardless of confidence.")
+                jmessage("Rescuing all ", length(le), " loose ends, regardless of confidence.")
             }
             
             ## determine orientation of loose ends
