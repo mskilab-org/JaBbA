@@ -113,6 +113,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param ism (logical) wehther to add ism constraints. default FALSE. only used if lp = TRUE
 #' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
 #' @param min.bins (numeric) minimum number of bins needed for a valid segment CN estimate (default 5)
+#' @param filter_loose (logical) run loose end annotation? (default FALSE)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -127,7 +128,7 @@ JaBbA = function(## Two required inputs
                  tfield = "tier",
                  reiterate = 0,
                  rescue.window = 1e3,
-                 rescue.all = FALSE,
+                 rescue.all = TRUE,
                  nudge.balanced = FALSE,
                  thresh.balanced = 500,
                  edgenudge = 0.1,
@@ -164,7 +165,8 @@ JaBbA = function(## Two required inputs
                  lp = FALSE,
                  ism = FALSE,
                  fix.thres = -1,
-                 min.bins = 5)
+                 min.bins = 5,
+                 filter_loose = FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -339,6 +341,13 @@ JaBbA = function(## Two required inputs
 
     ## if we are iterating more than once
     if (reiterate>1){
+
+        ## important: rescue.all should always be TRUE if not running filter.loose
+        if ((!rescue.all) & (!filter_loose)) {
+            jmessage("Resetting rescue.all to TRUE as filter.loose is FALSE")
+            rescue.all = TRUE
+        }
+        
         continue = TRUE
         this.iter = 1;
 
@@ -372,22 +381,11 @@ JaBbA = function(## Two required inputs
                     loose.ends.fn = file.path(outdir,
                                               paste0("iteration", this.iter - 1),
                                               "loose.end.stats.rds")
-                    ## if (this.iter > 2) {
-                    ##     message("Using loose end information")
-                    ##     loose.ends.fn = file.path(outdir,
-                    ##                               paste0("iteration", this.iter - 1),
-                    ##                               "loose.end.stats.rds")
-                    ## } else {
-                    ##     message("Using JaBbA segmentation")
-                    ##     loose.ends.fn = "/dev/null"
-                    ## }
                     seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
 
-                    ## roll back temporarily
                     seg = readRDS(seg.fn)$segstats[, c()]
                     seg = seg %Q% (strand(seg) == "+")
                     seg = gr.stripstrand(seg)
-                    ## seg = loose_end_segs(seg.fn, loose.ends.fn)
                 }
                 
             }
@@ -434,7 +432,9 @@ JaBbA = function(## Two required inputs
                 lp = lp,
                 ism = ism,
                 fix.thres = fix.thres,
-                min.bins = min.bins)
+                min.bins = min.bins,
+                filter_loose = filter_loose)
+            
             gc()
 
             jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
@@ -450,7 +450,7 @@ JaBbA = function(## Two required inputs
                     break
                 }
             } else {
-                jmessage("Rescuing all ", len(le), " loose ends, regardless of confidence.")
+                jmessage("Rescuing all ", length(le), " loose ends, regardless of confidence.")
             }
             
             ## determine orientation of loose ends
@@ -603,7 +603,8 @@ JaBbA = function(## Two required inputs
             lp = lp,
             ism = ism,
             fix.thres = fix.thres,
-            min.bins = min.bins)
+            min.bins = min.bins,
+            filter_loose = filter_loose)
     }
     setwd(cdir)
     return(jab)
@@ -663,6 +664,7 @@ JaBbA = function(## Two required inputs
 #' @param ism logical whether to add ISM constraints default FALSE
 #' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 #' @param min.bins (numeric) min number of coverage bins for a valid CN estimate
+#' @param filter_loose (logical) run loose end analysis?
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -704,6 +706,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       verbose = TRUE,
                       dyn.tuning = TRUE,
                       geno = FALSE,
+                      filter_loose = FALSE,
                       cn.signif = 1e-5)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
@@ -757,7 +760,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         {
             jmessage('Importing coverage from UCSC format')
             coverage = rtracklayer::import(coverage)
-            field = 'score';
+            names(values(coverage)) = field ## reset name of coverage field
             coverage = gr.fix(coverage)
         }
     }
@@ -1386,69 +1389,29 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         return(as.data.table(out))
     }
 
-    ## Old code replaced by new filter.loose function
-    ## PTHRESH = 0.01
-    ## .waviness = function(x, y, min.thresh = 5e3, max.thresh = 10e4, spar = 0.5, smooth = TRUE, filter = rep(FALSE, length(x)), trim = 10) {
-    ##     if(length(x)==0) return(NA)
-    ##     dat = data.table(x, y)[order(x), ]
-    ##     dat[, lag := x-min(x)]
-    ##     fdat = dat[!is.na(y), ][!is.infinite(y), ]
-    ##     ## autocorrelation
-    ##     if(nrow(fdat)==0) return(NA)
-    ##     fdat[, ac := as.numeric(acf(c(y, y), plot = FALSE, lag.max = length(y))$acf[-1])]
-    ##     if (smooth) { ## smoothing the autocorrelation gets rid of some more noise
-    ##         fdat = fdat[!is.na(lag) & !is.na(ac),]
-    ##         if (nrow(fdat[!is.na(lag) & !is.na(ac),])<=4)
-    ##             return(NA)
-    ##         fdat$ac = predict(smooth.spline(fdat$lag, fdat$ac, spar = spar), fdat$lag)$y
-    ##     }
-    ##     return(fdat[lag>min.thresh & lag<max.thresh, sum(ac^2)])
-    ## }
+    if (filter_loose) {
 
-    ## .mod = function(dt){
-    ##     mod = dt[, glm(counts ~ tumor + fused + ix, family='gaussian')]
-    ##     res = dt$counts - predict(mod, dt, type='response')
-    ##     return(res)
-    ## }
+        jmessage("Starting loose end annotation")
 
-    ## start building the model
-    ## gather loose ends from sample
-    gg = gG(jabba = jabd)
-    ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
-    lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
+        ## start building the model
+        ## gather loose ends from sample
+        gg = gG(jabba = jabd)
+        ll = gr2dt(gr.start(gg$nodes[!is.na(cn) & loose.cn.left>0]$gr))[, ":="(lcn = loose.cn.left, strand = "+")]
+        lr = gr2dt(gr.end(gg$nodes[!is.na(cn) & loose.cn.right>0]$gr))[, ":="(lcn = loose.cn.right, strand = "-")]
 
-    ## TODO
-    ## arbitrarily defined based on Julie's paper and prelim TGCT 1kb dryclean data
-    if (binwidth<1000){
-        PTHRESH = 3.4e-7
-    } else {
-        PTHRESH = 2e-6
-    }       
+        ## TODO
+        ## arbitrarily defined based on Julie's paper and prelim TGCT 1kb dryclean data
+        if (binwidth<1000){
+            PTHRESH = 3.4e-7
+        } else {
+            PTHRESH = 2e-6
+        }       
 
-    if ((nrow(ll)+nrow(lr))>0){
-        l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
-        l[, leix := 1:.N]
-        l = dt2gr(l)
-        ## if (FALSE) { ## this used to be true if LP but now let's not use filter.loose
-        ##     ## TODO: not allowable by CRAN
-        ##     l$epgap = NULL ## unset epgap for LP
-        ##     ## dump coverage to temporary file
-        ##     tmp.cov.file = paste0(outdir, "/", "tmp.coverage.rds")
-        ##     saveRDS(coverage, tmp.cov.file)
-        ##     le.class = loosends:::filter.loose(gg, ## this function is not exported!
-        ##                                        cov = tmp.cov.file,
-        ##                                        field = field,
-        ##                                        l = l,
-        ##                                        purity = gg$meta$purity,
-        ##                                        ploidy = gg$meta$ploidy,
-        ##                                        verbose = TRUE)
-        ##     le.class[, passed := true.pos]
-        ##     file.remove(tmp.cov.file)
-        ## } else {
-        le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
-        ## }
-        ## only save non-empty data tables
-        if (nrow(le.class)) {
+        if ((nrow(ll)+nrow(lr))>0){
+            l = rbind(ll, lr)[, ":="(sample = name)] ## FIXME
+            l[, leix := 1:.N]
+            l = dt2gr(l)
+            le.class = filter.loose(gg, cov = coverage, field = field, l = l, PTHRESH = PTHRESH, verbose = TRUE, max.epgap = epgap)
             saveRDS(le.class, le.class.file.rds)
             n.le = dt2gr(le.class)
             jabd.simple$segstats =
@@ -1459,21 +1422,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                 grbind(
                     jabd$segstats %Q% (loose==FALSE),
                     jabd$segstats %Q% (loose==TRUE) %$% n.le[, c("passed", "true.pos")])
-        } else {
-            ## set true.pos and passed to FALSE for simplified graph
-            simple.loose = jabd.simple$segstats %Q% (loose == TRUE)
-            simple.loose$passed = FALSE
-            simple.loose$true.pos = FALSE
-            jabd.simple$segstats = grbind(jabd.simple$segstats %Q% (loose == FALSE), simple.loose)
-
-            ## set true.pos and passed to FALSE for raw graph
-            raw.loose = jabd$segstats %Q% (loose == TRUE)
-            raw.loose$passed = FALSE
-            raw.loose$true.pos = FALSE
-            jabd$segstats = grbind(jabd$segstats %Q% (loose == FALSE), raw.loose)
+            jmessage("Loose end quality annotated")
         }
-        jmessage("Loose end quality annotated")
-    }   
+    } else {
+        jmessage("Skipping loose end annotation")
+    }
 
 
     
@@ -1688,7 +1641,8 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         else
         {
             this.cov = rtracklayer::import(cov.file)
-            field = 'score';
+            names(values(this.cov)) = field
+            ## field = 'score';
         }
     }
     else {
@@ -8784,64 +8738,3 @@ dflm = function(x, last = FALSE, nm = '')
     return(res)
 }
 
-#' @name loose_end_segs
-#'
-#' @param jabba.fn (jabba output)
-#' @param loose.ends.fn (.rds file with loose end analysis file name)
-loose_end_segs = function(jabba.fn, loose.ends.fn = "/dev/null") {
-    
-    if (!file.exists(jabba.fn)) {
-        stop("JaBbA file invalid")
-    }
-
-    segstats = readRDS(jabba.fn)$segstats
-    seg = segstats %Q% (strand(segstats) == "+")
-    seg = gr.stripstrand(seg)[, c()]
-
-    if (!file.exists(loose.ends.fn)) {
-        warning("Loose ends file invalid")
-        return(seg)
-    }
-
-    if (!file.info(loose.ends.fn)$size) {
-        message("Loose ends file not supplied")
-        return(seg)
-    }
-
-    
-    loose.ends.dt = readRDS(loose.ends.fn)
-
-    if (!("true.pos" %in% colnames(loose.ends.dt))) {
-        warning("Loose ends file must contain column true.pos")
-        return(seg)
-    }
-
-    loose.ends.dt = loose.ends.dt[true.pos == TRUE,]
-    if (nrow(loose.ends.dt)) {
-        ## le = dt2gr(loose.ends.dt[, .(seqnames, start, end, strand)],
-        ##            seqlengths = seqlengths(segstats),
-        ##            seqinfo = seqinfo(segstats))
-        ## le.pad = gr.stripstrand(resize(le, width = 2))
-        ## le.nodes = segstats
-        ## breaks = dt2gr(loose.ends.dt[, .(seqnames, start, end)],
-        ##                seqlengths = seqlengths(segstats),
-        ##                seqinfo = seqinfo(segstats))
-        le.gr = dt2gr(loose.ends.dt[, .(seqnames, start, end)])
-        gg = gG(jabba = jabba.fn)
-        nstarts = gr.start(gg$nodes$gr[, "node.id"]) %&% le.gr
-        nends = gr.end(gg$nodes$gr[, "node.id"]) %&% le.gr
-        nstart.ids = c(nstarts$node.id,
-                       pmax(nstarts$node.id - 1, 1),
-                       pmin(nstarts$node.id + 1, length(gg$nodes)))
-        nend.ids = c(nends$node.id,
-                       pmin(nends$node.id + 1, length(gg$nodes)),
-                       pmin(nends$node.id + 2, length(gg$nodes)))
-        selected.nodes = unique(c(nstart.ids, nend.ids))
-        breaks = gr.stripstrand(gr.start(gg$nodes[selected.nodes]$gr[, c()]))
-        seg = gr.breaks(breaks)
-    } else {
-        seg = si2gr(seqinfo(segstats))
-    }
-    names(seg) = NULL
-    return(seg)
-}
