@@ -3114,8 +3114,8 @@ jbaLP = function(kag.file = NULL,
                  var.field = "loess.var",
                  bins.field = "nbins",
                  tfield = "tier",
-                 min.var = 1,##1e-3, 
-                 min.bins = 3,
+                 min.var = 1,
+                 min.bins = 1,
                  lambda = 100,
                  L0 = TRUE,
                  M = 1e3,
@@ -8737,4 +8737,3 @@ dflm = function(x, last = FALSE, nm = '')
     res = dt$counts - predict(mod, dt, type='response')
     return(res)
 }
-
