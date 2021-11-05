@@ -22,6 +22,7 @@ tests/testthat/JaBbA.empty.jj/
 tests/testthat/JaBbA.tier/
 tests/testthat/JaBbA.ism/
 tests/testthat/JaBbA.mem/
+tests/testthat/JaBbA.*/
 tests/testthat/JaBbA/
 tests/testthat/raw.prm
 tests/testthat/raw.sols.rds
