@@ -476,12 +476,14 @@ JaBbA = function(## Two required inputs
             ## junction rescue
             ## rescues junctions that are within rescue.window bp of a loose end
             ## got used, stay there
+            ## but not loose ends overlapping an exorbitant number of junctions
+            le.keep = which((le %N% (stack(ra.all) + rescue.window)) < 20)
             tokeep = which(values(jab$junctions)$cn>0) 
             new.ra.id = unique(c(
                 values(jab$junctions)$id[tokeep],
                 ## near a loose ends, got another chance
                 values(ra.all)$id[which(grl.in(ra.all,
-                                               le + rescue.window,
+                                               le[le.keep] + rescue.window,
                                                some = T,
                                                ignore.strand = FALSE))],
                 ## tier 2 or higher must stay for all iterations
@@ -1061,6 +1063,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     bp.dt[, last := (end == max(.SD$end, na.rm = TRUE)), by = seqnames]
     bp.dt[first == TRUE, start := 1]
     bp.dt[last == TRUE, end := union.sl[seqnames]]
+
+    ## keep only valid junctions after this seqlength normalization process
+    bp.dt = bp.dt[end > start,]
 
     ## convert back to GRanges
     seg = dt2gr(bp.dt[, .(seqnames, start, end, strand = "*")], seqlengths = union.sl)
@@ -3218,6 +3223,24 @@ jbaLP = function(kag.file = NULL,
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)
+
+    ## check for edge rewards
+    if (!is.null(kag.gg$edges$dt$reward)) {
+        if (verbose) {
+            message("Checking edge rewards...")
+        }
+        erewards = kag.gg$edges$dt[, reward]
+        reward.ix = which(erewards != 0)
+        if (verbose) {
+            message("Number of nonzero rewards: ", length(reward.ix))
+        }
+        erewards[reward.ix] = lambda ## set to lambda?
+        kag.gg$edges$mark(reward = erewards)
+    } else {
+        if (verbose) {
+            message("Rewards not supplied on edges!")
+        }
+    }
     
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
@@ -3334,8 +3357,7 @@ jbaLP = function(kag.file = NULL,
                   ism = ism,
                   trelim = tm, ## max.mem * 1e3,
                   nfix = nfix,
-                  nodefileind = 3,
-                  reduce.loose = TRUE) ## TODO: make this a flag
+                  nodefileind = 3)
     
     bal.gg = res$gg
     sol = res$sol
@@ -6424,7 +6446,7 @@ read.junctions = function(rafile,
                     vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
                     vgr$SVTYPE="BND"
                 }
-                return(vgr)
+                return(verify.junctions(vgr))
             }
 
             ## TODO: Delly and Novobreak
@@ -6742,7 +6764,7 @@ read.junctions = function(rafile,
             }
 
             if (!get.loose | is.null(vgr$mix)){
-                return(ra)
+                return(verify.junctions(ra))
             } else {
                 npix = is.na(vgr$mix)
                 ## these are possible "loose ends" that we will add to the segmentation
@@ -6757,7 +6779,7 @@ read.junctions = function(rafile,
                     values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
                 }
 
-                return(list(junctions = ra, loose.ends = vgr.loose))
+                return(list(junctions = verify.junctions(ra), loose.ends = vgr.loose))
             }
         } else{
             rafile = data.table::fread(rafile)
