@@ -2412,7 +2412,7 @@ ramip_stub = function(kag.file,
                        ism = ism,
                        tfield = tfield,
                        max.mem = mem,
-                       min.bins = min.bins,
+                       min.bins = min.bins, ## should this always be 1?
                        fix.thres = fix.thres)
 
     } else {
