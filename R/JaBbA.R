@@ -6272,17 +6272,33 @@ read.junctions = function(rafile,
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
-            ln = readLines(ra.path)
+            f = file(ra.path, open = "rb")
+            headers = character(0)
+            thisline = readLines(f, 1)
+            while (grepl("^((#)|(chrom)|(chr))", thisline)) {
+                headers = c(headers, thisline)
+                thisline = readLines(f, 1)
+            }
+            ln = sum(length(headers), length(thisline))
+            while (length(thisline) > 0) {
+                ## thisline = readBin(f, "raw", n = 50000)
+                ## sum(thisline == as.raw(10L))
+                thisline = readLines(f, n = 50000)
+                ln = length(thisline) + ln
+            }
+            lastheader = tail(headers, 1)
+            ## ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chrom1)|(chr1))', ln))))-1
-                if (is.infinite(nh)){
-                    nh = 1
-                }
+                ## nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
+                nh = length(headers)
+                ## if (is.infinite(nh)){
+                ##     nh = 1
+                ## }
             } else{
                 nh = skip
             }
 
-            if ((length(ln)-nh)==0){
+            if ( (ln-nh) <=0) {
                 ## if (get.loose){
                 ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
                 ## }
@@ -6291,16 +6307,18 @@ read.junctions = function(rafile,
                 ## }
             }
 
-            if (nh ==0){
+            if (nh ==0) {
                 rafile = fread(rafile, header = FALSE)
             } else {
 
                 if (nh == 1) {
                     header_arg = TRUE
                     skip_arg = 0
+                    bedhead = NULL
                 } else if (nh > 1) {
                     header_arg = F
                     skip_arg = nh
+                    bedhead = gsub("^#", "", unlist(strsplit(lastheader, "\t|,")))
                 }
 
                 rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
@@ -6314,6 +6332,10 @@ read.junctions = function(rafile,
 
                 if (is.null(rafile)){
                     stop('Error reading bedpe')
+                }
+
+                if (!is.null(bedhead) && identical(length(bedhead), ncol(rafile))) {
+                    colnames(rafile) = bedhead
                 }
             }
 
