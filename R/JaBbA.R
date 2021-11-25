@@ -2746,7 +2746,7 @@ segstats = function(target,
         }
         
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
-        if (length(bad.nodes <- which((utarget$wbins.nafrac > max.na) | (is.na(utarget$wbins.nafrac))))>0)
+        if (length(bad.nodes <- which((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))))>0)
         {
             utarget$max.na = max.na ## what about really small segs in a good "environment"
             utarget$bad[bad.nodes] = TRUE
@@ -2793,8 +2793,8 @@ segstats = function(target,
 
         ## xtYao ## Thursday, Feb 18, 2021 02:07:22 PM
         ## To prevent extreme outlying variances, limit traing data to variance between 0.05 and 0.95 quantile
-        middle.mean = tmp[, which(between(mean, quantile(mean, 0.05), quantile(mean, 0.95)))]
-        middle.var = tmp[, which(between(var, quantile(var, 0.05), quantile(var, 0.95)))]
+        middle.mean = tmp[, which(between(mean, quantile(mean, 0.05, na.rm = TRUE), quantile(mean, 0.95, na.rm = TRUE)))]
+        middle.var = tmp[, which(between(var, quantile(var, 0.05, na.rm = TRUE), quantile(var, 0.95, na.rm = TRUE)))]
 
         if (verbose)
         {
@@ -3234,7 +3234,7 @@ jbaLP = function(kag.file = NULL,
         if (verbose) {
             message("Number of nonzero rewards: ", length(reward.ix))
         }
-        erewards[reward.ix] = lambda ## set to lambda?
+        erewards[reward.ix] = lambda / 2 ## set to lambda? or half lambda?
         kag.gg$edges$mark(reward = erewards)
     } else {
         if (verbose) {
