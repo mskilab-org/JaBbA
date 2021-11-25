@@ -718,6 +718,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
     jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
     jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
+    purity.ploidy.txt.file = paste(outdir, 'purity.ploidy.txt', sep = '/')
     jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
     jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
     seg.tab.file = paste(outdir, 'jabba.seg', sep = '/')
@@ -1426,6 +1427,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         saveRDS(jab, jabba.raw.rds.file)
         saveRDS(jabd, jabba.rds.file)
         saveRDS(jabd.simple, jabba.simple.rds.file)
+
+        purity.ploidy.dt = data.table(purity = jab$purity,
+                                      ploidy = jab$ploidy)
+        fwrite(purity.ploidy.dt, purity.ploidy.txt.file, sep = '\t')
 
         jab.gg = gGnome::gGraph$new(jab = jabd)
         tmp.jabd.simple = jabd.simple
