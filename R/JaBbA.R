@@ -2068,7 +2068,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
                             purity = confint$max.cellularity)
         } else if (use.ppgrid){
             jmessage("Using ppgrid to estimate purity ploidy")
-            browser()
             pdf(paste(out.file, '.ppgrid.pdf', sep = ''), height = 10, width = 10)
             if (!is.null(het.file))
             {
@@ -2772,11 +2771,11 @@ segstats = function(target,
         ## i.e. we fit loess function to map segment mean to variance across the sample
         ## the assumption is that such a function exists
         ##        target$nbins = sapply(map, length)[as.character(abs(as.numeric(names(target))))]        
-        MINBIN = 5 ## enough data so variance~mean function can be estimated
+        MINBIN = 1 ## enough data so variance~mean function can be estimated
         tmp = data.table(var = utarget$raw.var,
                          mean = utarget$mean,
                          nbins = utarget$nbins,
-                         bad = utarget$bad)[var>0 & nbins>MINBIN & !bad, ]
+                         bad = utarget$bad)[var>0 & nbins>MINBIN & !bad & !is.na(mean) & !is.na(var), ]
 
         ## if (lp) {
         ##     browser()
