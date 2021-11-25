@@ -1478,12 +1478,17 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     tmp.cov = sample(coverage, pmin(length(coverage), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
+    # add ncn values
+    tmp.cov = tmp.cov %$% kag$segstats[,'ncn']
+    # transform using rel2abs
+    tmp.cov$cn = rel2abs(tmp.cov, purity = jab$purity, ploidy = jab$ploidy,
+                         field = field, field.ncn = 'ncn')
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
     jabd$gtrack$y1 = y1
     jabd.simple$gtrack$y1 = y1
 
-    td.cov = gTrack(tmp.cov, y.field = field, col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
+    td.cov = gTrack(tmp.cov, y.field = 'cn', col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
 
     if (verbose)
     {
