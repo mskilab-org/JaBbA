@@ -709,6 +709,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       dyn.tuning = TRUE,
                       geno = FALSE,
                       filter_loose = FALSE,
+                      outlier.thresh = 0.9999,
                       cn.signif = 1e-5)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
@@ -821,6 +822,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         } else {
             jwarning("'--blacklist.coverage' cannot be parsed into a GRanges, please check")
         }
+    }
+
+    if (!is.null(outlier.thresh)) {
+        field.thresh = quantile(values(coverage)[[field]], probs = outlier.thresh, na.rm = TRUE)
+        bad.ix = which(values(coverage)[[field]] > field.thresh)
+        values(coverage)[bad.ix, field] = NA
     }
 
     seg.fn = paste0(outdir, '/seg.rds')
@@ -2755,7 +2762,7 @@ segstats = function(target,
             if (verbose)
             {
                 na.wid = sum(width(utarget[mapped] %Q% which(bad==TRUE)))/1e6
-                jmessage("Definining coverage good quality nodes as <", (1 - max.na)*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
+                jmessage("Definining coverage good quality nodes as >=", (1 - max.na)*100, "% bases covered by non-NA and non-Inf values in +/-100KB region")
                 jmessage("Hard setting ", na.wid,
                          " Mb of the genome to NA that didn't pass our quality threshold")
                 if (na.wid > (sum(as.double(seqlengths(target[mapped])/1e6))/2)){
