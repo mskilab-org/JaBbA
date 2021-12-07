@@ -17,6 +17,7 @@ test_that(desc = "Testing LP JaBbA with .bw coverage input",
                       slack.penalty = 10,
                       tilim = 60,
                       cfield = 'ratio',
+                      reiterate = 2,
                       verbose = 2,
                       outdir = 'JaBbA.filter',
                       overwrite = TRUE,
@@ -61,7 +62,7 @@ test_that(desc = "Testing LP JaBbA with .bw coverage input",
                       rescue.all = FALSE,
                       filter_loose = FALSE))
                   },
-                  regexp = "Resetting rescue.all to TRUE")
+                  regexp = "Skipping loose end annotation")
           })
 
 test_that(desc = "Testing LP JaBbA with .bw coverage input",
