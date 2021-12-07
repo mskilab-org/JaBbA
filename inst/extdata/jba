@@ -60,8 +60,7 @@ if (!exists("opt"))
         make_option(
             c("--rescue.all"),
             type = "logical",
-            default = FALSE,
-            action = "store_true",
+            default = TRUE,
             help = "Attempt to rescue all loose ends regardless of internal quality filter"
         ),
         make_option(
@@ -151,7 +150,7 @@ if (!exists("opt"))
         make_option(
             c("--epgap"),
             type="numeric",
-            default = 0.01,
+            default = 1e-5,
             help = "threshold for calling convergence"),        
         make_option(
             c("-o", "--outdir"),
@@ -176,18 +175,23 @@ if (!exists("opt"))
         make_option(
             c("--fix.thres"),
             type = "numeric",
-            default = 5,
+            default = -1,
             help = "fix nodes above a threshold multiple of lambda"),
         make_option(
             c("--lp"),
             type = "logical",
-            default = FALSE,
+            default = TRUE,
             help = "Whether to run optimization as LP"),
         make_option(
             c("--ism"),
             type = "logical",
-            default = FALSE,
+            action = "store_true",
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
+        make_option(
+            c("--filter_loose"),
+            type = "logical",
+            action = "store_true",
+            help = "run filter.loose to get a breakdown of loose ends?"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = FALSE,
@@ -318,7 +322,8 @@ suppressPackageStartupMessages(
         lp = opt$lp,
         ism = opt$ism,
         verbose = 2,
-        fix.thres = opt$fix.thres
+        fix.thres = opt$fix.thres,
+        filter_loose = opt$filter_loose
     )
 })
 
