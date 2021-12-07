@@ -1,7 +1,6 @@
 #' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
-#' @importFrom loosends filter.loose
 #' @importFrom gGnome gG balance
 #' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
 #' @importFrom gTrack gTrack
