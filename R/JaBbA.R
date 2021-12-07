@@ -725,6 +725,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     jabba.simple.gg.rds.file = paste(outdir, 'jabba.simple.gg.rds', sep = '/')
     jabba.simple.vcf.file = paste(outdir, 'jabba.simple.vcf', sep = '/')
     jabba.simple.cnv.vcf.file = paste(outdir, 'jabba.simple.cnv.vcf', sep = '/')
+    purity.ploidy.txt.file = paste(outdir, 'purity.ploidy.txt', sep = '/')
     jabba.png.file = paste(outdir, 'jabba.png', sep = '/')
     jabba.simple.png.file = paste(outdir, 'jabba.simple.png', sep = '/')
     seg.tab.file = paste(outdir, 'jabba.seg', sep = '/')
@@ -1449,6 +1450,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         saveRDS(jabd, jabba.rds.file)
         saveRDS(jabd.simple, jabba.simple.rds.file)
 
+        purity.ploidy.dt = data.table(purity = jab$purity,
+                                      ploidy = jab$ploidy)
+        fwrite(purity.ploidy.dt, purity.ploidy.txt.file, sep = '\t')
+
         jab.gg = gGnome::gGraph$new(jab = jabd)
         tmp.jabd.simple = jabd.simple
         values(tmp.jabd.simple$junctions)$cn = NULL
@@ -1495,12 +1500,17 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     tmp.cov = sample(coverage, pmin(length(coverage), 5e5))
     tmp.cov = gr.fix(tmp.cov, jabd$segstats)
+    # add ncn values
+    tmp.cov = tmp.cov %$% kag$segstats[,'ncn']
+    # transform using rel2abs
+    tmp.cov$cn = rel2abs(tmp.cov, purity = jab$purity, ploidy = jab$ploidy,
+                         field = field, field.ncn = 'ncn')
 
     y1 = pmax(5, max(jabd$segstats$cn)*1.1)
     jabd$gtrack$y1 = y1
     jabd.simple$gtrack$y1 = y1
 
-    td.cov = gTrack(tmp.cov, y.field = field, col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
+    td.cov = gTrack(tmp.cov, y.field = 'cn', col = alpha('black', 0.2), name = 'Cov', y1 = (y1 + jab$gamma)/jab$beta)
 
     if (verbose)
     {
