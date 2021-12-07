@@ -3211,8 +3211,6 @@ jbaLP = function(kag.file = NULL,
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
 
-    ## browser()
-
     ## add lower bounds depending on ALT junction tier
     if (tfield %in% colnames(kag.gg$edges$dt)) {
         lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
@@ -6722,14 +6720,14 @@ read.junctions = function(rafile,
                                       , tier := ifelse(
                                             tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
                                     values(this.ra) = this.dt
-                                    return(this.ra)
+                                    return(verify.junctions(this.ra))
                                 })
                     loose=FALSE ## TODO: temporary until we figure out how
                 }
             }
 
             if (!get.loose | is.null(vgr$mix)){
-                return(ra)
+                return(verify.junctions(ra))
             } else {
                 npix = is.na(vgr$mix)
                 ## these are possible "loose ends" that we will add to the segmentation
@@ -6744,7 +6742,7 @@ read.junctions = function(rafile,
                     values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
                 }
 
-                return(list(junctions = ra, loose.ends = vgr.loose))
+                return(list(junctions = verify.junctions(ra), loose.ends = vgr.loose))
             }
         } else{
             rafile = data.table::fread(rafile)
