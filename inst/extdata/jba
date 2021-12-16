@@ -185,11 +185,13 @@ if (!exists("opt"))
         make_option(
             c("--ism"),
             type = "logical",
+            default = FALSE,
             action = "store_true",
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(
             c("--filter_loose"),
             type = "logical",
+            default = FALSE,
             action = "store_true",
             help = "run filter.loose to get a breakdown of loose ends?"),
         make_option(c("-v", "--verbose"),
