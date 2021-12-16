@@ -3145,6 +3145,7 @@ jbaLP = function(kag.file = NULL,
                  epgap = 1e-3,
                  max.mem = 16,
                  fix.thres = -1,
+                 round.thresh = 0.25,
                  return.type = "karyograph",
                  nodefileind = 3)
 {
@@ -3224,18 +3225,10 @@ jbaLP = function(kag.file = NULL,
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
 
-        ## tmp = sd/sqrt(bins)
-
-        ## browser()
-        ## ppng(print(plot(y = values(kag.gg$nodes$gr)[[var.field]] * beta * beta, x = kag.gg$nodes$gr$cn)))
-        ## ppng(print(plot(y = vars, x = kag.gg$nodes$gr$cn)))
-        ## ppng(print(plot(y = tmp, x = kag.gg$nodes$gr$cn)))
-        ## ppng(print(plot(y = wts, x = kag.gg$nodes$gr$cn)))
-        ## ppng(print(plot(y = bins / (tmp * sqrt(2)), x = kag.gg$nodes$gr$cn)))
-
         ## compute node weights
         wts = bins / (sd * sqrt(2)) ## for consistency with Laplace distribution
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
+
     }
     kag.gg$nodes$mark(weight = wts)
 
