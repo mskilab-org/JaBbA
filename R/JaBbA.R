@@ -3265,8 +3265,6 @@ jbaLP = function(kag.file = NULL,
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
 
-    ## browser()
-
     ## add lower bounds depending on ALT junction tier
     if (tfield %in% colnames(kag.gg$edges$dt)) {
         lbs = ifelse(kag.gg$edges$dt[, ..tfield] == 1, 1, 0)
@@ -6790,7 +6788,7 @@ read.junctions = function(rafile,
                                       , tier := ifelse(
                                             tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
                                     values(this.ra) = this.dt
-                                    return(this.ra)
+                                    return(verify.junctions(this.ra))
                                 })
                     loose=FALSE ## TODO: temporary until we figure out how
                 }
