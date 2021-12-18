@@ -6943,6 +6943,9 @@ read.junctions = function(rafile,
 #' @param ra GRangesList object to be verified
 #' @return GRangesList
 filter_oob_junctions = function(ra) {
+    if (!length(ra)) {
+        return(ra)
+    }
     pivoted.ra = grl.pivot(ra)
     sl = seqlengths(ra)
     bp1 = pivoted.ra[[1]]
