@@ -34,10 +34,10 @@ Imports:
   optparse,
   gplots,
   graphics,
-  loosends,
   sequenza
 Suggests: 
   testthat,
+  bamUtils,
   covr
 License: MIT + file LICENSE
 LazyData: true
