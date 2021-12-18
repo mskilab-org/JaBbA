@@ -164,7 +164,7 @@ JaBbA = function(## Two required inputs
                  lp = FALSE,
                  ism = FALSE,
                  fix.thres = -1,
-                 min.bins = 5,
+                 min.bins = 1,
                  filter_loose = FALSE)
 {
     system(paste('mkdir -p', outdir))
