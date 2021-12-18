@@ -2223,7 +2223,7 @@ ramip_stub = function(kag.file,
     outdir = normalizePath(dirname(kag.file))
     this.kag = readRDS(kag.file)
 
-    ## if (is.null(this.kag$gamma) | is.null(this.kag$beta))
+    ## if (ios.null(this.kag$gamma) | is.null(this.kag$beta))
     ## {
     ##     pp = ppgrid(this.kag$segstats, verbose = verbose, plot = T, purity.min = purity.min, purity.max = purity.max, ploidy.min = ploidy.min, ploidy.max = ploidy.max)
     ##     this.kag$beta = pp[1,]$beta
@@ -2454,29 +2454,35 @@ ramip_stub = function(kag.file,
     }
     saveRDS(ra.sol, out.file)
 
-    ## ## report the optimization status
-    opt.report =
-        do.call(`rbind`,
-                lapply(seq_along(ra.sol$sols),
-                       function(cl){
-                           x = ra.sol$sols[[cl]]
-                           if (inherits(x$nll.cn, "Matrix") |
-                               inherits(x$nll.cn, "matrix")){
-                               nll.cn = x$nll.cn[1, 1]
-                           } else {
-                               nll.cn = NA
-                           }
-                           width.tot = sum(width(x$segstats %Q% (strand=="+"))/1e6)
-                           data.table(cl = cl,
-                                      obj = ifelse(is.null(x$obj), NA, x$obj),
-                                      width.tot = width.tot,
-                                      status = ifelse(is.null(x$status), NA, x$status),
-                                      nll.cn = nll.cn,
-                                      nll.opt = x$nll.opt,
-                                      gap.cn = x$gap.cn,
-                                      epgap = ifelse(is.null(x$epgap), NA, x$epgap),
-                                      converge = ifelse(is.null(x$converge), NA, x$converge))
-                       }))
+    ## add optimization status logging for LP
+    if (lp) {
+        opt.report = data.table(status = ra.sol$status,
+                                obj = ra.sol$obj,
+                                epgap = ra.sol$epgap)
+    } else {
+        opt.report =
+            do.call(`rbind`,
+                    lapply(seq_along(ra.sol$sols),
+                           function(cl){
+                               x = ra.sol$sols[[cl]]
+                               if (inherits(x$nll.cn, "Matrix") |
+                                   inherits(x$nll.cn, "matrix")){
+                                   nll.cn = x$nll.cn[1, 1]
+                               } else {
+                                   nll.cn = NA
+                               }
+                               width.tot = sum(width(x$segstats %Q% (strand=="+"))/1e6)
+                               data.table(cl = cl,
+                                          obj = ifelse(is.null(x$obj), NA, x$obj),
+                                          width.tot = width.tot,
+                                          status = ifelse(is.null(x$status), NA, x$status),
+                                          nll.cn = nll.cn,
+                                          nll.opt = x$nll.opt,
+                                          gap.cn = x$gap.cn,
+                                          epgap = ifelse(is.null(x$epgap), NA, x$epgap),
+                                          converge = ifelse(is.null(x$converge), NA, x$converge))
+                           }))
+    }
     saveRDS(opt.report, paste0(outdir, "/opt.report.rds"))
     if (verbose){
         jmessage("Recording convergence status of subgraphs")
@@ -3121,8 +3127,11 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param max.mem (numeric) maximum memory in GB
 #' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 #' @param return.type (character) either "gGraph" or "karyograph"
+#' @param require.convergence (logical) warn if not converged? default TRUE
+#' @param max.epgap.thresh (numeric) above this value, all node and edge CNs are NA (default 0.5)
+#' @param nodefileind (numeric) one of 0, 1, 2, 3 (for storing CPLEX tree node files), default 3
 #'
-#' @return
+#' @returnn
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
 #' 
 #' @author Marcin Imielinski, Zi-Ning Choo
@@ -3147,6 +3156,8 @@ jbaLP = function(kag.file = NULL,
                  fix.thres = -1,
                  round.thresh = 0.25,
                  return.type = "karyograph",
+                 require.convergence = FALSE,
+                 max.epgap.thresh = 0.5,
                  nodefileind = 3)
 {
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
@@ -3374,6 +3385,20 @@ jbaLP = function(kag.file = NULL,
         return(bal.gg)
     }
 
+    ## check for convergence
+    if (require.convergence) {
+        if (verbose) {
+            message("Checking for convergence to epgap below: ", epgap)
+        }
+        if (sol$epgap > epgap) {
+           warning("Optimization did not converge! Reached epgap: ", sol$epgap)
+        }
+        if (sol$epgap > max.epgap.thresh) {
+            warning("Very high epgap, marking CN as NA")
+            bal.gg$nodes$mark(cn = NA)
+            bal.gg$edges$mark(cn = NA)
+        }
+    }
     
     ## just replace things in the outputs
     ## this can create weird errors if the order of kag and bal.gg isn't the same
