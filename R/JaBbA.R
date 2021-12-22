@@ -7270,7 +7270,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
                       seg.ix[2:(length(seg.ix))])
     ## # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
     ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) ==
-                                as.character(seqnames(tile[ref.pairs[,2]]))), ]
+                                as.character(seqnames(tile[ref.pairs[,2]]))), , drop = FALSE]
 
     ## XT fix 08/12: edge.id could be length 0 when no aberrant junction is used
     ## we should still make the ref edges in that case
