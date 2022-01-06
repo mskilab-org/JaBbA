@@ -763,7 +763,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         {
             jmessage('Importing coverage from UCSC format')
             coverage = rtracklayer::import(coverage)
-            names(values(coverage)) = field ## reset name of coverage field
+            if ("score" %in% names(values(coverage))) {
+                values(coverage)[, field] = values(coverage)[, "score"]
+            } else {
+                names(values(coverage)) = field ## reset name of coverage field
+            }
             coverage = gr.fix(coverage)
         }
     }
@@ -1662,7 +1666,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         else
         {
             this.cov = rtracklayer::import(cov.file)
-            names(values(this.cov)) = field
+            if ("score" %in% names(values(this.cov))) {
+                values(this.cov)[, field] = values(this.cov)[, "score"]
+            } else {
+                names(values(this.cov)) = field
+            }
             ## field = 'score';
         }
     }
