@@ -824,11 +824,11 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         }
     }
 
-    if (!is.null(outlier.thresh)) {
-        field.thresh = quantile(values(coverage)[[field]], probs = outlier.thresh, na.rm = TRUE)
-        bad.ix = which(values(coverage)[[field]] > field.thresh)
-        values(coverage)[bad.ix, field] = NA
-    }
+    ## if (!is.null(outlier.thresh)) {
+    ##     field.thresh = quantile(values(coverage)[[field]], probs = outlier.thresh, na.rm = TRUE)
+    ##     bad.ix = which(values(coverage)[[field]] > field.thresh)
+    ##     values(coverage)[bad.ix, field] = NA
+    ## }
 
     seg.fn = paste0(outdir, '/seg.rds')
     if (!overwrite & file.exists(seg.fn))
