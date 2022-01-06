@@ -187,7 +187,6 @@ if (!exists("opt"))
             type = "logical",
             default = FALSE,
             action = "store_true",
-            default = FALSE,
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(
             c("--filter_loose"),
