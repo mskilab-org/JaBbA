@@ -21,7 +21,7 @@ Depends:
   GenomicRanges,
   gUtils,
   gTrack,
-  gGnome (>= 1.0)
+  gGnome (>= 0.1)
 Imports:
   data.table,
   Matrix,
