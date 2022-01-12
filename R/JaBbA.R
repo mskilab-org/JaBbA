@@ -5189,8 +5189,8 @@ jabba.alleles = function(jab,
         ss.p = jab$segstats[ as.logical( strand(jab$segstats)=='+' ) ]
 
         ## find the reference junctions
-        ord.ix = order(jab$segstats)
-        rev.ix = as.logical(strand(jab$segstats[ord.ix]) == '-')
+        ord.ix = GenomicRanges::order(jab$segstats)
+        rev.ix = as.logical(GenomicRanges::strand(jab$segstats[ord.ix]) == '-')
         ord.ix = c(ord.ix[!rev.ix], rev(ord.ix[rev.ix]))
 
         ref.jun = cbind(ord.ix[-length(ord.ix)], ord.ix[-1])
@@ -5407,7 +5407,7 @@ jabba.alleles = function(jab,
     tmp.str = gr.string(gr.stripstrand(asegstats), mb = F, other.cols = 'type');
     asegstats$tile.id = as.integer(factor(tmp.str, unique(tmp.str)))
 
-    ix = order(asegstats.final)
+    ix = GenomicRanges::order(asegstats.final)
     asegstats.final = asegstats.final[ix]
     aadj.final = aadj.final[ix, ix]
 
