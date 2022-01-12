@@ -370,6 +370,9 @@ SEXP Rcplex2(SEXP numcols_p,
     Rprintf("Status: %d", status);
     my_error(("Failed to set parameters to default.\n"));
   }
+
+  /* Close Rcplex environment */
+  Rcplex_close();
   return(res);
 }
 

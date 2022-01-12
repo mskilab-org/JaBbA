@@ -1235,7 +1235,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    ism = ism,
                    tfield = tfield,
                    fix.thres = fix.thres,
-                   min.bins = min.bins)
+                   min.bins = min.bins,
+                   customparams = T)
+        Rcplex::Rcplex.close()
     }
 
 
@@ -1443,10 +1445,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     tryCatch(
     {
-        jabba2vcf(jabd, jabba.vcf.file);
-        jabba2vcf(jabd, jabba.cnv.vcf.file, cnv = TRUE)
-        jabba2vcf(jabd.simple, jabba.simple.vcf.file)
-        jabba2vcf(jabd.simple, jabba.simple.cnv.vcf.file, cnv = TRUE)
+        if (overwrite | !file.exists(jabba.vcf.file)) jabba2vcf(jabd, jabba.vcf.file);
+        if (overwrite | !file.exists(jabba.cnv.vcf.file)) jabba2vcf(jabd, jabba.cnv.vcf.file, cnv = TRUE)
+        if (overwrite | !file.exists(jabba.simple.vcf.file)) jabba2vcf(jabd.simple, jabba.simple.vcf.file)
+        if (!file.exists(jabba.simple.cnv.vcf.file)) jabba2vcf(jabd.simple, jabba.simple.cnv.vcf.file, cnv = TRUE)
     }, error = function(e) print("Jabba VCF generation failed"))
 
     if (nrow(jabd$edges)>0){
@@ -2177,7 +2179,7 @@ ramip_stub = function(kag.file,
                       slack.prior = 0.001,
                       gamma = NA,
                       beta = NA,
-                      customparams = F,
+                      customparams = FALSE,
                       purity.min = NA, purity.max = NA,
                       ploidy.min = NA, ploidy.max = NA,
                       init = NULL,
@@ -2227,6 +2229,7 @@ ramip_stub = function(kag.file,
 
     if (customparams)
     {
+        if (verbose) jmessage("number of specified max.threads: ", max.threads)
         MAX.THREADS = Sys.getenv("LSB_DJOB_NUMPROC")
         if (nchar(MAX.THREADS) == 0)
             MAX.THREADS = Inf
@@ -2235,9 +2238,14 @@ ramip_stub = function(kag.file,
         max.threads = min(max.threads, MAX.THREADS)
         if (is.infinite(max.threads))
             max.threads = 0
+        if (verbose) jmessage("number of specified max.threads after processing: ", max.threads)
 
         param.file = paste(out.file, '.prm', sep = '')
         .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
+        if (verbose) {
+            jmessage("param.file contents: ")
+            system2('cat', normalizePath(param.file))
+        }
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
         if (verbose)
@@ -2459,11 +2467,12 @@ ramip_stub = function(kag.file,
         jmessage("Recording convergence status of subgraphs")
     }
 
-    if (customparams)
-    {
-        system(paste('rm', param.file))
-        Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
-    }
+    ## #' keh2019 Tuesday, Jan 11, 2022, Week 02, 01:40:04 PM commenting out
+    ## if (customparams)
+    ## {
+    ##     system(paste('rm', param.file))
+    ##     Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
+    ## }
 }
 
 ##############################
@@ -5553,19 +5562,31 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 ##
 .cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
 {
-    param_lines = "CPLEX Parameter File Version 12.6.0.0"
+    vnum = grep("Welcome to IBM", system2("cplex", c("-c \"quit\""), stdout = T), value = T)
+    vnum = gsub("([a-z)(A-Z ]+)([0-9.]+)$", "\\2", vnum)
+    ## param_lines = "CPLEX Parameter File Version 12.6.0.0"
+    param_lines = paste("CPLEX Parameter File Version", vnum)
+
 
     param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t')) ## 12.6.0.0 version
     ## param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
+    param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t')) ## 20.0.0.0 version
 
-    if (!is.na(nodefileind))
+    if (!is.na(nodefileind)) {
         param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
+       
+        param_lines = c(param_lines, paste("CPXPARAM_MIP_Strategy_File", nodefileind, sep = '\t'))
+
+
+    }
+
 
     if (!is.na(treememlim))
     {
         ## #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
         param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
-        ## param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
+        param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
+        
     }
 
     writeLines(param_lines, out.file)

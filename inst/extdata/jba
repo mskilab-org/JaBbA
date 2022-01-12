@@ -70,6 +70,7 @@ withAutoprint(
                 c("--nudgebalanced"),
                 type = "logical",
                 default = TRUE,
+                action = "store_true",
                 help = "whether to attempt to add a small incentive for chains of quasi-reciprocal junctions."),
             make_option(
                 c("--edgenudge"),
@@ -197,9 +198,14 @@ withAutoprint(
                 action = "store_true",
                 default = FALSE,
                 help = "run filter.loose to get a breakdown of loose ends?"),
+            make_option(
+                c("--max.threads"),
+                type = "numeric",
+                default = Inf,
+                help = "number of threads"),
             make_option(c("-v", "--verbose"),
                         action = "store_true",
-                        default = FALSE,
+                        default = TRUE,
                         help = "verbose output")
         )
 
@@ -324,6 +330,7 @@ withAutoprint(
             tilim = opt$tilim,
             epgap = opt$epgap,
             ## TODO use.gurobi = opt$gurobi,
+            max.threads = opt$max.threads,
             ## TODO max.threads = Inf, max.mem = 16
             ## below are general options
             max.mem = opt$mem,
