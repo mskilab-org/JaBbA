@@ -2241,7 +2241,8 @@ ramip_stub = function(kag.file,
         if (verbose) jmessage("number of specified max.threads after processing: ", max.threads)
 
         param.file = paste(out.file, '.prm', sep = '')
-        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
+        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3,
+                            workingmemlim = mem * 1024)
         if (verbose) {
             jmessage("param.file contents: ")
             system2('cat', normalizePath(param.file))
@@ -5560,33 +5561,52 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 
 ## cplex set max threads (warning can only do once globally per machine, so be wary of multiple hosts running on same machine)
 ##
-.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
+.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA, workingmemlim = NA_real_)
 {
-    vnum = grep("Welcome to IBM", system2("cplex", c("-c \"quit\""), stdout = T), value = T)
+    vnum = grep("Welcome to IBM",
+                system2("cplex", c("-c \"quit\""), stdout = T),
+                value = T)
     vnum = gsub("([a-z)(A-Z ]+)([0-9.]+)$", "\\2", vnum)
+    vnums = as.integer(unlist(strsplit(vnum, "\\.")))
     ## param_lines = "CPLEX Parameter File Version 12.6.0.0"
     param_lines = paste("CPLEX Parameter File Version", vnum)
 
 
-    param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t')) ## 12.6.0.0 version
-    ## param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t'))
-    param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t')) ## 20.0.0.0 version
+    if (vnums[1] <= 12 && vnums[2] <= 6) {
+        param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t'))
+    } else {
+        param_lines = c(param_lines, paste("CPXPARAM_Threads", numthreads, sep = '\t')) ## 20.0.0.0 version
+    }
+
 
     if (!is.na(nodefileind)) {
-        param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
-       
-        param_lines = c(param_lines, paste("CPXPARAM_MIP_Strategy_File", nodefileind, sep = '\t'))
-
-
+        if (vnums[1] <= 12 && vnums[2] <= 6) {
+            param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
+        } else {
+            param_lines = c(param_lines, paste("CPXPARAM_MIP_Strategy_File", nodefileind, sep = '\t'))
+        }
     }
 
 
     if (!is.na(treememlim))
     {
         ## #      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
-        param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
-        param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
+        if (vnums[1] <= 12 && vnums[2] <= 6) {
+            param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+        } else {
+            param_lines = c(param_lines, paste("CPXPARAM_MIP_Limits_TreeMemory", treememlim, sep = '\t'))
+        }
         
+    }
+
+    if (!is.null(workingmemlim) && !identical(workingmemlim, NA_real_)) {
+        ## workingmemlim should be expressed in units of megabytes for CPLEX
+        ## default is 2048
+        if (vnums[1] <= 12 && vnums[2] <= 6) {
+            param_lines = c(param_lines, paste("CPX_PARAM_WORKMEM", workingmemlim, sep = '\t'))
+        } else {
+            param_lines = c(param_lines, paste("CPXPARAM_WorkMem", workingmemlim, sep = '\t'))
+        }
     }
 
     writeLines(param_lines, out.file)
