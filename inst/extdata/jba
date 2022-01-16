@@ -191,7 +191,6 @@ if (!exists("opt"))
             c("--filter_loose"),
             type = "logical",
             default = FALSE,
-            action = "store_true",
             help = "run filter.loose to get a breakdown of loose ends?"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
