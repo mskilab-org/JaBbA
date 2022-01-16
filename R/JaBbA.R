@@ -6485,7 +6485,7 @@ read.junctions = function(rafile,
                     vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
                     vgr$SVTYPE="BND"
                 }
-                return(verify.junctions(vgr))
+                return(vgr)
             }
 
             ## TODO: Delly and Novobreak
