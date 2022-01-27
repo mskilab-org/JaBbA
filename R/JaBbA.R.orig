@@ -6437,7 +6437,7 @@ read.junctions <- function(rafile,
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
                 if (!"END" %in% colnames(values(vgr))){
-                    jerror("Non BND SV should have the second breakpoint coor in END columns!")
+                    stop("Non BND SV should have the second breakpoint coor in END columns!")
                 }
 
                 if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2))){
@@ -6517,7 +6517,7 @@ read.junctions <- function(rafile,
                 ## now delly...
                 ## if SVTYPE is BND but no MATEID, don't pretend to be
                 if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-                    values(vgr[fake.bix])$SVTYPE = "TRA"
+                    values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
                 }
 
                 ## add row names just like Snowman
@@ -6588,24 +6588,13 @@ read.junctions <- function(rafile,
                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
                 mc.bnd$MATEID = as.character(mc.bnd$MATEID)
 
-                vgr.nonbnd = vgr[which(!mid)]
-                if (length(loose.ix <- which(vgr.nonbnd$FILTER=="LOOSEEND"))>0){
-                    ## Non-BND rows contains loose ends
-                    vgr.loose = vgr.nonbnd[loose.ix]
-                    vgr.nonbnd = vgr.nonbnd[setdiff(seq_along(vgr.nonbnd), loose.ix)]
-                }
-                
-                if (length(vgr.nonbnd)>0){
-                    vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
-                    mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
-                    vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
-                    values(vgr) = rbind(mc.bnd, mc.nonbnd)
-                }
+                vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
+                values(vgr) = rbind(mc.bnd, mc.nonbnd, fill = TRUE)
             }
 
             ## sanity check
             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
-                jerror("MATEID or SVTYPE not included. Required")
+                stop("MATEID or SVTYPE not included. Required")
             }
 
             vgr$mateid = vgr$MATEID
@@ -6621,11 +6610,11 @@ read.junctions <- function(rafile,
             }
 
             if (sum(vgr$svtype == 'BND')==0){
-                jwarning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+                warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
             }
 
             if (!all(vgr$svtype == 'BND')){
-                jwarning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
+                warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
                                 sum(vgr$svtype != 'BND')))
 
             }
@@ -6660,7 +6649,10 @@ read.junctions <- function(rafile,
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
                 ## sort by name, record bp1 or bp2
-                jmessage("STRANDS INFO field found.")
+                if (verbose)
+                {
+                    message("STRANDS INFO field found.")
+                }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
                 vgr = vgr[order(names(vgr))]
@@ -6676,9 +6668,11 @@ read.junctions <- function(rafile,
 
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-            }
-            else if (any(grepl("\\[|\\]", alt))){
-                jmessage("ALT field format like BND")
+            } else if (any(grepl("\\[|\\]", alt))){
+                if (verbose)
+                {
+                    message("ALT field format like BND")
+                }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
@@ -6689,14 +6683,13 @@ read.junctions <- function(rafile,
                 ## add extra genotype fields to vgr
                 if (all(is.na(vgr$mateid))){
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                        jwarning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
                         vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
                         (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
                     else if (!is.null(vgr$SCTG))
                     {
-                        jwarning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                        ## require(igraph)
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
                         ucoord = unique(c(vgr$coord, vgr$mcoord))
                         vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
@@ -6708,7 +6701,7 @@ read.junctions <- function(rafile,
                         }
                     }
                     else{
-                        jerror('Error: MATEID tag missing')
+                        stop('Error: MATEID tag missing')
                     }
                 }
 
@@ -6719,12 +6712,12 @@ read.junctions <- function(rafile,
                 vgr.pair = vgr[pix]
 
                 if (length(vgr.pair)==0){
-                    jerror('Error: No mates found despite nonzero number of BND rows in VCF')
+                    stop('Error: No mates found despite nonzero number of BND rows in VCF')
                 }
 
                 vgr.pair$mix = match(vgr.pair$mix, pix)
 
-                vix = which(seq_along(vgr.pair)<vgr.pair$mix)
+                vix = which(1:length(vgr.pair)<vgr.pair$mix)
                 vgr.pair1 = vgr.pair[vix]
                 vgr.pair2 = vgr.pair[vgr.pair1$mix]
 
@@ -6820,10 +6813,33 @@ read.junctions <- function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
+<<<<<<< HEAD
+            ## ra = ra.dedup(ra)
+=======
             if (geno==TRUE){
                 ## expand into a list of GRLs, named by the sample name in the VCF
                 geno.dt = data.table(
                     data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
+                )
+                if (ncol(geno.dt)>1) {
+                    cnms = colnames(geno.dt)
+                    single.ra = ra
+                    ra = lapply(setNames(cnms, cnms),
+                                function(cnm){
+                                    this.ra = copy(single.ra)
+                                    this.dt = data.table(as.data.frame(values(this.ra)))
+                                    this.geno = geno.dt[[cnm]]
+                                    this.dt[
+                                      , tier := ifelse(
+                                            tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
+                                    values(this.ra) = this.dt
+                                    return(verify.junctions(this.ra))
+                                })
+                    loose=FALSE ## TODO: temporary until we figure out how
+                }
+            }
+
+>>>>>>> 23046d32b6cb5ad00fd55339f5ed84cd447e1777
             if (!get.loose | is.null(vgr$mix)){
                 return(verify.junctions(ra))
             } else {
@@ -6842,8 +6858,13 @@ read.junctions <- function(rafile,
                 return(list(junctions = verify.junctions(ra), loose.ends = vgr.loose))
             }
         }
-    } else if (is.na(rafile)){
-        return(GRangesList())
+        else
+      {
+        stop('Unrecognized file extension: currently accepted are .rds, .bedpe, .vcf, .vcf.gz, vcf.bgz')
+      }
+        ## else {
+        ##     rafile = read.delim(rafile)
+        ## }
     }
 
 
@@ -6922,7 +6943,7 @@ read.junctions <- function(rafile,
         rafile = rafile[which(!bad.ix), ]
 
         if (nrow(rafile)==0){
-            return(GRangesList())
+            return(GRanges())
         }
 
         seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
