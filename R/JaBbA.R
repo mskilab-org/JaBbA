@@ -6580,7 +6580,6 @@ read.junctions <- function(rafile,
                     vgr.nonbnd$END[naix] = -1
                     vgr.nonbnd$loose.end[naix] = TRUE
                   }
-
                 vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
               }
 
@@ -6589,10 +6588,17 @@ read.junctions <- function(rafile,
                 mc.bnd$MATEID = as.character(mc.bnd$MATEID)
 
                 vgr.nonbnd = vgr[which(!mid)]
-                if (length(loose.ix <- which(vgr.nonbnd$FILTER=="LOOSEEND"))>0){
+                if (length(loose.ix <- which(vgr.nonbnd$FILTER=="LOOSEEND" |
+                                             grepl("gridss.*b$",
+                                                   names(vgr.nonbnd),
+                                                   perl = T)))>0){
                     ## Non-BND rows contains loose ends
                     vgr.loose = vgr.nonbnd[loose.ix]
-                    vgr.nonbnd = vgr.nonbnd[setdiff(seq_along(vgr.nonbnd), loose.ix)]
+                    vgr.loose$loose.end = TRUE
+                    vgr.nonbnd = vgr.nonbnd[setdiff(
+                        seq_along(vgr.nonbnd),
+                        loose.ix
+                    )]
                 }
                 
                 if (length(vgr.nonbnd)>0){
@@ -6820,7 +6826,7 @@ read.junctions <- function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            if (geno==TRUE){
+            if (isTRUE(geno)){
                 ## expand into a list of GRLs, named by the sample name in the VCF
                 geno.dt = data.table(
                     data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
