@@ -6858,9 +6858,9 @@ read.junctions <- function(rafile,
                 }
 
                 return(list(junctions = verify.junctions(ra), loose.ends = vgr.loose))
-            } else {
-                rafile = data.table::fread(rafile)
             }
+        } else {
+            rafile = data.table::fread(rafile)
         }
     } else if (is.na(rafile)){
         return(GRangesList())
