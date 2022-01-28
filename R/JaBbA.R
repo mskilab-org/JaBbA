@@ -6425,7 +6425,9 @@ read.junctions <- function(rafile,
             }
 
             ## BND format doesn't have duplicated rownames
-            if (any(duplicated(names(vgr)))){
+            duped = sum(names(vgr) %in% names(vgr)[duplicated(names(vgr))]) == length(vgr)
+            ## if (any(duplicated(names(vgr)))){
+            if (duped){
                 names(vgr) = NULL
             }
 
