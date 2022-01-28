@@ -174,7 +174,7 @@ withAutoprint(
             make_option(
                 c("--lp"),
                 type = "logical",
-                default = FALSE,
+                default = TRUE,
                 help = "Whether to run optimization as LP"),
             make_option(
                 c("--ism"),
@@ -189,7 +189,7 @@ withAutoprint(
                         action = "store_true",
                         default = TRUE,
                         help = "verbose output")
-            )
+        )
             
         parseobj = OptionParser(
             usage = paste(
