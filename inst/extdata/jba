@@ -165,6 +165,76 @@ withAutoprint(
                 c("-n", "--name"),
                 type = "character",
                 default = "tumor",
+                help = "Sample / Individual name"),
+            make_option(
+                c("--cores"),
+                type = "integer",
+                default = 1,
+                help = "Number of cores for JaBBa MIP"),
+            make_option(
+                c("--lp"),
+                type = "logical",
+                default = FALSE,
+                help = "Whether to run optimization as LP"),
+            make_option(
+                c("--ism"),
+                type = "logical",
+                default = FALSE,
+                help = "Add ISM constraints? (only valid if LP = TRUE)"),
+            ## make_option(c("--gurobi"),
+            ##             type = 'character',
+            ##             default = 'FALSE',
+            ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
+            make_option(c("-v", "--verbose"),
+                        action = "store_true",
+                        default = TRUE,
+                        help = "verbose output")
+            )
+            
+        parseobj = OptionParser(
+            usage = paste(
+                c("jba JUNCTIONS COVERAGE [options]",
+                  "\tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList",
+                  " \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges",
+                  "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
+                collapse="\n"),
+            option_list=option_list
+        )
+
+        args = tryCatch(
+            parse_args(parseobj,
+                       positional_arguments = TRUE,
+                       print_help_and_exit = FALSE),
+
+            error = function(e) {message(jbastr); print_help(parseobj); NULL}
+        )
+
+        opt = NULL;
+        if (!is.null(args)) {
+            opt = args$options
+            opt$junctions = args$args[1]
+            opt$coverage = args$args[2]
+            if (!file.exists(opt$junctions))
+            {
+                message('Did not find junction file ', opt$junctions)
+                message('Warning: will be running JaBbA without junctions')
+                ## print_help(parseobj); stop()
+                opt$junctions = ""
+            }
+            if (!file.exists(opt$coverage))
+            {
+                message('Did not find coverage file ', opt$coverage)
+                print_help(parseobj); stop()
+            }
+        } else {
+            stop("See usage.")
+        }
+    }
+
+    suppressPackageStartupMessages(
+    {
+
+        if (!is.null(opt$seg) && is.character(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
         {
             message('Did not find seg file ', opt$seg, ' setting to NULL')
             opt$seg = NULL
