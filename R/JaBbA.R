@@ -6824,6 +6824,24 @@ read.junctions <- function(rafile,
                 ## expand into a list of GRLs, named by the sample name in the VCF
                 geno.dt = data.table(
                     data.table(as.data.frame(VariantAnnotation::geno(vcf)$GT))
+                )
+                if (ncol(geno.dt)>1) {
+                    cnms = colnames(geno.dt)
+                    single.ra = ra
+                    ra = lapply(setNames(cnms, cnms),
+                                function(cnm){
+                                    this.ra = copy(single.ra)
+                                    this.dt = data.table(as.data.frame(values(this.ra)))
+                                    this.geno = geno.dt[[cnm]]
+                                    this.dt[
+                                      , tier := ifelse(
+                                            tier==2, ifelse(grepl("1", this.geno), 2, 3), 3)]
+                                    values(this.ra) = this.dt
+                                    return(verify.junctions(this.ra))
+                                })
+                    loose=FALSE ## TODO: temporary until we figure out how
+                }
+            }
             if (!get.loose | is.null(vgr$mix)){
                 return(verify.junctions(ra))
             } else {
@@ -6840,6 +6858,8 @@ read.junctions <- function(rafile,
                 }
 
                 return(list(junctions = verify.junctions(ra), loose.ends = vgr.loose))
+            } else {
+                rafile = data.table::fread(rafile)
             }
         }
     } else if (is.na(rafile)){
