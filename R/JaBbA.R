@@ -2251,8 +2251,8 @@ ramip_stub = function(kag.file,
         if (verbose) jmessage("number of specified max.threads after processing: ", max.threads)
 
         param.file = paste(out.file, '.prm', sep = '')
-        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3,
-                            workingmemlim = mem * 1024)
+        .cplex_customparams(param.file, max.threads, treememlim = mem * 1024,
+                            workingmemlim = floor((mem * 0.9) * 1024))
         if (verbose) {
             jmessage("param.file contents: ")
             system2('cat', normalizePath(param.file))
@@ -5574,7 +5574,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
     vnum = grep("Welcome to IBM",
                 system2("cplex", c("-c \"quit\""), stdout = T),
                 value = T)
-    vnum = gsub("([a-z)(A-Z ]+)([0-9.]+)$", "\\2", vnum)
+    vnum = sub("([a-z)(A-Z ]+)([0-9.]+)$", "\\2", vnum)
     vnums = as.integer(unlist(strsplit(vnum, "\\.")))
     ## param_lines = "CPLEX Parameter File Version 12.6.0.0"
     param_lines = paste("CPLEX Parameter File Version", vnum)
