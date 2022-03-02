@@ -15,7 +15,7 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/gChain,
-  github::mskilab/gGnome
+  github::mskilab/gGnome@gurobi
 Depends:
   R (>= 3.6.0),
   GenomicRanges,
