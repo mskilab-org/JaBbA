@@ -476,7 +476,7 @@ JaBbA = function(## Two required inputs
             ## rescues junctions that are within rescue.window bp of a loose end
             ## got used, stay there
             ## but not loose ends overlapping an exorbitant number of junctions
-            le.keep = which((le %N% (stack(ra.all) + rescue.window)) < 20)
+            le.keep = which((le %N% (stack(ra.all) + rescue.window)) < 6)
             tokeep = which(values(jab$junctions)$cn>0) 
             new.ra.id = unique(c(
                 values(jab$junctions)$id[tokeep],
@@ -2435,8 +2435,9 @@ ramip_stub = function(kag.file,
                        ism = ism,
                        tfield = tfield,
                        max.mem = mem,
-                       min.bins = min.bins, ## should this always be 1?
-                       fix.thres = fix.thres)
+                       min.bins = min.bins,
+                       fix.thres = fix.thres,
+                       use.gurobi = use.gurobi)
 
     } else {
         ra.sol = jbaMIP(this.kag$adj,
@@ -3138,6 +3139,7 @@ jerror = function(..., pre = 'JaBbA', call. = TRUE)
 #' @param require.convergence (logical) warn if not converged? default TRUE
 #' @param max.epgap.thresh (numeric) above this value, all node and edge CNs are NA (default 0.5)
 #' @param nodefileind (numeric) one of 0, 1, 2, 3 (for storing CPLEX tree node files), default 3
+#' @param use.gurobi (logical) use gurobi? default FALSE
 #'
 #' @returnn
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -3166,8 +3168,14 @@ jbaLP = function(kag.file = NULL,
                  return.type = "karyograph",
                  require.convergence = FALSE,
                  max.epgap.thresh = 0.5,
-                 nodefileind = 3)
+                 nodefileind = 3,
+                 use.gurobi = FALSE)
 {
+    if (use.gurobi) {
+        if (!requireNamespace("gurobi", quietly = TRUE)) {
+            stop("use.gurobi is TRUE but gurobi is not installed")
+        }
+    }
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
         stop("one of kag, kag.file, gg.file, gg must be supplied")
     }
@@ -3238,6 +3246,7 @@ jbaLP = function(kag.file = NULL,
         ## this is because there are a larger number of points with low CN and few high CN points
         ## resulting in low estimated variance for high CN nodes even if raw variance was high
         vars = pmax(pmax(vars, kag.gg$nodes$dt$cn), min.var)
+        ## vars = pmax(vars, min.var) ## make sure that all variances are at least min.var
         sd = sqrt(vars)
 
         ## process bins
@@ -3261,7 +3270,7 @@ jbaLP = function(kag.file = NULL,
         if (verbose) {
             message("Number of nonzero rewards: ", length(reward.ix))
         }
-        erewards[reward.ix] = lambda / 2 ## set to lambda? or half lambda?
+        erewards[reward.ix] = lambda / 8 ## set to lambda? or half lambda?
         kag.gg$edges$mark(reward = erewards)
     } else {
         if (verbose) {
@@ -3356,7 +3365,7 @@ jbaLP = function(kag.file = NULL,
     gc.dat = gc()
     mem.mb = sum(gc.dat[, 2])
 
-    tm = (max.mem * 1e3 - 2 * mem.mb) - 1e3 ## 1 gb buffer - better is to call in balance
+    tm = (max.mem * 1e3 - mem.mb) - 1e3 ## 1 gb buffer - better is to call in balance
 
     if (verbose) {
         message("Currently used: ", mem.mb, " Mb")
@@ -3382,7 +3391,8 @@ jbaLP = function(kag.file = NULL,
                   ism = ism,
                   trelim = tm, ## max.mem * 1e3,
                   nfix = nfix,
-                  nodefileind = 3)
+                  nodefileind = 3,
+                  use.gurobi = use.gurobi)
     
     bal.gg = res$gg
     sol = res$sol
