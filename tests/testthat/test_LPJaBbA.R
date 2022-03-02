@@ -253,13 +253,13 @@ test_that(desc = "Testing vanilla JaBbA LP with gurobi",
                             tfield = 'nothing',
                             nudge.balanced = TRUE,
                             use.gurobi = TRUE,
-                            dyn.tuning = TRUE,
+                            dyn.tuning = FALSE,
                             lp = TRUE,
                             ism = FALSE,
                             max.na = 1)
                   )
-
-                  expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns, tolerance = 1.1)
+                  ## only check for chromosome 12...
+                  expect_equal(jab.lp$nodes$dt[seqnames == "12", cn], expected.cns, tolerance = 0.5)
               } else {
                   expect_error(object = {
                       jab.lp = suppressWarnings(
