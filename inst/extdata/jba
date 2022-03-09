@@ -186,14 +186,17 @@ if (!exists("opt"))
             c("--ism"),
             type = "logical",
             default = FALSE,
-            action = "store_true",
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(
             c("--filter_loose"),
             type = "logical",
             default = FALSE,
-            action = "store_true",
             help = "run filter.loose to get a breakdown of loose ends?"),
+        make_option(
+            c("--gurobi"),
+            type = "logical",
+            default = FALSE,
+            help = "use gurobi optimizer instead of CPLEX?"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = FALSE,
@@ -314,7 +317,7 @@ suppressPackageStartupMessages(
         loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
         tilim = opt$tilim,
         epgap = opt$epgap,
-        ## TODO use.gurobi = opt$gurobi,
+        use.gurobi = opt$gurobi,
         ## TODO max.threads = Inf, max.mem = 16
         ## below are general options
         max.mem = opt$mem,
