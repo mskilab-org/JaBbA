@@ -8824,6 +8824,9 @@ dflm = function(x, last = FALSE, nm = '')
 #' @param outdir Output directory where to place the summary graphs and txt files (only if multiple JaBbAs are provided.)
 
 QCStats = function(inputDT,outdir){
+	library(data.table)
+	library(gGnome)
+	library(ggplot2)
 	summaryDT=data.table(pair=character(),Tier_1_Input_Junctions=numeric(),Tier_2_Input_Junctions=numeric(),Tier_3_Input_Junctions=numeric(),
 		Tier_1_Output_Junctions=numeric(),Tier_2_Output_Junctions=numeric(),Tier_3_Output_Junctions=numeric(),
 		Number_of_Segments_Input=numeric(),Number_of_Segments_Output=numeric(),Non_telomeric_Loose_Ends=numeric(),
