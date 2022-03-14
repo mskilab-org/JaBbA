@@ -35,6 +35,8 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
    [CPLEX Studio](https://www.ibm.com/products/ilog-cplex-optimization-studio).
    The software is proprietary, but can be obtained for free under [IBM's academic
    initiative](https://www.ibm.com/products/ilog-cplex-optimization-studio/pricing).
+   
+   **Note:** as of v1.1, JaBbA now supports the use of [Gurobi](https://www.gurobi.com/products/gurobi-optimizer/) for MIP optimization as an alternative to CPLEX. Please see below for installation instructions.
 
 2. Set `CPLEX_DIR` variable to your CPLEX Studio installation directory
 
@@ -60,6 +62,33 @@ $ jba ## to see usage
 5. Test run jba executable on provided toy data
 ```{bash}
 $ jba ${JABBA_PATH}/junctions.vcf ${JABBA_PATH}/coverage.txt 
+```
+
+### Running JaBbA with Gurobi
+
+As of ```v1.1``` JaBbA can now be run with [Gurobi](https://www.gurobi.com/products/gurobi-optimizer/), which offers a [free academic license](https://www.gurobi.com/academia/academic-program-and-licenses/). To use Gurobi with JaBbA, please follow the following steps for installation:
+
+1. Install [Gurobi](https://www.gurobi.com/documentation/9.5/quickstart_windows/software_installation_guid.html) and set up a [license](https://www.gurobi.com/academia/academic-program-and-licenses/).
+2. Install the [R interface](https://www.gurobi.com/documentation/9.5/quickstart_mac/r_interface.html)
+3. Set up your ```GUROBI_HOME``` environment variable:
+
+```export GUROBI_HOME=[your path to gurobi]```
+
+4. Install JaBbA 
+```{r}
+devtools::install_github('mskilab/JaBbA')
+```
+
+5. For convenience, add `jba` executable to your `PATH`
+```{bash}
+$ JABBA_PATH=$(Rscript -e 'cat(paste0(installed.packages()["JaBbA", "LibPath"], "/JaBbA/extdata/"))')
+$ export PATH=${PATH}:${JABBA_PATH}
+$ jba ## to see usage
+```
+
+6. Note that to run JaBbA with Gurobi you will need to use the ```---gurobi``` flag:
+```{bash}
+$ jba ${JABBA_PATH}/junctions.vcf ${JABBA_PATH}/coverage.txt --gurobi TRUE
 ```
 
 ## Usage
@@ -175,6 +204,9 @@ Options:
 	
 	--ism
 		Include infinite sites constraints
+	
+	--gurobi
+		Use Gurobi for MIP optimization instead of CPLEX
 
 	-v, --verbose
 		verbose output

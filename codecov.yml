@@ -14,6 +14,9 @@ coverage:
         threshold: 1%
         if_not_found: success
         if_ci_failed: error
+   patch:
+     default:
+       target: 50%
 
 parsers:
   gcov:
