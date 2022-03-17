@@ -95,7 +95,7 @@ if (!exists("opt"))
         make_option(
             c("--maxna"),
             type = "numeric",
-            default = 0.1,
+            default = 0.5,
             help = "Any node with more NA than this fraction will be ignored"),
         make_option(
             c("--blacklist.coverage"),
