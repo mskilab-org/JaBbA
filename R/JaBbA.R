@@ -41,17 +41,22 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
     if(any(toset)) options(op.JaBbA[toset])
 
     ## test for CPLEX environment
+    ## either CPLEX or gurobi must be installed
     cplex.dir = Sys.getenv("CPLEX_DIR")
-    if (is.null(cplex.dir)){
-        jerror("CPLEX_DIR environment variable not found!")
-    } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-        jerror("${CPLEX_DIR}/cplex not found")
-    } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
-               !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-        jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+    if (!requireNamespace("gurobi", quietly = TRUE)) {
+        jmessage("Gurobi not installed - checking for CPLEX")
+        if (is.null(cplex.dir)){
+            jerror("CPLEX_DIR environment variable not found!")
+        } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
+            jerror("${CPLEX_DIR}/cplex not found")
+        } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
+                   !file.exists(paste0(cplex.dir, "/cplex/lib"))){
+            jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+        } else {
+            jmessage("Found CPLEX environment in: ", cplex.dir)
+        }
     } else {
-        jmessage("Found CPLEX environment in: ", cplex.dir)
-        ## jmessage("CPLEX version: ", cplex.version)
+        jmessage("gurobi is installed and can be used")
     }
 
     invisible()
