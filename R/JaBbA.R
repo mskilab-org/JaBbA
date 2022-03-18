@@ -47,13 +47,13 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
         jmessage("Gurobi not installed")
     }
     if (is.null(cplex.dir)){
-        jerror("CPLEX_DIR environment variable not found!")
+        jmessage("CPLEX_DIR environment variable not found!")
     } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-        jerror("${CPLEX_DIR}/cplex not found")
+        jmessage("${CPLEX_DIR}/cplex not found")
     } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
                !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-        jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
-    } 
+        jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+    }
 
     invisible()
 }
@@ -180,7 +180,7 @@ JaBbA = function(## Two required inputs
     ## check optimizer choice is appropriate
     if (use.gurobi) {
         if (!requireNamespace("gurobi", quietly = TRUE)) {
-            stop("use.gurobi is TRUE but gurobi is not installed")
+            jerror("use.gurobi is TRUE but gurobi is not installed")
         }
     } else {
         cplex.dir = Sys.getenv("CPLEX_DIR")
