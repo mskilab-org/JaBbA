@@ -8936,11 +8936,11 @@ QCStats = function(inputDT,outdir){
 
 #' @name QCGraphs
 #' @title QCGraphs
-#' @description
+#' @description Function for generating quality graphs for the output of a JaBbA run. Can be run either for one or multiple JaBbA outputs (see below).
 #' 
 #' 
-#' @param StatsTxt 
-#' @param StatsCsv
+#' @param StatsTxt Route to output file of QCStats. Only provide if running for a single sample.
+#' @param StatsCsv Csv with pairs (column 1) and corresponding path to QCStats file (columns 2). Only provide if running for more than 1 file.
 #' @param KarDT 
 #' @param outdir Output directory where to place the function's graphs and txt files
 
