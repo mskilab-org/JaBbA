@@ -41,17 +41,18 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
     if(any(toset)) options(op.JaBbA[toset])
 
     ## test for CPLEX environment
+    ## either CPLEX or gurobi must be installed
     cplex.dir = Sys.getenv("CPLEX_DIR")
+    if (!requireNamespace("gurobi", quietly = TRUE)) {
+        jmessage("Gurobi not installed")
+    }
     if (is.null(cplex.dir)){
-        jerror("CPLEX_DIR environment variable not found!")
+        jmessage("CPLEX_DIR environment variable not found!")
     } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-        jerror("${CPLEX_DIR}/cplex not found")
+        jmessage("${CPLEX_DIR}/cplex not found")
     } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
                !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-        jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
-    } else {
-        jmessage("Found CPLEX environment in: ", cplex.dir)
-        ## jmessage("CPLEX version: ", cplex.version)
+        jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     }
 
     invisible()
@@ -176,6 +177,23 @@ JaBbA = function(## Two required inputs
     ra = junctions
     reiterate = 1 + as.integer(reiterate)
 
+    ## check optimizer choice is appropriate
+    if (use.gurobi) {
+        if (!requireNamespace("gurobi", quietly = TRUE)) {
+            jerror("use.gurobi is TRUE but gurobi is not installed")
+        }
+    } else {
+        cplex.dir = Sys.getenv("CPLEX_DIR")
+        if (is.null(cplex.dir)){
+            jerror("CPLEX_DIR environment variable not found!")
+        } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
+            jerror("${CPLEX_DIR}/cplex not found")
+        } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
+                   !file.exists(paste0(cplex.dir, "/cplex/lib"))){
+            jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+        }
+    }
+    
     ## if (is.character(ra))
     ## {
     ##     if (!file.exists(ra))
@@ -3173,11 +3191,7 @@ jbaLP = function(kag.file = NULL,
                  nodefileind = 3,
                  use.gurobi = FALSE)
 {
-    if (use.gurobi) {
-        if (!requireNamespace("gurobi", quietly = TRUE)) {
-            stop("use.gurobi is TRUE but gurobi is not installed")
-        }
-    }
+    
     if (is.null(kag.file) & is.null(kag) & is.null(gg.file) & is.null(gg)) {
         stop("one of kag, kag.file, gg.file, gg must be supplied")
     }
