@@ -8940,12 +8940,11 @@ QCStats = function(inputDT,outdir){
 					r_of_Coverage_and_CN=signif(as.vector(Comb_corr_pe$estimate),digits=4),
 					p_value_of_r=signif(as.vector(Comb_corr_pe$p.value),digits=4),
 					RMSE_of_Coverage_and_CN=signif(Comb_rmse,digits=4)))
-
-	}
-
-	fwrite(summaryDT,paste0(outdir,"/QCSummary.csv"))
-	QCGraphs(StatsCsv=paste0(outdir,"/QCSummary.csv"),KarDT=data.table(cn=combforScatter$CN,cnmle=combforScatter$CNMLE),
+		
+		fwrite(summaryDT,paste0(outdir,"/QCSummary.csv"))
+		QCGraphs(StatsCsv=paste0(outdir,"/QCSummary.csv"),KarDT=data.table(cn=combforScatter$CN,cnmle=combforScatter$CNMLE),
 			outdir=outdir)
+	}
 }
 
 #' @name QCGraphs
