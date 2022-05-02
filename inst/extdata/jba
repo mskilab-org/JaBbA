@@ -270,7 +270,8 @@ suppressPackageStartupMessages(
   }
 
 
-    require(JaBbA)
+    #require(JaBbA)
+    devtools::load_all('~/git/JaBbA')
     jmessage = function(..., pre = 'JaBbA'){
         message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
     }
