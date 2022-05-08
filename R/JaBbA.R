@@ -8860,8 +8860,8 @@ QCStats = function(inputDT,outdir){
 		output_Jtiers=table(output_gg$edges[type == 'ALT']$dt$tier)
 		input_segs=length(readRDS(JaBba_Args$seg))
 		output_segs=nrow(output_gg$nodes$dt)
-		corr_sp=cor.test(kar$segstats$cnmle,kar$segstats$cn,method="spearman",na.action = "na.exclude")	
-		corr_pe=cor.test(kar$segstats$cnmle,kar$segstats$cn,method="pearson", na.action = "na.exclude")
+		corr_sp=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="spearman",na.action = "na.exclude")	
+		corr_pe=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="pearson", na.action = "na.exclude")
 		rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
 		fep=readRDS(paste0(inputDT$inputdir[i],"/jabba.raw.rds"))$epgap
 
