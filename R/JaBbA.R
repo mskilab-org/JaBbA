@@ -8860,10 +8860,11 @@ QCStats = function(inputDT,outdir){
 		output_Jtiers=table(output_gg$edges[type == 'ALT']$dt$tier)
 		input_segs=length(readRDS(JaBba_Args$seg))
 		output_segs=nrow(output_gg$nodes$dt)
-		corr_sp=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="spearman",na.action = "na.exclude")	
-		corr_pe=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="pearson", na.action = "na.exclude")
+		corr_sp=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="spearman")	
+		corr_pe=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="pearson")
 		rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
 		fep=readRDS(paste0(inputDT$inputdir[i],"/jabba.raw.rds"))$epgap
+
 
 		sink(paste0(inputDT$inputdir[i],"/QCStats.txt"))
 		cat("Stat \t Value \n")
@@ -8891,7 +8892,7 @@ QCStats = function(inputDT,outdir){
 		cat(paste0("RMSE_of_Coverage_and_CN \t",signif(rmse,digits=4),"\n"))
 		sink()
 
-		QCGraphs(StatsTxt=paste0(inputDT$inputdir[i],"/QCStats.txt"),KarDT=data.table(cn=kar$segstats$cn[!is.na(kar$segstats$cn)],cnmle=kar$segstats$cnmle[!is.na(kar$segstats$cn)]),
+		QCGraphs(StatsTxt=paste0(inputDT$inputdir[i],"/QCStats.txt"),KarDT=data.table(cn=kar$segstats$cn,cnmle=kar$segstats$cnmle),
 			outdir=inputDT$inputdir[i])
 
 		if(nrow(inputDT)>1){
@@ -8911,8 +8912,8 @@ QCStats = function(inputDT,outdir){
 					p_value_of_r=signif(as.vector(corr_pe$p.value),digits=4),
 					RMSE_of_Coverage_and_CN=signif(rmse,digits=4)))
 
-				combforScatter$CNMLE=c(combforScatter$CNMLE,kar$segstats$cnmle[!is.na(kar$segstats$cn)])
-				combforScatter$CN=c(combforScatter$CN,kar$segstats$cn[!is.na(kar$segstats$cn)])
+				combforScatter$CNMLE=c(combforScatter$CNMLE,kar$segstats$cnmle)
+				combforScatter$CN=c(combforScatter$CN,kar$segstats$cn)
 			
 		}
 	}
