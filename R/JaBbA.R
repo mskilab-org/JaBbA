@@ -626,7 +626,6 @@ JaBbA = function(## Two required inputs
             filter_loose = filter_loose)
     }
     QCStats(inputDT=data.table(pair=name,inputdir=outdir),outdir=outdir)
-    QCGraphs(StatsTxt=paste0(outdir,"/QCStats.txt"),KarDT=paste0(outdir,"/karyograph.rds"),outdir=outdir)
     setwd(cdir)
     return(jab)
 }
