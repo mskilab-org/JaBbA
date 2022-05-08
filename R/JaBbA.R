@@ -8849,7 +8849,6 @@ QCStats = function(inputDT,outdir){
 	combforScatter=list(CNMLE=vector(),CN=vector())
 
 	for(i in 1:nrow(inputDT)){
-		print(inputDT$pair[i])
 		JaBba_Args=readRDS(paste0(inputDT$inputdir[i],"/cmd.args.rds"))
 		output_gg=readRDS(paste0(inputDT$inputdir[i], "/jabba.gg.rds"))
 		opt.report=readRDS(paste0(inputDT$inputdir[i], "/opt.report.rds"))
