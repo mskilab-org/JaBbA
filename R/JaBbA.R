@@ -8891,7 +8891,7 @@ QCStats = function(inputDT,outdir){
 		cat(paste0("RMSE_of_Coverage_and_CN \t",signif(rmse,digits=4),"\n"))
 		sink()
 
-		QCGraphs(StatsTxt=paste0(inputDT$inputdir[i],"/QCStats.txt"),KarDT=data.table(cn=kar$segstats$cn,cnmle=kar$segstats$cnmle),
+		QCGraphs(StatsTxt=paste0(inputDT$inputdir[i],"/QCStats.txt"),KarDT=data.table(cn=kar$segstats$cn[!is.na(kar$segstats$cn)],cnmle=kar$segstats$cnmle[!is.na(kar$segstats$cn)]),
 			outdir=inputDT$inputdir[i])
 
 		if(nrow(inputDT)>1){
@@ -8911,8 +8911,8 @@ QCStats = function(inputDT,outdir){
 					p_value_of_r=signif(as.vector(corr_pe$p.value),digits=4),
 					RMSE_of_Coverage_and_CN=signif(rmse,digits=4)))
 
-				combforScatter$CNMLE=c(combforScatter$CNMLE,kar$segstats$cnmle)
-				combforScatter$CN=c(combforScatter$CN,kar$segstats$cn)
+				combforScatter$CNMLE=c(combforScatter$CNMLE,kar$segstats$cnmle[!is.na(kar$segstats$cn)])
+				combforScatter$CN=c(combforScatter$CN,kar$segstats$cn[!is.na(kar$segstats$cn)])
 			
 		}
 	}
