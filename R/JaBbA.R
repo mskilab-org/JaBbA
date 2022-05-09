@@ -8833,11 +8833,12 @@ dflm = function(x, last = FALSE, nm = '')
 #' Function to generate quality control stats for one (default) or multiple JaBbA outputs. It is to be runned after the main JaBba function is done. Stats are printed to a txt file (QCStats.txt)
 #' 
 #' @param inputDT Datatable with the following columns:
-#'				pair name of the sample pair
-#' 				inputdir: Directory with JaBbA results
+#' 	pair name of the sample pair
+#' 	inputdir: Directory with JaBbA results
 #' @param outdir Output directory where to place the summary graphs and txt files (only if multiple JaBbAs are provided.)
+#' @param testMode Whether to run the function in test mode or not. Only used for running unit tests. This mode returns a few specific QC values (as opposed to writing them down in a file) to be checked via test_that.
 
-QCStats = function(inputDT,outdir){
+QCStats = function(inputDT,outdir,testMode=FALSE){
 	library(data.table)
 	library(gGnome)
 	library(ggplot2)
@@ -8863,7 +8864,10 @@ QCStats = function(inputDT,outdir){
 		rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
 		fep=readRDS(paste0(inputDT$inputdir[i],"/jabba.raw.rds"))$epgap
 
-
+		if(testMode){
+			return(c(input_segs,output_segs,fep,rmse))
+		}
+				
 		sink(paste0(inputDT$inputdir[i],"/QCStats.txt"))
 		cat("Stat \t Value \n")
 		cat(paste0("Tier_1_Input_Junctions \t",ifelse("1" %in% names(input_Jtiers), input_Jtiers[[1]], "0"),"\n"))
@@ -8953,7 +8957,7 @@ QCStats = function(inputDT,outdir){
 #' 
 #' @param StatsTxt Route to output file of QCStats. Only provide if running for a single sample.
 #' @param StatsCsv Csv with pairs (column 1) and corresponding path to QCStats file (columns 2). Only provide if running for more than 1 file.
-#' @param KarDT 
+#' @param KarDT Datatable with paired up values of cn and cnmle from the output karyograph.
 #' @param outdir Output directory where to place the function's graphs and txt files
 
 QCGraphs=function(StatsTxt=NA, StatsCsv=NA, KarDT, outdir){
