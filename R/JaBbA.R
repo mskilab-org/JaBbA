@@ -8842,6 +8842,22 @@ QCStats = function(inputDT,outdir,testMode=FALSE){
 	library(data.table)
 	library(gGnome)
 	library(ggplot2)
+	
+	
+	if(testMode){
+			output_gg=readRDS(system.file('testing', "jabba.gg.rds", package = "JaBbA"))
+			opt.report=readRDS(system.file('testing', "opt.report.rds", package = "JaBbA"))
+			kar=readRDS(system.file('testing', "karyograph.rds", package = "JaBbA"))
+			fep=readRDS(system.file('testing', "jabba.raw.rds", package = "JaBbA"))$epgap
+		
+			input_segs=length(readRDS(system.file('extdata', "seg.rds", package = "JaBbA")))
+			output_segs=nrow(output_gg$nodes$dt)
+			rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
+			
+			return(c(input_segs,output_segs,rmse,fep))
+		}
+	
+	
 	summaryDT=data.table(pair=character(),Tier_1_Input_Junctions=numeric(),Tier_2_Input_Junctions=numeric(),Tier_3_Input_Junctions=numeric(),
 		Tier_1_Output_Junctions=numeric(),Tier_2_Output_Junctions=numeric(),Tier_3_Output_Junctions=numeric(),
 		Number_of_Segments_Input=numeric(),Number_of_Segments_Output=numeric(),Non_telomeric_Loose_Ends=numeric(),
@@ -8864,9 +8880,6 @@ QCStats = function(inputDT,outdir,testMode=FALSE){
 		rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
 		fep=readRDS(paste0(inputDT$inputdir[i],"/jabba.raw.rds"))$epgap
 
-		if(testMode){
-			return(c(input_segs,output_segs,fep,rmse))
-		}
 				
 		sink(paste0(inputDT$inputdir[i],"/QCStats.txt"))
 		cat("Stat \t Value \n")
