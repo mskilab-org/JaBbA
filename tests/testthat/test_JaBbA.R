@@ -299,6 +299,6 @@ test_that("QCStats", {
     expect_equal(statTest[3], 0.7884, tolerance=0.0001)
     expect_equal(statTest[4], 0.0, tolerance=0.0001)
   
-  }
+  })
 
 
