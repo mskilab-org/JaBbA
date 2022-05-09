@@ -114,6 +114,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
 #' @param min.bins (numeric) minimum number of bins needed for a valid segment CN estimate (default 5)
 #' @param filter_loose (logical) run loose end annotation? (default FALSE)
+#' @param Qcout (logical) should QC stats of the run be generated? (default FALSE)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -166,7 +167,8 @@ JaBbA = function(## Two required inputs
                  ism = FALSE,
                  fix.thres = -1,
                  min.bins = 1,
-                 filter_loose = FALSE)
+                 filter_loose = FALSE,
+		 QCout=FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -625,7 +627,9 @@ JaBbA = function(## Two required inputs
             min.bins = min.bins,
             filter_loose = filter_loose)
     }
-    QCStats(inputDT=data.table(pair=name,inputdir=outdir),outdir=outdir)
+    if(Qcout){	    
+    	QCStats(inputDT=data.table(pair=name,inputdir=outdir),outdir=outdir)
+    }
     setwd(cdir)
     return(jab)
 }
