@@ -8850,7 +8850,7 @@ QCStats = function(inputDT,outdir,testMode=FALSE){
 			kar=readRDS(system.file('testing', "karyograph.rds", package = "JaBbA"))
 			fep=readRDS(system.file('testing', "jabba.raw.rds", package = "JaBbA"))$epgap
 		
-			input_segs=length(readRDS(system.file('extdata', "seg.rds", package = "JaBbA")))
+			input_segs=length(readRDS(system.file('extdata', "segs.rds", package = "JaBbA")))
 			output_segs=nrow(output_gg$nodes$dt)
 			rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
 			
