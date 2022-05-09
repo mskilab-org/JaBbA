@@ -294,10 +294,10 @@ statTest=QCStats(data.table(),NA,testMode=TRUE)
 
 test_that("QCStats", {
     print("Comparing QC stats for test data:")
-    expect_equal(statTest[1], 406)
-    expect_equal(statTest[2], 34)
+    expect_equal(statTest[1], 406.0)
+    expect_equal(statTest[2], 34.0)
     expect_equal(statTest[3], 0.7884, tolerance=0.0001)
-    expect_equal(statTest[4], 0, tolerance=0.0001)
+    expect_equal(statTest[4], 0.0, tolerance=0.0001)
   
   }
 
