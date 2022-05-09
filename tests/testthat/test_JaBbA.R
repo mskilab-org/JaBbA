@@ -27,6 +27,18 @@ print(Sys.getenv("DEFAULT_GENOME"))
 ## print("IS IT A VECTOR NOW??????!!!!!!")
 ## print(is.vector(hg_seqlengths()))
 
+print("Comparing QC stats for test data:")
+test_that("QCStats", {
+    statTest=QCStats(data.table(),NA,testMode=TRUE)
+    expect_equal(statTest[1], 406.0)
+    expect_equal(statTest[2], 34.0)
+    expect_equal(statTest[3], 0.7884, tolerance=0.0001)
+    expect_equal(statTest[4], 0.0, tolerance=0.0001)
+  
+  })
+
+print("QC_Done")
+
 test_that("read.junctions", {
     expect_equal(all(values(read.junctions(juncs.fn))$tier==c(2, 3, 2, 3, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 2)), TRUE)
     expect_equal(as.data.table(unlist(read.junctions(juncs.fn))[, c()]), as.data.table(unlist(read.junctions(bedpe))[, c()]))
@@ -289,16 +301,4 @@ test_that("JaBbA", {
     expect_equal(jab.lp$nodes$dt[!is.na(cn) & cn > 0, cn], c(5, 3, 2, 4, 5, 3, 5, 3, 2, 3, 5), tolerance = 1.1)
     expect_equal(jab.lp$junctions$dt$cn, c(3, 2, 2, 1, 2, 4, 3, 2, 3, 3, 2, 2, 1, 2, 3), tolerance = 1.1)
 })
-
-statTest=QCStats(data.table(),NA,testMode=TRUE)
-
-test_that("QCStats", {
-    print("Comparing QC stats for test data:")
-    expect_equal(statTest[1], 406.0)
-    expect_equal(statTest[2], 34.0)
-    expect_equal(statTest[3], 0.7884, tolerance=0.0001)
-    expect_equal(statTest[4], 0.0, tolerance=0.0001)
-  
-  })
-
 
