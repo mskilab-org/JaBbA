@@ -2704,12 +2704,18 @@ segstats = function(target,
                   nbins = sum(good.bin),
                   nbins.tot = .N,
                   nbins.nafrac = 1 - sum(good.bin)/.N,
-                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1]),
                   ## wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
+                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1],
+                  wbins.ok = sum(width[which(good.bin==TRUE)] / 1e3, na.rm = TRUE)), ## width of bins with coverage in kbp
                 keyby = target.name]
             values(utarget) = cbind(
                 values(utarget),
-                target.mdat[names(utarget), .(raw.mean, raw.var, nbins, nbins.tot, nbins.nafrac, wbins.nafrac)]
+                target.mdat[names(utarget), .(raw.mean, raw.var,
+                                              nbins,
+                                              nbins.tot,
+                                              nbins.nafrac,
+                                              wbins.nafrac,
+                                              wbins.ok)]
             )
             ## target$mean[ix] = sample.mean[ix]
             ## target$var[ix] = sample.var[ix]
@@ -2799,7 +2805,8 @@ segstats = function(target,
         }
         
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
-        if (length(bad.nodes <- which((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))))>0)
+        if (length(bad.nodes <- which(((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))) &
+                                      utarget$wbins.ok < 50))>0)
         {
             utarget$max.na = max.na ## what about really small segs in a good "environment"
             utarget$bad[bad.nodes] = TRUE
