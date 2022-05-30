@@ -1133,7 +1133,10 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     saveRDS(seg, seg.fn)
 
     
-    if (overwrite | !file.exists(kag.file)){
+    ## if (overwrite | !file.exists(kag.file)){
+    ## REMOVE THIS LATER
+    ## THIS IS JUST FOR HETS ANNOTATION!!
+    if (TRUE) {
         karyograph_stub(seg,
                         coverage,
                         ra = ra,
@@ -1464,7 +1467,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
 
     
-    if (overwrite | !file.exists(jabba.simple.rds.file))
+    ## if (overwrite | !file.exists(jabba.simple.rds.file))
+    ## REMOVE THIS
+    if (TRUE)
     {
         jmessage("Saving results")
         saveRDS(jabd$segstats, seg.gr.file)
