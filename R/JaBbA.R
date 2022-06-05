@@ -180,7 +180,8 @@ JaBbA = function(## Two required inputs
     ##     {
     ##         jerror(paste('Junction path', ra, 'does not exist'))
     ##     }
-    ra.all = read.junctions(ra, geno = geno) ## GRL
+    ra.all = verify.junctions(read.junctions(ra, geno = geno)) ## GRL
+    
 
     if (is.null(ra.all)){
         jwarning("no junction file is given, will be running JaBbA without junctions!")
@@ -235,7 +236,7 @@ JaBbA = function(## Two required inputs
     ra.uf = NULL
     if (!is.null(juncs.uf)){
         jmessage("Loading supplementary junctions")
-        ra.uf = read.junctions(juncs.uf, geno=FALSE)
+        ra.uf = verify.junctions(read.junctions(juncs.uf, geno=FALSE))
     }
 
     if (is.null(tfield)){
@@ -279,7 +280,7 @@ JaBbA = function(## Two required inputs
     }
 
     if (!is.null(blacklist.junctions)){2
-        blacklist.junctions = read.junctions(blacklist.junctions)
+        blacklist.junctions = verify.junctions(read.junctions(blacklist.junctions))
         if (length(blacklist.junctions)>0){
             black.ix = which(gUtils::grl.in(ra.all, blacklist.junctions))
             if (length(black.ix)>0){
@@ -290,7 +291,7 @@ JaBbA = function(## Two required inputs
     }
 
     if (!is.null(whitelist.junctions)){
-        whitelist.junctions = read.junctions(whitelist.junctions)
+        whitelist.junctions = verify.junctions(read.junctions(whitelist.junctions))
         if (length(whitelist.junctions)>0){
             white.ix = which(gUtils::grl.in(ra.all, whitelist.junctions))
             if (length(white.ix)>0){
@@ -904,7 +905,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     ra = junctions
     if (inherits(ra, "character")){
-        ra = read.junctions(junctions, geno = geno)
+        ra = verify.junctions(read.junctions(junctions, geno = geno))
     } else if (!inherits(ra, "GRangesList")){
         jerror("`ra` must be GRangesList here")
     }
@@ -1784,11 +1785,11 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
 
             these.junctions$chr1 = gsub('23', 'X', gsub('24', 'Y', these.junctions$chr1))
             these.junctions$chr2 = gsub('23', 'X', gsub('24', 'Y', these.junctions$chr2))
-            this.ra = read.junctions(these.junctions, seqlengths = hg_seqlengths())
+            this.ra = verify.junctions(read.junctions(these.junctions, seqlengths = hg_seqlengths()))
         }
         else if (grepl('(\\.bedpe)|(\\.vcf$)|(\\.vcf\\.gz$)', ra.file))
         {
-            tmp.ra = read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T, geno = geno)
+            tmp.ra = verify.junctions(read.junctions(ra.file, seqlengths = hg_seqlengths(), get.loose = T, geno = geno))
             if (length(tmp.ra)==0){
                 this.ra = gr.fix(GRangesList(), hg_seqlengths())
                 loose.ends = GRanges(seqlengths = hg_seqlengths())
