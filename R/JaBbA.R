@@ -5397,23 +5397,25 @@ jabba.alleles = function(jab,
     if (verbose)
         jmessage('Starting phasing ')
 
-    for (k in 1:nrow(ref.jun))
-    {
-        i = ref.jun[k, 1]
-        j = ref.jun[k, 2]
-        a = acn[ref.jun[k,1],]
-        b = acn[ref.jun[k,2],]
-
-        phased.out[amap[i, ]] = FALSE
-        phased.in[amap[j, ]] = FALSE
-
-        pairs.ij = cbind(rep(c(1:2), 2), rep(c(1:2), each = 2)) ## 4 possible matches
-        m = setdiff(which(a[pairs.ij[,1]] == b[pairs.ij[,2]]), NA)
-
-        if (!(length(m) %in% c(0, 4))) ## 1,2, and 3 matches are fine (3 matches occur if one interval is in allelic balance, and the other not
+    if (nrow(ref.jun))
+      {
+        for (k in 1:nrow(ref.jun))
         {
+          i = ref.jun[k, 1]
+          j = ref.jun[k, 2]
+          a = acn[ref.jun[k,1],]
+          b = acn[ref.jun[k,2],]
+
+          phased.out[amap[i, ]] = FALSE
+          phased.in[amap[j, ]] = FALSE
+
+          pairs.ij = cbind(rep(c(1:2), 2), rep(c(1:2), each = 2)) ## 4 possible matches
+          m = setdiff(which(a[pairs.ij[,1]] == b[pairs.ij[,2]]), NA)
+
+          if (!(length(m) %in% c(0, 4))) ## 1,2, and 3 matches are fine (3 matches occur if one interval is in allelic balance, and the other not
+          {
             if (length(m)==2) ## pick the phase that the alleles can handle
-                m = rev(m[order(as.numeric(sum(adj.ab[i, ])<=a[pairs.ij[m,1]]) + as.numeric(sum(adj.ab[, j])<=b[pairs.ij[m,2]]))])
+              m = rev(m[order(as.numeric(sum(adj.ab[i, ])<=a[pairs.ij[m,1]]) + as.numeric(sum(adj.ab[, j])<=b[pairs.ij[m,2]]))])
 
             m.ij = pairs.ij[m[1], ]
             fm.ij = .flip(m.ij)
@@ -5425,45 +5427,46 @@ jabba.alleles = function(jab,
 
             if (length(a.ab <- Matrix::which(adj.ab[i,]!=0))>0)
             {
-                ## if a.ab (partner) is already phased then unpopulate the non-ab allelic junction, otherwise populate both alleles of partner
-                ## BUG: a.ab is length 2????
-                ## hack: replace a.ab with a.ab[1]
-                if (any(ph <- aadj[amap[i, fm.ij[1]], amap[a.ab[1], ]] !=0))
-                {
-                    aadj[amap[i, fm.ij[1]], amap[a.ab[1], ph]] = adj.ab[i, a.ab[1]]
-                    aadj[amap[i, m.ij[1]], amap[a.ab[1], ph]] = 0
-                }
-                else
-                    ## otherwise diffuse copy into both alleles of the partner (will be resolved when we resolve phase for the partner interval)
-                    ## or collapse unphased nodes back
-                    aadj[amap[i, fm.ij[1]], amap[a.ab[1], ]] = adj.ab[i, a.ab[1]]/2
+              ## if a.ab (partner) is already phased then unpopulate the non-ab allelic junction, otherwise populate both alleles of partner
+              ## BUG: a.ab is length 2????
+              ## hack: replace a.ab with a.ab[1]
+              if (any(ph <- aadj[amap[i, fm.ij[1]], amap[a.ab[1], ]] !=0))
+              {
+                aadj[amap[i, fm.ij[1]], amap[a.ab[1], ph]] = adj.ab[i, a.ab[1]]
+                aadj[amap[i, m.ij[1]], amap[a.ab[1], ph]] = 0
+              }
+              else
+                ## otherwise diffuse copy into both alleles of the partner (will be resolved when we resolve phase for the partner interval)
+                ## or collapse unphased nodes back
+                aadj[amap[i, fm.ij[1]], amap[a.ab[1], ]] = adj.ab[i, a.ab[1]]/2
 
-                if (!conservative)
-                    if (a[fm.ij[1]] < adj.ab[i, a.ab]) # if the allelic node can't handle the outgoing allelic edge flux, so unphase
-                        phased.out[amap[i, ]] = FALSE
+              if (!conservative)
+                if (a[fm.ij[1]] < adj.ab[i, a.ab]) # if the allelic node can't handle the outgoing allelic edge flux, so unphase
+                  phased.out[amap[i, ]] = FALSE
             }
 
             if (length(b.ab <- Matrix::which(adj.ab[,j]!=0))>0)
             {
-                ## if b.ab (partner) is already phased then concentrate all of the junction copy into the aberrant allele of this interval
-                ## BUG: why b.ab is length 2???? I thought we resolved this long ago
-                ## hack: replace a.ab with a.ab[1]
-                if (any(ph <- aadj[amap[b.ab[1], ], amap[j, fm.ij[2]]] !=0))
-                {
-                    aadj[amap[b.ab[1], ph], amap[j, fm.ij[2]]] = adj.ab[b.ab[1], j]
-                    aadj[amap[b.ab[1], ph], amap[j, m.ij[2]]] = 0
-                }
-                else
-                    ## otherwise diffuse copy into both alleles of the partner (will be resolved when we resolve phase for the partner interval)
-                    ## or collapse unphased nodes back
-                    aadj[amap[b.ab[1],], amap[j, fm.ij[2]]] = adj.ab[b.ab[1], j]/2
+              ## if b.ab (partner) is already phased then concentrate all of the junction copy into the aberrant allele of this interval
+              ## BUG: why b.ab is length 2???? I thought we resolved this long ago
+              ## hack: replace a.ab with a.ab[1]
+              if (any(ph <- aadj[amap[b.ab[1], ], amap[j, fm.ij[2]]] !=0))
+              {
+                aadj[amap[b.ab[1], ph], amap[j, fm.ij[2]]] = adj.ab[b.ab[1], j]
+                aadj[amap[b.ab[1], ph], amap[j, m.ij[2]]] = 0
+              }
+              else
+                ## otherwise diffuse copy into both alleles of the partner (will be resolved when we resolve phase for the partner interval)
+                ## or collapse unphased nodes back
+                aadj[amap[b.ab[1],], amap[j, fm.ij[2]]] = adj.ab[b.ab[1], j]/2
 
-                if (!conservative)
-                    if (b[fm.ij[2]] < adj.ab[b.ab, j]) # the allelic node cn can't handle the incoming allelic edge flux, so unphase
-                        phased.in[amap[j, ]] = FALSE
+              if (!conservative)
+                if (b[fm.ij[2]] < adj.ab[b.ab, j]) # the allelic node cn can't handle the incoming allelic edge flux, so unphase
+                  phased.in[amap[j, ]] = FALSE
             }
+          }
         }
-    }
+      }
 
     if (verbose)
         jmessage('Finished phasing, finalizing.')
