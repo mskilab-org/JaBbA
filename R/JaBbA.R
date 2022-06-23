@@ -1,3 +1,4 @@
+
 #' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
 #' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
 #' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
@@ -773,8 +774,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
         {
             coverage = readRDS(coverage)
         }
-        else if (grepl('(\\.txt$)|(\\.tsv$)|(\\.csv$)', coverage))
-        {
+        else if (grepl("((\\.txt)|(\\.tsv)|(\\.csv))(.gz|.xz|.bz|.bz2){0,}$", coverage))
+        {                       
             tmp = fread(coverage)
             coverage = try(dt2gr(tmp))
             if (inherits(tmp, "try-error")){
@@ -6523,7 +6524,11 @@ read.junctions = function(rafile,
                 }
                 return(vgr)
             }
-
+            
+            if ("PARID" %in% colnames(mcols(vgr))) {
+                vgr$MATEID = vgr$PARID
+            }
+            
             ## TODO: Delly and Novobreak
             ## fix mateids if not included
             if (!"MATEID" %in% colnames(mcols(vgr))) {
