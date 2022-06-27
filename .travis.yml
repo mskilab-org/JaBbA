@@ -24,6 +24,7 @@ before_install:
 - export PATH=samtools-1.6/:$PATH
 - curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+- export GITHUB_PAT=""
 install:
 - ./travis-tool.sh install_github mskilab/bamUtils
 - ./travis-tool.sh install_github mskilab/gUtils
