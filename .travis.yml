@@ -14,8 +14,7 @@ bioc_packages:
 - Rsamtools
 before_install:
 - curl -OL $URL
-- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-- echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
+- mv jabba.tar.gz?dl=0 jabba.tar.gz
 - mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
 - wget https://github.com/samtools/samtools/releases/download/1.6/samtools-1.6.tar.bz2
 - tar -vxjf samtools-1.6.tar.bz2
@@ -41,8 +40,7 @@ after_success:
 - travis_wait Rscript -e 'covr::codecov()'
 env:
   global:
-  - secure: "dzCiDGDvdIgj3hVZqvPa1AWpfcyTUjNVy47kNawlM6QwF1y1y8iXj53CkRTVbDA/5ndbEHiUcGivlEhU2Jz6pA3Rej/KDpGOzDgygg8GiRF1M4npSD+Iva7WtCNU7VorRn4b4objui/KpuhivxDjxOsq62/PzvJH6LCVni9C/V2Y5mDnlV1ljS1xLdhjP5EMIq800ZjA/jdCgtbcFZDFL0HMeQKV3XyFhRoE7K8Hk8LBjNZQkIxrHunlxjZkHsRSBZtCSzncnqpUsl/qEXEVKyw8GSODLSOkaI4xxGWkO+lmJYiZIQFwtUxzwC9WHrIs1tbKU8UkFBTD+vdGxLt7DcvVCHvGkUnOMOJb697R5qeaQ5zwpksfl0wdvg2IQ4cha1nhUDsPv1DoCFqMSx2oD+cSwMsyacMiIsPEnzKP3GWrR+2ay7+6qMN+OIEhdvGy/vnKs5EcNr+TD/s/SyHjQz03vZa2K/8kJ38UxiuJpX3TS8dMd0IJWdxGfWwzKjEf8jx5Ivcsi5ja+mPgqfMWrt2XSJZ4kBPWRkSeBvEhzQ94OG5r+k1I2sJyr9zmmJQmsNKbL8utfaoga3LFVERHR0FCOU7TmTfeCAKABRrKu66ZFSLk/6SuNHw8Kq+Pc0II/fryrC18jYeB5aKcXc7KDNr9OicWsa93JkN5Qji8R2E="
-  - secure: "ueMn8wdpbKYhiP16MHLK3UmWQmNg44+7nivVALK6CLTvuTn3w7jRwGUIxa3Zb8YRprTFn7XwlqNjL7H6SLCnhk631Nvprb9u9ZzcX+v3qPJnRdkG4X5nSEXnd0fv4fmUiNi0pmT9ONA9FUmVhdxk2CIq++KYiNi8ugIGcl/hvqK8Zp7Hn5XxLL5VU1nrQXBWSeAcGJtvNfjYGofyeJuRmbcQi0DdtCHj1mkt7VolGE8jOigWj6kKc0EfBCClv9y2SxMwu8AMKDvLH1eJEHzMuEDdA7v5mZOakpsUZErZTowTKYhv8jkqBAfdGgZlMVkZpTD/yu+pNx96xIPVC15OExE8DkbrbwCpzVTtjWiWgw8O1OH68q/agaRhNAICm/r+MVoad1yDN1TACkX0LjLC6VTTPM2OKJDzN5gI9sEa5Ky2PYYHRIPfnwkJ9BzuFlxrSfy9a6bY3ycRhON4sNu24tzkbVCNml866WpaSYbUbk7h/MBLBcmUiF3mcAmkfMXamKA6jiZDYxRxiiFE0CimBIgxqGYzTT3KVJoEQc4d33MM5QRuXU76i4xrzd2KuQrGSQOIi/wqE/vNzm3OTK6fIETFANj4jxNMDRsKczKn7SYooYpFXEbyir59O/aCe6rcG9nkY9F4TZhz4ar6VpXQy6us4VLslQ/LIOCReefQxQc="
+  - secure: "x6FcFOHRoXUUb4gqa73d9z9SKMqtAeevofKMfa5ZhgwGC4lT40LsNiaR/e4WLvyHRVxqm0fvVPkkSzyZyriU8ARIYV84dk67bvgRZwJLO/1fBswOTQh1NeSB0gcS6GlxMvkDg18Irui8f8/0IbCyqxHzslC2hRKQYArcv0e9ARMraEipb5RoDXRyIql8YuRCfy2IbwyEIoVCCoUowECy3og387imGt/KORg9g9+jYyoTUu77+EkElQ1DyU0NXIttlYWlucqrkovNNRiMH4pzc37OXFhpDb6SUZceh9N2fWFpi1YhWbZs52OVxJt2lY2O2+o3S2Imhj1A/8/ZKTvWNrxqs2Xtty4vA2p5z9bmXX1sthNeGiITg/j3V8LMUUI7dM1HLGa+cKe3uA2qyXveJxy8UfTcMjWqJqQL9Iyxguq5NPyaKcPa9pT1RZq0lSw57GJY6MkkdPweVlaAWy9mtVSsI+JO1Td+fmUUDzXwee2BvmuLOuiKg1jvlJbp5gLAv+PG5BPp1o4rppyzBZIuT5bKVZ4Ks70opvP+Pte82fYT6lKeiOwWYBUuehtT1LaIoG3v9L0mBtAQA3H3PTOEl7xa7rcdnLif2Pk//m7JvzHWfaawzSyUvy6LB3tMMDqnD/eiWEWgaJcGQMSxl8XM7zw67rueRG5QP3tSWCGTAZ4="
   - CPLEX_DIR=$HOME/my.cplex/
   - CPLEX_INCLUDE_PATH=$HOME/my.cplex/include
   - CPLEX_LIB_PATH=$HOME/my.cplex/lib
