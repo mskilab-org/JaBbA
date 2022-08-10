@@ -1,9 +1,7 @@
 #!/usr/bin/env Rscript
-withAutoprint(
-{
-    options(error = function() {traceback(2); quit('no',1)})
-    library(optparse)
-    jbastr = "
+options(error = function() {traceback(2); quit('no',1)})
+library(optparse)
+jbastr = "
  _____         ___    _      _____ 
 (___  )       (  _`\\ ( )    (  _  )
     | |   _ _ | (_) )| |_   | (_) |
@@ -13,164 +11,6 @@ withAutoprint(
 
 (Junction     Balance     Analysis)\n"
 
-<<<<<<< HEAD
-    if (!exists("opt"))
-    {
-        option_list = list(
-            make_option(
-                c("--j.supp"),
-                type = "character",
-                default = NULL,
-                help = "supplement junctions in the same format as junctions"),
-            make_option(
-                c("--blacklist.junctions"),
-                type = "character",
-                default = NULL,
-                help = "rearrangement junctions to be excluded from consideration"),
-            make_option(
-                c("--whitelist.junctions"),
-                type = "character",
-                default = NULL,
-                help = "rearrangement junctions to be forced to be incorporated"),
-            make_option(
-                c("--geno"),
-                action = "store_true",
-                default = FALSE,
-                help = "whether the junction has genotype information"),
-            make_option(
-                c("--indel"),
-                type = "character",
-                default = "exclude",
-                help = "character of the decision to 'exclude' or 'include' small(< min.nbins * coverage bin width) isolated INDEL-like events into the model. Default NULL, do nothing."),
-            make_option(
-                c("--cfield"),
-                type = "character",
-                help = "junction confidence meta data field in ra"),
-            make_option(
-                c("--tfield"),
-                type = "character",
-                default = "tier",
-                help = "tier confidence meta data field in ra. tiers are 1 = must use, 2 = may use, 3 = use only in iteration>1 if near loose end. Default 'tier'."),
-            make_option(
-                c("--iterate"),
-                type = "integer",
-                default = 0,
-                help = "the number of extra re-iterations allowed, to rescue lower confidence junctions that are near loose end. Default 0. This requires junctions to be tiered via a metadata field tfield."),
-            make_option(
-                c("--rescue.window"),
-                type = "numeric",
-                default = 1e3,
-                help = "window size in bp within which to look for lower confidence junctions. Default 1000."),
-            make_option(
-                c("--rescue.all"),
-                type = "logical",
-                default = TRUE,
-                help = "Attempt to rescue all loose ends regardless of internal quality filter"
-            ),
-            make_option(
-                c("--nudgebalanced"),
-                type = "logical",
-                default = TRUE,
-                action = "store_true",
-                help = "whether to attempt to add a small incentive for chains of quasi-reciprocal junctions."),
-            make_option(
-                c("--edgenudge"),
-                type = "numeric",
-                default = 0.1,
-                help = "numeric hyper-parameter of how much to nudge or reward aberrant junction incorporation. Default 0.1 (should be several orders of magnitude lower than average 1/sd on individual segments), a nonzero value encourages incorporation of perfectly balanced rearrangements which would be equivalently optimal with 0 copies or more copies."),
-            make_option(
-                c("--strict"),
-                default = FALSE,
-                action = "store_true",
-                help = "if used will only include junctions that exactly overlap segs"),
-            make_option(
-                c("--allin"),
-                action = "store_true",
-                default = FALSE,
-                help = "if TRUE will put all tiers in the first round of iteration"),
-            make_option(
-                c("--field"),
-                type = "character",
-                default = "ratio",
-                help = "name of the metadata column of coverage that contains the data. Default 'ratio' (coverage ratio between tumor and normal). If using dryclean, it is 'foreground'."),        
-            make_option(
-                c("-s", "--seg"),
-                type = "character",
-                help = "Path to .rds file of GRanges object of intervals corresponding to initial segmentation (required)"),
-            make_option(
-                c("--maxna"),
-                type = "numeric",
-                default = 0.1,
-                help = "Any node with more NA than this fraction will be ignored"),
-            make_option(
-                c("--blacklist.coverage"),
-                type = "character",
-                default = NULL,
-                help = "Path to .rds, BED, TXT, containing the blacklisted regions of the reference genome"),
-            make_option(
-                c("--nseg"),
-                type = "character",
-                default = "",
-                help = "Path to .rds file of GRanges object of intervals corresponding to normal tissue copy number, needs to have $cn field"),
-            make_option(
-                c("--hets"),
-                type = "character",
-                default = "",
-                help = "Path to tab delimited hets file output of pileup with fields seqnames, start, end, alt.count.t, ref.count.t, alt.count.n, ref.count.n"),
-            make_option(
-                c("--ploidy"),
-                type = "character",
-                default = NA,
-                help = "Ploidy guess, can be a length 2 range"),
-            make_option(
-                c("--purity"),
-                type = "character",
-                default = NA,
-                help = "Purity guess, can be a length 2 range"),
-            make_option(
-                c("--ppmethod"),
-                type = "character",
-                default = "sequenza",
-                help = "select from 'ppgrid', 'ppurple', and 'sequenza' to infer purity and ploidy if not both given. Default, 'sequenza'."),        
-            make_option(
-                c("--cnsignif"),
-                type = "numeric",
-                default = 1e-5,
-                help = "alpha value for CBS"),
-            make_option(
-                c("--slack"),
-                type = "numeric",
-                default = 100,
-                help = "Slack penalty to apply per loose end"),
-            make_option(
-                c("--linear"),
-                action = "store_true",
-                default = FALSE,
-                help = "if TRUE will use L1 loose end penalty"),
-            make_option(
-                c("-t", "--tilim"),
-                type = "integer",
-                default = 6000,
-                help = "Time limit for JaBbA MIP"),
-            make_option(
-                c("--epgap"),
-                type="numeric",
-                default = 1e-5,
-                help = "threshold for calling convergence"),        
-            make_option(
-                c("-o", "--outdir"),
-                type = "character",
-                default = "./",
-                help = "Directory to dump output into"),
-            make_option(
-                c("-n", "--name"),
-                type = "character",
-                default = "tumor",
-        {
-            message('Did not find seg file ', opt$seg, ' setting to NULL')
-            opt$seg = NULL
-        }
-=======
 if (!exists("opt"))
 {
     option_list = list(
@@ -228,6 +68,7 @@ if (!exists("opt"))
             c("--nudgebalanced"),
             type = "logical",
             default = TRUE,
+            action = "store_true",
             help = "whether to attempt to add a small incentive for chains of quasi-reciprocal junctions."),
         make_option(
             c("--edgenudge"),
@@ -256,7 +97,7 @@ if (!exists("opt"))
         make_option(
             c("--maxna"),
             type = "numeric",
-            default = 0.1,
+            default = 0.5,
             help = "Any node with more NA than this fraction will be ignored"),
         make_option(
             c("--blacklist.coverage"),
@@ -347,122 +188,180 @@ if (!exists("opt"))
             c("--ism"),
             type = "logical",
             default = FALSE,
-            action = "store_true",
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(
             c("--filter_loose"),
             type = "logical",
             default = FALSE,
-            action = "store_true",
             help = "run filter.loose to get a breakdown of loose ends?"),
+        make_option(
+<<<<<<< HEAD
+            c("--max.threads"),
+            type = "integer",
+            default = 1L,
+            help = "run filter.loose to get a breakdown of loose ends?"),
+        ## make_option(c("--gurobi"),
+        ##             type = 'character',
+        ##             default = 'FALSE',
+        ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
+=======
+            c("--gurobi"),
+            type = "logical",
+            default = FALSE,
+            help = "use gurobi optimizer instead of CPLEX?"),
+>>>>>>> master
         make_option(c("-v", "--verbose"),
                     action = "store_true",
-                    default = FALSE,
+                    default = TRUE,
                     help = "verbose output")
     )
+    
+    parseobj = OptionParser(
+        usage = paste(
+            c("jba JUNCTIONS COVERAGE [options]",
+              "\tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList",
+              " \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges",
+              "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
+            collapse="\n"),
+        option_list=option_list
+    )
 
-    parseobj = OptionParser(usage = paste(c("jba JUNCTIONS COVERAGE [options]",
-                                            "\tJUNCTIONS can be BND style vcf, bedpe, rds of GrangesList",
-                                            " \tCOVERAGE is a .wig, .bw, .bedgraph, .bed., .rds of a granges, or .tsv  .csv /.txt  file that is coercible to a GRanges",
-                                            "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
-                                          collapse="\n"),
-                                          option_list=option_list)
->>>>>>> 23046d32b6cb5ad00fd55339f5ed84cd447e1777
+    args = tryCatch(
+        parse_args(parseobj,
+                   positional_arguments = TRUE,
+                   print_help_and_exit = FALSE),
 
+        error = function(e) {message(jbastr); print_help(parseobj); NULL}
+    )
 
-        ## if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
-        ## {
-        ##   message('Did not find j.supp file ', opt$j.supp, ' setting to NULL')
-        ##   opt$j.supp = NULL
-        ## }
-
-        if (!is.null(opt$hets) && (is.na(opt$hets) || opt$hets == '/dev/null' || !file.exists(opt$hets)))
+    opt = NULL;
+    if (!is.null(args)) {
+        opt = args$options
+        opt$junctions = args$args[1]
+        opt$coverage = args$args[2]
+        if (!file.exists(opt$junctions))
         {
-            message('Did not find hets file ', opt$hets, ' setting to NULL')
-            opt$hets = NULL
+            message('Did not find junction file ', opt$junctions)
+            message('Warning: will be running JaBbA without junctions')
+            ## print_help(parseobj); stop()
+            opt$junctions = ""
         }
-
-        if (!is.null(opt$nseg) && (is.na(opt$nseg) || opt$nseg == '/dev/null' || !file.exists(opt$nseg)))
+        if (!file.exists(opt$coverage))
         {
-            message('Did not find nseg file ', opt$nseg, ' setting to NULL')
-            opt$nseg = NULL
+            message('Did not find coverage file ', opt$coverage)
+            print_help(parseobj); stop()
         }
+    } else {
+        stop("See usage.")
+    }
+}
 
-        if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
-        {
-            message('Did not find supplementary junction file ', opt$j.supp, ' setting to NULL')
-            opt$j.supp = NULL
-        }
+suppressPackageStartupMessages(
+{
 
-        if (!is.null(opt$blacklist.junctions) && (is.na(opt$blacklist.junctions) || opt$blacklist.junctions == '/dev/null' || !file.exists(opt$blacklist.junctions)))
-        {
-            message('Did not find blacklist.junctions file ', opt$blacklist.junctions, ' setting to NULL')
-            opt$blacklist.junctions = NULL
-        }
+    if (!is.null(opt$seg) && is.character(opt$seg) && (is.na(opt$seg) || opt$seg == '/dev/null' || !file.exists(opt$seg)))
+    {
+        message('Did not find seg file ', opt$seg, ' setting to NULL')
+        opt$seg = NULL
+    }
 
 
-        require(JaBbA)
-        jmessage = function(..., pre = 'JaBbA'){
-            message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
-        }
-        message(jbastr)
-        jmessage('Located junction file ', opt$junctions)
-        jmessage('Located coverage file ', opt$coverage)
-        jmessage('Loading packages ...')
-        system(paste('mkdir -p', opt$outdir))
-        writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
-        saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
-        jab = JaBbA(
-            ## below are required positional arguments
-            junctions = opt$junctions,
-            coverage = opt$coverage,
-            ## below are junction related options
-            juncs.uf = opt$j.supp,
-            blacklist.junctions = opt$blacklist.junctions,
-            whitelist.junctions = opt$whitelist.junctions,
-            geno = opt$geno,
-            indel = opt$indel,
-            cfield = opt$cfield,
-            tfield = opt$tfield,
-            reiterate = opt$iterate,
-            rescue.window = opt$rescue.window,
-            nudge.balanced = opt$nudgebalanced,
-            ## TODO: thresh.balanced, 500 default hardcoded
-            edgenudge = opt$edgenudge,
-            strict = opt$strict,
-            all.in = opt$allin,
-            ## below are coverage related options
-            field = opt$field,
-            seg = opt$seg,
-            max.na = opt$maxna,                
-            blacklist.coverage = opt$blacklist.coverage,
-            nseg = opt$nseg,
-            hets = opt$hets,
-            purity = scan(text = opt$purity, what = numeric(), sep = ",", quiet = T),
-            ploidy = scan(text = opt$ploidy, what = numeric(), sep = ",", quiet = T),
-            pp.method = opt$ppmethod,
-            ## TODO: min.nbins, 5 by default
-            cn.signif = opt$cnsignif,
-            ## below are optimization related options
-            slack = opt$slack,
-            loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
-            tilim = opt$tilim,
-            epgap = opt$epgap,
-            ## TODO use.gurobi = opt$gurobi,
-            max.threads = opt$max.threads,
-            ## TODO max.threads = Inf, max.mem = 16
-            ## below are general options
-            max.mem = opt$mem,
-            outdir = opt$outdir,
-            name = opt$name,
-            mc.cores = opt$cores,
-            lp = opt$lp,
-            ism = opt$ism,
-            verbose = 2,
-            fix.thres = opt$fix.thres,
-            filter_loose = opt$filter_loose,
-            rescue.all = opt$rescue.all
-        )
-    })
-    quit('no', 0)
-}, echo = FALSE)
+    ## if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+    ## {
+    ##   message('Did not find j.supp file ', opt$j.supp, ' setting to NULL')
+    ##   opt$j.supp = NULL
+    ## }
+
+    if (!is.null(opt$hets) && (is.na(opt$hets) || opt$hets == '/dev/null' || !file.exists(opt$hets)))
+    {
+        message('Did not find hets file ', opt$hets, ' setting to NULL')
+        opt$hets = NULL
+    }
+
+    if (!is.null(opt$nseg) && (is.na(opt$nseg) || opt$nseg == '/dev/null' || !file.exists(opt$nseg)))
+    {
+        message('Did not find nseg file ', opt$nseg, ' setting to NULL')
+        opt$nseg = NULL
+    }
+
+    if (!is.null(opt$j.supp) && (is.na(opt$j.supp) || opt$j.supp == '/dev/null' || !file.exists(opt$j.supp)))
+    {
+        message('Did not find supplementary junction file ', opt$j.supp, ' setting to NULL')
+        opt$j.supp = NULL
+    }
+
+    if (!is.null(opt$blacklist.junctions) && (is.na(opt$blacklist.junctions) || opt$blacklist.junctions == '/dev/null' || !file.exists(opt$blacklist.junctions)))
+    {
+        message('Did not find blacklist.junctions file ', opt$blacklist.junctions, ' setting to NULL')
+        opt$blacklist.junctions = NULL
+    }
+
+
+    require(JaBbA)
+    jmessage = function(..., pre = 'JaBbA'){
+        message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
+    }
+    message(jbastr)
+    jmessage('Located junction file ', opt$junctions)
+    jmessage('Located coverage file ', opt$coverage)
+    jmessage('Loading packages ...')
+    system(paste('mkdir -p', opt$outdir))
+    writeLines(paste(paste("--", names(opt), " ", sapply(opt, function(x) paste(x, collapse = ",")), sep = "", collapse = " "), sep = ""), paste(opt$outdir, "cmd.args", sep = "/"))
+    saveRDS(opt, paste(opt$outdir, "cmd.args.rds", sep = "/"))
+    jab = JaBbA(
+        ## below are required positional arguments
+        junctions = opt$junctions,
+        coverage = opt$coverage,
+        ## below are junction related options
+        juncs.uf = opt$j.supp,
+        blacklist.junctions = opt$blacklist.junctions,
+        whitelist.junctions = opt$whitelist.junctions,
+        geno = opt$geno,
+        indel = opt$indel,
+        cfield = opt$cfield,
+        tfield = opt$tfield,
+        reiterate = opt$iterate,
+        rescue.window = opt$rescue.window,
+        nudge.balanced = opt$nudgebalanced,
+        ## TODO: thresh.balanced, 500 default hardcoded
+        edgenudge = opt$edgenudge,
+        strict = opt$strict,
+        all.in = opt$allin,
+        ## below are coverage related options
+        field = opt$field,
+        seg = opt$seg,
+        max.na = opt$maxna,                
+        blacklist.coverage = opt$blacklist.coverage,
+        nseg = opt$nseg,
+        hets = opt$hets,
+        purity = scan(text = opt$purity, what = numeric(), sep = ",", quiet = T),
+        ploidy = scan(text = opt$ploidy, what = numeric(), sep = ",", quiet = T),
+        pp.method = opt$ppmethod,
+        ## TODO: min.nbins, 5 by default
+        cn.signif = opt$cnsignif,
+        ## below are optimization related options
+        slack = opt$slack,
+        loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
+        tilim = opt$tilim,
+        epgap = opt$epgap,
+<<<<<<< HEAD
+        ## TODO use.gurobi = opt$gurobi,
+        max.threads = opt$max.threads,
+=======
+        use.gurobi = opt$gurobi,
+>>>>>>> master
+        ## TODO max.threads = Inf, max.mem = 16
+        ## below are general options
+        max.mem = opt$mem,
+        outdir = opt$outdir,
+        name = opt$name,
+        mc.cores = opt$cores,
+        lp = opt$lp,
+        ism = opt$ism,
+        verbose = 2,
+        fix.thres = opt$fix.thres,
+        filter_loose = opt$filter_loose,
+        rescue.all = opt$rescue.all
+    )
+})
+quit('no', 0)

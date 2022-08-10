@@ -15,13 +15,13 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/gChain,
-  github::mskilab/gGnome
+  github::mskilab/gGnome@0de9f45b5cf744375015ad4f164df555f05cf80a
 Depends:
   R (>= 3.5.0),
   GenomicRanges,
   gUtils,
   gTrack,
-  gGnome
+  gGnome (>= 0.1)
 Imports:
   data.table,
   Matrix,
@@ -37,6 +37,7 @@ Imports:
   sequenza
 Suggests: 
   testthat,
+  bamUtils,
   covr
 License: MIT + file LICENSE
 LazyData: true

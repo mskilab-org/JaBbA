@@ -138,7 +138,7 @@ test_that(desc = "Test incorporation of Tier 1 junctions even with ISM = TRUE",
                         tfield = "tier",
                         cn.field = "cn",
                         ism = TRUE,
-                        epgap = 1e-2,
+                        epgap = 1e-6,
                         verbose = 2,
                         return.type = "gGraph")
               )
@@ -157,7 +157,7 @@ test_that(desc = "Testing LP JaBbA without input junctions",
               expect_warning(JaBbA(
                   junctions = "",
                   coverage = cf,
-                  slack.penalty = 10,
+                  slack.penalty = 100,
                   tilim = 60,
                   cfield = 'ratio',
                   verbose = 2,
@@ -182,7 +182,7 @@ test_that(desc = "Testing LP JaBbA with wrong coverage field",
               expect_warning(JaBbA(
                   junctions = "",
                   coverage = cf,
-                  slack.penalty = 10,
+                  slack.penalty = 100,
                   tilim = 60,
                   cfield = 'ratio',
                   field = "bad.coverage.field",
@@ -191,7 +191,7 @@ test_that(desc = "Testing LP JaBbA with wrong coverage field",
                   overwrite = TRUE,
                   ploidy=4.5,## preset HCC1954
                   purity=1,
-                  epgap = 0.01,
+                  epgap = 1e-6,
                   all.in = TRUE,
                   tfield = 'nothing',
                   nudge.balanced = TRUE,
@@ -210,16 +210,16 @@ test_that(desc = "Testing vanilla JaBbA LP",
                         coverage = cf,
                         whitelist.junctions = whitelist.junctions,
                         blacklist.coverage = blacklist.coverage,
-                        slack.penalty = 10,
+                        slack.penalty = 100,
                         hets = ht,
                         tilim = 60,
                         cfield = 'nudge',
                         verbose = 2,
                         outdir = 'JaBbA.lp',
                         overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
+                        ploidy=4.57,## preset HCC1954
                         purity=1,
-                        epgap = 0.01,
+                        epgap = 1e-6,
                         all.in = TRUE,
                         tfield = 'nothing',
                         nudge.balanced = TRUE,
@@ -228,10 +228,68 @@ test_that(desc = "Testing vanilla JaBbA LP",
                         ism = FALSE,
                         max.na = 1)
               )
-
-              expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns)
-
+              expect_equal(jab.lp$nodes$dt[cn > 0, cn], expected.cns, tolerance = 1.1)
           })
+
+test_that(desc = "Testing vanilla JaBbA LP with gurobi",
+          code = {
+              if (requireNamespace("gurobi", quietly = TRUE)) {
+                  jab.lp = suppressWarnings(
+                      JaBbA(junctions = jj,
+                            coverage = cf,
+                            whitelist.junctions = whitelist.junctions,
+                            blacklist.coverage = blacklist.coverage,
+                            slack.penalty = 100,
+                            hets = ht,
+                            tilim = 60,
+                            cfield = 'nudge',
+                            verbose = 2,
+                            outdir = 'JaBbA.lp',
+                            overwrite = TRUE,
+                            ploidy=4.57,## preset HCC1954
+                            purity=1,
+                            epgap = 1e-6,
+                            all.in = TRUE,
+                            tfield = 'nothing',
+                            nudge.balanced = TRUE,
+                            use.gurobi = TRUE,
+                            dyn.tuning = FALSE,
+                            lp = TRUE,
+                            ism = FALSE,
+                            max.na = 1)
+                  )
+                  ## only check for chromosome 12...
+                  expect_equal(jab.lp$nodes$dt[seqnames == "12", cn], expected.cns, tolerance = 0.5)
+              } else {
+                  expect_error(object = {
+                      jab.lp = suppressWarnings(
+                          JaBbA(junctions = jj,
+                                coverage = cf,
+                                whitelist.junctions = whitelist.junctions,
+                                blacklist.coverage = blacklist.coverage,
+                                slack.penalty = 100,
+                                hets = ht,
+                                tilim = 60,
+                                cfield = 'nudge',
+                                verbose = 2,
+                                outdir = 'JaBbA.lp',
+                                overwrite = TRUE,
+                                ploidy=4.57,## preset HCC1954
+                                purity=1,
+                                epgap = 1e-6,
+                                all.in = TRUE,
+                                tfield = 'nothing',
+                                nudge.balanced = TRUE,
+                                use.gurobi = TRUE,
+                                dyn.tuning = TRUE,
+                                lp = TRUE,
+                                ism = FALSE,
+                                max.na = 1)
+                      )
+                  })
+              }
+          })
+
 
 test_that(desc = "Testing JaBbA LP with ISM",
           code = {
@@ -240,16 +298,16 @@ test_that(desc = "Testing JaBbA LP with ISM",
                         coverage = cf,
                         whitelist.junctions = whitelist.junctions,
                         blacklist.coverage = blacklist.coverage,
-                        slack.penalty = 10,
+                        slack.penalty = 100,
                         hets = ht,
                         tilim = 60,
                         cfield = 'nudge',
                         verbose = 2,
                         outdir = 'JaBbA.mem',
                         overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
+                        ploidy=4.57,## preset HCC1954
                         purity=1,
-                        epgap = 0.01,
+                        epgap = 1e-6,
                         all.in = TRUE,
                         tfield = 'nothing',
                         nudge.balanced = TRUE,
@@ -259,7 +317,7 @@ test_that(desc = "Testing JaBbA LP with ISM",
                         max.na = 1)
               )
 
-              expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns)
+              expect_equal(jab.ism$nodes$dt[cn > 0, cn], expected.cns, tolerance = 1.1)
           })
 
 test_that("Testing JaBbA LP with tier 1 junctions and uniformly random coverage",
@@ -278,9 +336,9 @@ test_that("Testing JaBbA LP with tier 1 junctions and uniformly random coverage"
                         verbose = 2,
                         outdir = 'JaBbA.tier',
                         overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
+                        ploidy=4.57,## preset HCC1954
                         purity=1,
-                        epgap = 0.01,
+                        epgap = 1e-6,
                         all.in = TRUE,
                         tfield = 'tier',
                         nudge.balanced = TRUE,
@@ -311,9 +369,9 @@ test_that("Testing JaBbA LP with reiteration and empty junctions file",
                         verbose = 2,
                         outdir = 'JaBbA.empty.jj',
                         overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
+                        ploidy=4.57,## preset HCC1954
                         purity=1,
-                        epgap = 0.01,
+                        epgap = 1e-6,
                         all.in = TRUE,
                         tfield = 'nothing',
                         nudge.balanced = TRUE,
@@ -323,7 +381,7 @@ test_that("Testing JaBbA LP with reiteration and empty junctions file",
                         max.na = 1)
               )
 
-              expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns)
+              expect_equal(jab.empty$nodes$dt[cn > 0, cn], expected.cns, tolerance = 1.1)
           })
 
 test_that("Testing JaBbA LP with empty junctions file and tiers in juncs.uf",
@@ -343,9 +401,9 @@ test_that("Testing JaBbA LP with empty junctions file and tiers in juncs.uf",
                         verbose = 2,
                         outdir = 'JaBbA.empty.jj',
                         overwrite = TRUE,
-                        ploidy=4.5,## preset HCC1954
+                        ploidy=4.57,## preset HCC1954
                         purity=1,
-                        epgap = 0.01,
+                        epgap = 1e-6,
                         all.in = TRUE,
                         tfield = 'tier',
                         nudge.balanced = TRUE,
@@ -354,6 +412,8 @@ test_that("Testing JaBbA LP with empty junctions file and tiers in juncs.uf",
                         ism = FALSE,
                         max.na = 1)
               )
-
-              expect_equal(jab.empty.2$nodes$dt[cn > 0, cn], expected.cns)
+              ## make sure that ALT edges are actually incorporated
+              expect_true(jab.empty.2$edges$dt[type == "ALT" & cn > 0, .N] > 0)
           })
+
+
