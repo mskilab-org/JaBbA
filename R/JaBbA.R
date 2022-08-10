@@ -166,7 +166,8 @@ JaBbA = function(## Two required inputs
                  ism = FALSE,
                  fix.thres = -1,
                  min.bins = 1,
-                 filter_loose = FALSE)
+                 filter_loose = FALSE,
+		 QCout=FALSE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -625,6 +626,9 @@ JaBbA = function(## Two required inputs
             min.bins = min.bins,
             filter_loose = filter_loose)
     }
+    if(QCout){	    
+    	QCStats(inputDT=data.table(pair=name,inputdir=outdir),outdir=outdir)
+    }
     setwd(cdir)
     return(jab)
 }
@@ -953,7 +957,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     }
 
     ra = junctions
-    if (inherits(ra, "character"))
+    if (inherits(ra, "character")) {
         ra = read.junctions(junctions, geno = geno)
     } else if (!inherits(ra, "GRangesList")){
         jerror("`ra` must be GRangesList here")
@@ -1787,14 +1791,6 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         jmessage("WARNING: big karyograph > 50000 nodes, may take longer to finish.")
     }
 
-
-    if (length(this.kag$tile)>5e4){
-        jmessage("WARNING: big karyograph > 50000 nodes, may take longer to finish.")
-    }
-    ## NA junctions thrown out
-    ## if (length(this.kag$junctions)>0){
-
-
     ## NA junctions thrown out
     ## if (length(this.kag$junctions)>0){
     ##     na.cov = this.cov[which(is.na(values(this.cov)[, field]))]
@@ -2232,7 +2228,7 @@ ramip_stub = function(kag.file,
                       out.file,
                       mc.cores = 1,
                       ## max.threads = Inf,
-                      max.threads = 8,
+                      max.threads = Inf,
                       mem = 16,
                       tilim = 1200,
                       slack.prior = 0.001,
@@ -2719,12 +2715,18 @@ segstats = function(target,
                   nbins = sum(good.bin),
                   nbins.tot = .N,
                   nbins.nafrac = 1 - sum(good.bin)/.N,
-                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1]),
+                  wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)], na.rm = TRUE)/target.width[1],
+                  wbins.ok = sum(width[which(good.bin==TRUE)] / 1e3, na.rm = TRUE)), ## width of bins with coverage in kbp
                   ## wbins.nafrac = 1 - sum(width[which(good.bin==TRUE)])/sum(width)),
                 keyby = target.name]
             values(utarget) = cbind(
                 values(utarget),
-                target.mdat[names(utarget), .(raw.mean, raw.var, nbins, nbins.tot, nbins.nafrac, wbins.nafrac)]
+                target.mdat[names(utarget), .(raw.mean, raw.var,
+                                              nbins,
+                                              nbins.tot,
+                                              nbins.nafrac,
+                                              wbins.nafrac,
+                                              wbins.ok)]
             )
             ## target$mean[ix] = sample.mean[ix]
             ## target$var[ix] = sample.var[ix]
@@ -2814,7 +2816,8 @@ segstats = function(target,
         }
 
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
-        if (length(bad.nodes <- which((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))))>0)
+        if (length(bad.nodes <- which(((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))) &
+                                      utarget$wbins.ok < 50))>0)
         {
             utarget$max.na = max.na ## what about really small segs in a good "environment"
             utarget$bad[bad.nodes] = TRUE
@@ -6509,8 +6512,19 @@ read.junctions = function(rafile,
                 end2 = ifelse(start2==end2-1, start2, end2)
             )]
         } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
-            vcf = VariantAnnotation::readVcf(rafile)
 
+          if (!is.null(seqlengths) && all(!is.na(seqlengths)))
+            {
+              vcf = VariantAnnotation::readVcf(
+                                         rafile, genome = Seqinfo(
+                                                   seqnames = names(seqlengths),
+                                                   seqlengths = as.vector(seqlengths)))
+            }
+          else ## get seqlengths from vcf
+          {
+            vcf = VariantAnnotation::readVcf(
+                                         rafile)
+          }
             ## vgr = rowData(vcf) ## parse BND format
             vgr = DelayedArray::rowRanges(vcf) ## this range is identical to using read_vcf
             ## old.vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
@@ -9582,3 +9596,203 @@ dflm = function(x, last = FALSE, nm = '')
     res = dt$counts - predict(mod, dt, type='response')
     return(res)
 }
+
+#' @name QCStats
+#' @title QCStats
+#' @description
+#' Function to generate quality control stats for one (default) or multiple JaBbA outputs. It is to be runned after the main JaBba function is done. Stats are printed to a txt file (QCStats.txt)
+#' 
+#' @param inputDT Datatable with the following columns:
+#' 	pair name of the sample pair
+#' 	inputdir: Directory with JaBbA results
+#' @param outdir Output directory where to place the summary graphs and txt files (only if multiple JaBbAs are provided.)
+#' @param testMode Whether to run the function in test mode or not. Only used for running unit tests. This mode returns a few specific QC values (as opposed to writing them down in a file) to be checked via test_that.
+
+QCStats = function(inputDT,outdir,testMode=FALSE){
+	library(data.table)
+	library(gGnome)
+	library(ggplot2)
+	
+	
+	if(testMode){
+			output_gg=readRDS(system.file('testing', "jabba.gg.rds", package = "JaBbA"))
+			opt.report=readRDS(system.file('testing', "opt.report.rds", package = "JaBbA"))
+			kar=readRDS(system.file('testing', "karyograph.rds", package = "JaBbA"))
+			fep=readRDS(system.file('testing', "jabba.raw.rds", package = "JaBbA"))$epgap
+		
+			input_segs=length(readRDS(system.file('extdata', "segs.rds", package = "JaBbA")))
+			output_segs=nrow(output_gg$nodes$dt)
+			rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
+			
+			return(c(input_segs,output_segs,rmse,fep))
+		}
+	
+	
+	summaryDT=data.table(pair=character(),Tier_1_Input_Junctions=numeric(),Tier_2_Input_Junctions=numeric(),Tier_3_Input_Junctions=numeric(),
+		Tier_1_Output_Junctions=numeric(),Tier_2_Output_Junctions=numeric(),Tier_3_Output_Junctions=numeric(),
+		Number_of_Segments_Input=numeric(),Number_of_Segments_Output=numeric(),Non_telomeric_Loose_Ends=numeric(),
+		Requested_epgap=numeric(),Final_epgap=numeric(),Converged=logical(),Rho_of_Coverage_and_CN=numeric(),p_value_of_Rho=numeric(),
+		r_of_Coverage_and_CN=numeric(),p_value_of_r=numeric(),RMSE_of_Coverage_and_CN=numeric())
+	combforScatter=list(CNMLE=vector(),CN=vector())
+
+	for(i in 1:nrow(inputDT)){
+		JaBba_Args=readRDS(paste0(inputDT$inputdir[i],"/cmd.args.rds"))
+		output_gg=readRDS(paste0(inputDT$inputdir[i], "/jabba.gg.rds"))
+		opt.report=readRDS(paste0(inputDT$inputdir[i], "/opt.report.rds"))
+		kar=readRDS(paste0(inputDT$inputdir[i], "/karyograph.rds"))
+		loose=length(output_gg$nodes$loose$edges.in[output_gg$nodes$loose$edges.in=="()->"])+length(output_gg$nodes$loose$edges.out[output_gg$nodes$loose$edges.out=="->()"])
+		input_Jtiers=table(readRDS(JaBba_Args$junctions)$dt$tier)
+		output_Jtiers=table(output_gg$edges[type == 'ALT']$dt$tier)
+		input_segs=length(readRDS(JaBba_Args$seg))
+		output_segs=nrow(output_gg$nodes$dt)
+		corr_sp=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="spearman")	
+		corr_pe=cor.test(kar$segstats$cnmle[!is.na(kar$segstats$cn)],kar$segstats$cn[!is.na(kar$segstats$cn)],method="pearson")
+		rmse=sqrt(sum((kar$segstats$cnmle-kar$segstats$cn)^2,na.rm=TRUE))
+		fep=readRDS(paste0(inputDT$inputdir[i],"/jabba.raw.rds"))$epgap
+
+				
+		sink(paste0(inputDT$inputdir[i],"/QCStats.txt"))
+		cat("Stat \t Value \n")
+		cat(paste0("Tier_1_Input_Junctions \t",ifelse("1" %in% names(input_Jtiers), input_Jtiers[[1]], "0"),"\n"))
+		cat(paste0("Tier_2_Input_Junctions \t",ifelse("2" %in% names(input_Jtiers), input_Jtiers[[2]], "0"),"\n"))
+		cat(paste0("Tier_3_Input_Junctions \t",ifelse("3" %in% names(input_Jtiers), input_Jtiers[[3]], "0"),"\n"))
+		cat(paste0("Tier_1_Output_Junctions \t",ifelse("1" %in% names(output_Jtiers), output_Jtiers[[1]], "0"),"\n"))
+		cat(paste0("Tier_2_Output_Junctions \t",ifelse("2" %in% names(output_Jtiers), output_Jtiers[[2]], "0"),"\n"))
+		cat(paste0("Tier_3_Output_Junctions \t",ifelse("3" %in% names(output_Jtiers), output_Jtiers[[3]], "0"),"\n"))
+
+		cat(paste0("Number_of_Segments_Input \t",input_segs,"\n"))
+		cat(paste0("Number_of_Segments_Output \t",output_segs,"\n"))
+		cat(paste0("Non_telomeric_Loose_Ends \t",loose,"\n"))
+
+		cat(paste0("Requested_epgap \t",JaBba_Args$epgap,"\n"))
+		cat(paste0("Final_epgap \t",fep,"\n"))
+		cat(paste0("Converged \t",ifelse(JaBba_Args$epgap>fep,"TRUE","FALSE"),"\n"))
+
+		cat(paste0("Rho_of_Coverage_and_CN \t",signif(as.vector(corr_sp$estimate),digits=4),"\n"))
+		cat(paste0("p_value_of_Rho \t",signif(as.vector(corr_sp$p.value),digits=4),"\n"))
+
+		cat(paste0("r_of_Coverage_and_CN \t",signif(as.vector(corr_pe$estimate),digits=4),"\n"))
+		cat(paste0("p_value_of_r \t",signif(as.vector(corr_pe$p.value),digits=4),"\n"))
+
+		cat(paste0("RMSE_of_Coverage_and_CN \t",signif(rmse,digits=4),"\n"))
+		sink()
+
+		QCGraphs(StatsTxt=paste0(inputDT$inputdir[i],"/QCStats.txt"),KarDT=data.table(cn=kar$segstats$cn,cnmle=kar$segstats$cnmle),
+			outdir=inputDT$inputdir[i])
+
+		if(nrow(inputDT)>1){
+				summaryDT=rbind(summaryDT,data.table(pair=inputDT$pair[i],
+					Tier_1_Input_Junctions=as.numeric(ifelse("1" %in% names(input_Jtiers), input_Jtiers[[1]], "0")),
+					Tier_2_Input_Junctions=as.numeric(ifelse("2" %in% names(input_Jtiers), input_Jtiers[[2]], "0")),
+					Tier_3_Input_Junctions=as.numeric(ifelse("3" %in% names(input_Jtiers), input_Jtiers[[2]], "0")),
+					Tier_1_Output_Junctions=as.numeric(ifelse("1" %in% names(output_Jtiers), output_Jtiers[[1]], "0")),
+					Tier_2_Output_Junctions=as.numeric(ifelse("3" %in% names(output_Jtiers), output_Jtiers[[1]], "0")),
+					Tier_3_Output_Junctions=as.numeric(ifelse("3" %in% names(output_Jtiers), output_Jtiers[[1]], "0")),
+					Number_of_Segments_Input=input_segs,Number_of_Segments_Output=output_segs,
+					Non_telomeric_Loose_Ends=loose,
+					Requested_epgap=JaBba_Args$epgap,Final_epgap=fep,Converged=ifelse(JaBba_Args$epgap>fep,"TRUE","FALSE"),
+					Rho_of_Coverage_and_CN=signif(as.vector(corr_sp$estimate),digits=4),
+					p_value_of_Rho=signif(as.vector(corr_sp$p.value),digits=4),
+					r_of_Coverage_and_CN=signif(as.vector(corr_pe$estimate),digits=4),
+					p_value_of_r=signif(as.vector(corr_pe$p.value),digits=4),
+					RMSE_of_Coverage_and_CN=signif(rmse,digits=4)))
+
+				combforScatter$CNMLE=c(combforScatter$CNMLE,kar$segstats$cnmle)
+				combforScatter$CN=c(combforScatter$CN,kar$segstats$cn)
+			
+		}
+	}
+
+	if(nrow(inputDT)>1){
+
+		Comb_corr_sp=cor.test(combforScatter$CNMLE,combforScatter$CN,method="spearman")	
+		Comb_corr_pe=cor.test(combforScatter$CNMLE,combforScatter$CN,method="pearson")
+		Comb_rmse=sqrt(sum((combforScatter$CNMLE-combforScatter$CN)^2,na.rm=TRUE))
+
+		summaryDT=rbind(summaryDT,data.table(pair="Mean",
+					Tier_1_Input_Junctions=mean(summaryDT$Tier_1_Input_Junctions),
+					Tier_2_Input_Junctions=mean(summaryDT$Tier_2_Input_Junctions),
+					Tier_3_Input_Junctions=mean(summaryDT$Tier_3_Input_Junctions),
+					Tier_1_Output_Junctions=mean(summaryDT$Tier_1_Output_Junctions),
+					Tier_2_Output_Junctions=mean(summaryDT$Tier_2_Output_Junctions),
+					Tier_3_Output_Junctions=mean(summaryDT$Tier_3_Output_Junctions),
+					Number_of_Segments_Input=mean(summaryDT$Number_of_Segments_Input),Number_of_Segments_Output=mean(summaryDT$Number_of_Segments_Output),
+					Non_telomeric_Loose_Ends=mean(summaryDT$Non_telomeric_Loose_Ends),
+					Requested_epgap=mean(summaryDT$Requested_epgap),
+					Final_epgap=mean(summaryDT$Final_epgap),
+					Converged="NA",
+					Rho_of_Coverage_and_CN=signif(as.vector(Comb_corr_sp$estimate),digits=4),
+					p_value_of_Rho=signif(as.vector(Comb_corr_sp$p.value),digits=4),
+					r_of_Coverage_and_CN=signif(as.vector(Comb_corr_pe$estimate),digits=4),
+					p_value_of_r=signif(as.vector(Comb_corr_pe$p.value),digits=4),
+					RMSE_of_Coverage_and_CN=signif(Comb_rmse,digits=4)))
+		
+		fwrite(summaryDT,paste0(outdir,"/QCSummary.csv"))
+		QCGraphs(StatsCsv=paste0(outdir,"/QCSummary.csv"),KarDT=data.table(cn=combforScatter$CN,cnmle=combforScatter$CNMLE),
+			outdir=outdir)
+	}
+}
+
+#' @name QCGraphs
+#' @title QCGraphs
+#' @description Function for generating quality graphs for the output of a JaBbA run. Can be run either for one or multiple JaBbA outputs (see below).
+#' 
+#' 
+#' @param StatsTxt Route to output file of QCStats. Only provide if running for a single sample.
+#' @param StatsCsv Csv with pairs (column 1) and corresponding path to QCStats file (columns 2). Only provide if running for more than 1 file.
+#' @param KarDT Datatable with paired up values of cn and cnmle from the output karyograph.
+#' @param outdir Output directory where to place the function's graphs and txt files
+
+QCGraphs=function(StatsTxt=NA, StatsCsv=NA, KarDT, outdir){
+	if(!is.na(StatsTxt)){
+		QCDF=read.table(StatsTxt,header=TRUE,stringsAsFactors=FALSE)
+		QCList=list()
+		for(i in 1:nrow(QCDF)){
+			QCList[as.character(QCDF$Stat[i])]=QCDF$Value[i]
+		}
+	}
+
+	if(!is.na(StatsCsv)){
+		QCDF=read.csv(StatsCsv,header=TRUE,stringsAsFactors=FALSE)
+		QCList=QCDF[QCDF$pair=="Mean",]
+	}
+
+	signifr=ifelse(QCList$"p_value_of_r"<0.01,"Significant","Non-Significant")
+	signifRho=ifelse(QCList$"p_value_of_Rho"<0.01,"Significant","Non-Significant")
+	convergence=ifelse(QCList$"Converged","reached","not reached")
+	subtext=paste0("Convergence ",convergence, " (epgap delta=",signif(as.numeric(QCList$Requested_epgap)-as.numeric(QCList$Final_epgap),digits=4),")")
+	captiontext=paste0("rho=",QCList$"Rho_of_Coverage_and_CN","(",signifRho,");"," r=",QCList$"r_of_Coverage_and_CN","(",signifr,")")
+
+	png(paste0(outdir,"/QC_CNScatter.png"))
+	p=ggplot(data.frame(KarDT), aes(x=cn, y=cnmle)) + geom_point()+
+	labs(title = "CN vs CN_Old",subtitle = subtext,
+		caption=captiontext)+xlab("CN")+ylab("CN_Old")+
+	theme_grey(base_size = 16)
+	print(p)
+	dev.off()
+
+	Frequency=c(as.integer(as.numeric(QCList$"Number_of_Segments_Input")),as.integer(as.numeric(QCList$"Number_of_Segments_Output")))
+	Type=c("Input","Output")
+	data<- data.frame(Frequency, Type)
+
+	png(paste0(outdir,"/QC_SegmentsBarplot.png"))
+	p=ggplot(data, aes(x=Type, y=Frequency, fill=Type)) + geom_bar(stat="identity", color="black",width=0.6)+
+	scale_fill_manual(values=c("#56B4E9", "#E69F00"))+
+	labs(title = "Genomic Segments")+ylab("Abundance")+theme_grey(base_size = 20)+geom_text(aes(label=Frequency), vjust=1.6, color="black", size=10)
+	print(p)
+	dev.off()
+
+
+	Frequency=c(as.numeric(QCList$Tier_1_Input_Junctions),as.numeric(QCList$Tier_2_Input_Junctions),as.numeric(QCList$Tier_3_Input_Junctions)
+		,as.numeric(QCList$Tier_1_Output_Junctions),as.numeric(QCList$Tier_2_Output_Junctions),as.numeric(QCList$Tier_3_Output_Junctions))
+	Type=c("Input","Input","Input","Output","Output","Output")
+	Tier=c(1,2,3,1,2,3)
+	data<- data.frame(Frequency, Type, Tier)
+
+	png(paste0(outdir,"/QC_JunctionsBarplot.png"))
+	p=ggplot(data=data, aes(x=Tier, y=Frequency, fill=Type)) +
+	geom_bar(stat="identity", color="black", position=position_dodge())+theme_minimal()+labs(title = "Junction Tiers",subtitle=paste0("Number of non-telomeric loose ends=",QCList$"Non_telomeric_Loose_Ends"))+theme_grey(base_size = 16)
+	print(p)
+	dev.off()
+}
+                  
