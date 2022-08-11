@@ -68,6 +68,7 @@ if (!exists("opt"))
             c("--nudgebalanced"),
             type = "logical",
             default = TRUE,
+            action = "store_true",
             help = "whether to attempt to add a small incentive for chains of quasi-reciprocal junctions."),
         make_option(
             c("--edgenudge"),
@@ -194,20 +195,26 @@ if (!exists("opt"))
             default = FALSE,
             help = "run filter.loose to get a breakdown of loose ends?"),
         make_option(
+<<<<<<< HEAD
             c("--max.threads"),
             type = "integer",
             default = 1L,
             help = "run filter.loose to get a breakdown of loose ends?"),
+        ## make_option(c("--gurobi"),
+        ##             type = 'character',
+        ##             default = 'FALSE',
+        ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
+=======
             c("--gurobi"),
             type = "logical",
             default = FALSE,
             help = "use gurobi optimizer instead of CPLEX?"),
+>>>>>>> master
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = TRUE,
                     help = "verbose output")
     )
-
     
     parseobj = OptionParser(
         usage = paste(
@@ -218,6 +225,7 @@ if (!exists("opt"))
             collapse="\n"),
         option_list=option_list
     )
+
     args = tryCatch(
         parse_args(parseobj,
                    positional_arguments = TRUE,
@@ -336,8 +344,12 @@ suppressPackageStartupMessages(
         loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
         tilim = opt$tilim,
         epgap = opt$epgap,
+<<<<<<< HEAD
+        ## TODO use.gurobi = opt$gurobi,
         max.threads = opt$max.threads,
+=======
         use.gurobi = opt$gurobi,
+>>>>>>> master
         ## TODO max.threads = Inf, max.mem = 16
         ## below are general options
         max.mem = opt$mem,

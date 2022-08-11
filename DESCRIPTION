@@ -17,7 +17,7 @@ Remotes:
   github::mskilab/gChain,
   github::mskilab/gGnome@0de9f45b5cf744375015ad4f164df555f05cf80a
 Depends:
-  R (>= 3.6.0),
+  R (>= 3.5.0),
   GenomicRanges,
   gUtils,
   gTrack,
@@ -41,4 +41,4 @@ Suggests:
   covr
 License: MIT + file LICENSE
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
