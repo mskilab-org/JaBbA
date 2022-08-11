@@ -2297,7 +2297,7 @@ ramip_stub = function(kag.file,
 
         param.file = paste(out.file, '.prm', sep = '')
         .cplex_customparams(param.file, max.threads, treememlim = mem * 1024,
-                            workingmemlim = floor((mem * 0.9) * 1024))
+                            workingmemlim = floor((mem * 0.25) * 1024))
         if (verbose) {
             jmessage("param.file contents: ")
             system2('cat', normalizePath(param.file))
@@ -5679,9 +5679,13 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 ##
 .cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA, workingmemlim = NA_real_)
 {
+    CPLEX.CMD = readLines(pipe(sprintf('find %s/%s -name cplex', Sys.getenv("CPLEX_DIR"), 'cplex/bin')))
     vnum = grep("Welcome to IBM",
-                system2("cplex", c("-c \"quit\""), stdout = T),
+                system2(CPLEX.CMD, c("-c \"quit\""), stdout = T),
                 value = T)
+    ## vnum = grep("Welcome to IBM",
+    ##             system2("cplex", c("-c \"quit\""), stdout = T),
+    ##             value = T)
     vnum = sub("([a-z)(A-Z ]+)([0-9.]+)$", "\\2", vnum)
     vnums = as.integer(unlist(strsplit(vnum, "\\.")))
     ## param_lines = "CPLEX Parameter File Version 12.6.0.0"
