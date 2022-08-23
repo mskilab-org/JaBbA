@@ -3306,7 +3306,7 @@ jbaLP = function(kag.file = NULL,
     
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
-    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+    kag.gg$nodes[abs(cn) > M]$mark(cn = NA, weight = NA)
 
     ## add lower bounds depending on ALT junction tier
     if (tfield %in% colnames(kag.gg$edges$dt)) {
