@@ -2817,7 +2817,7 @@ segstats = function(target,
 
         ## FIXME: sometimes we'd throw away 1-bin not bad nodes because its variance is NA
         if (length(bad.nodes <- which(((utarget$wbins.nafrac >= max.na) | (is.na(utarget$wbins.nafrac))) &
-                                      utarget$wbins.ok < 50))>0)
+                                      utarget$wbins.ok < 20))>0)
         {
             utarget$max.na = max.na ## what about really small segs in a good "environment"
             utarget$bad[bad.nodes] = TRUE
