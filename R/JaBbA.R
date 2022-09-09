@@ -5787,7 +5787,7 @@ write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
 {
     if (!is.data.frame(x))
         x = as.data.frame(x)
-
+    x = apply(x,2,as.character)
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
 
