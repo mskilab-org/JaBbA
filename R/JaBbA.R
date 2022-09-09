@@ -1136,7 +1136,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
 
     saveRDS(seg, seg.fn)
 
-
     if (overwrite | !file.exists(kag.file)){
         if (verbose) jmessage("creating karyograph")
         karyograph_stub(seg,
@@ -1468,7 +1467,6 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     } else {
         jmessage("Skipping loose end annotation")
     }
-
 
 
     if (overwrite | !file.exists(jabba.simple.rds.file))
@@ -5838,7 +5836,7 @@ write.tab = function(x, ..., sep = "\t", quote = F, row.names = F)
 {
     if (!is.data.frame(x))
         x = as.data.frame(x)
-
+    x = apply(x,2,as.character)
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
 
