@@ -13,6 +13,7 @@ bioc_packages:
 - rtracklayer
 - Rsamtools
 before_install:
+- echo "$URL"
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
 - echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
