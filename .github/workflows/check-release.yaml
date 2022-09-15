@@ -36,7 +36,7 @@ jobs:
         run: |
           curl -OL $URL
           mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-          echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
+          echo $JAB | sudo gpg --passphrase-fd 0 --decrypt jabba.tar.gz.gpg
           mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
           export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE	
       - uses: r-lib/actions/setup-r-dependencies@v2
