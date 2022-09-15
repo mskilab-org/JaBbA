@@ -1,0 +1,62 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/master/examples
+# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+on:
+  push:
+    branches: [main, master, zc_dev]
+  pull_request:
+    branches: [main, master, zc_dev]
+
+name: R-CMD-check
+
+jobs:
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      JAB: ${{ secrets.JAB }}
+      URL: ${{ secrets.URL }}
+      CPLEX_DIR: $HOME/my.cplex/
+      CPLEX_INCLUDE_PATH: $HOME/my.cplex/include
+      CPLEX_LIB_PATH: $HOME/my.cplex/lib
+      R_CHECK_ARGS: "--no-build-vignettes --no-manual --as-cran --no-examples"
+      _R_CHECK_TESTS_NLINES_: 0
+      R_REMOTES_NO_ERRORS_FROM_WARNINGS: TRUE
+      _R_CHECK_FORCE_SUGGESTS_: false
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+	  r-version: '4.2.0'
+
+  - uses: lhotari/action-upterm@v1
+
+      - name: cplex setup
+        run: |
+	  curl -OL $URL
+	  mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+	  echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
+	  mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
+	  export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE	
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+	  cache: true
+	  cache-version: 1
+          extra-packages: rcmdcheck
+
+      - uses: r-lib/actions/check-r-package@v2
+
+      - name: Show testthat output
+        if: always()
+        run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+
+      - name: Upload check results
+        if: failure()
+        uses: actions/upload-artifact@main
+        with:
+          name: ${{ runner.os }}-r${{ matrix.config.r }}-results
+          path: check
