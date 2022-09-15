@@ -30,6 +30,8 @@ jobs:
           use-public-rspm: true
           r-version: '4.2.0'    
       - uses: lhotari/action-upterm@v1
+        with:
+          limit-access-to-actor: false
       - name: cplex setup
         run: |
           curl -OL $URL
