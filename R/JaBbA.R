@@ -1286,7 +1286,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    fix.thres = fix.thres,
                    min.bins = min.bins,
                    customparams = T)
-        Rcplex::Rcplex.close()
+
     }
 
 
