@@ -6970,7 +6970,7 @@ read.junctions = function(rafile,
         } else {
             rafile = data.table::fread(rafile)
         }
-    } else if (is.na(rafile)){
+    } else if (all(is.na(rafile), na.rm = TRUE)){
         return(GRangesList())
     }
 
