@@ -18,7 +18,7 @@ Remotes:
   github::mskilab/gChain,
   github::mskilab/gGnome
 Depends:
-  R (>= 4.2.0),
+  R (>= 4.0.0),
   GenomicRanges,
   gUtils,
   gTrack,
