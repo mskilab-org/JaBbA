@@ -2,9 +2,9 @@
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
   push:
-    branches: [main, master, zc_dev]
+    branches: [master, qc]
   pull_request:
-    branches: [main, master, zc_dev]
+    branches: [master, qc]
 
 name: R-CMD-check
 
