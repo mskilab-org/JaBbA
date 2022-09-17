@@ -1,17 +1,9 @@
 language: r
 sudo: false
 cache: packages
-r: 3.6.1
+r: 4.0.2
 warnings_are_errors: false
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
-bioc_packages:
-- GenomeInfoDb
-- S4Vectors
-- GenomicRanges
-- VariantAnnotation
-- DNAcopy
-- rtracklayer
-- Rsamtools
 before_install:
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg

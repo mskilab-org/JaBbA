@@ -1,0 +1,75 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/master/examples
+# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+on:
+  push:
+    branches: [main, master, zc_dev]
+  pull_request:
+    branches: [main, master, zc_dev]
+
+name: R-CMD-check
+
+jobs:
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      JAB: ${{ secrets.JAB }}
+      URL: ${{ secrets.URL }}
+      R_CHECK_ARGS: "--no-build-vignettes --no-manual --as-cran --no-examples"
+      _R_CHECK_TESTS_NLINES_: 0
+      R_REMOTES_NO_ERRORS_FROM_WARNINGS: TRUE
+      R_KEEP_PKG_SOURCE: yes
+      RCMDCHECK_ERROR_ON: error
+      
+    steps:
+      - uses: actions/checkout@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+          r-version: '4.0.2'
+      - name: cplex setup
+        run: |
+          set -x
+          curl -OL $URL
+          mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+          gpg --pinentry-mode=loopback --passphrase="$JAB" --output jabba.tar.gz --decrypt jabba.tar.gz.gpg
+          mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
+
+      - name: set environment variables
+        run: |
+          set -x
+          echo "R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE" >> $GITHUB_ENV
+          echo "CPLEX_DIR=$HOME/my.cplex" >> $GITHUB_ENV
+          echo "CPLEX_INCLUDE_PATH=$HOME/my.cplex/include" >> $GITHUB_ENV
+          echo "CPLEX_LIB_PATH=$HOME/my.cplex/lib" >> $GITHUB_ENV
+          
+      - name: verify environment variables are set!
+        run: |
+          set -x
+          echo "Value of CPLEX_DIR: $CPLEX_DIR"
+          
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          cache: true
+          cache-version: 1
+          extra-packages: rcmdcheck
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          error-on: '"error"'
+
+      - name: Show testthat output
+        if: always()
+        run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+
+      - name: Upload check results
+        if: failure()
+        uses: actions/upload-artifact@main
+        with:
+          name: ${{ runner.os }}-r${{ matrix.config.r }}-results
+          path: check
+          
+      - name: manual debugging
+        if: failure()
+        uses: mxschmitt/action-tmate@v3

@@ -1286,7 +1286,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    fix.thres = fix.thres,
                    min.bins = min.bins,
                    customparams = T)
-        Rcplex::Rcplex.close()
+
     }
 
 
@@ -6970,7 +6970,7 @@ read.junctions = function(rafile,
         } else {
             rafile = data.table::fread(rafile)
         }
-    } else if (is.na(rafile)){
+    } else if (all(is.na(rafile), na.rm = TRUE)){
         return(GRangesList())
     }
 
