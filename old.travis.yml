@@ -1,0 +1,42 @@
+language: r
+sudo: false
+cache: packages
+r: 4.0.2
+warnings_are_errors: false
+r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
+before_install:
+- curl -OL $URL
+- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+- echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
+- mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
+- wget https://github.com/samtools/samtools/releases/download/1.6/samtools-1.6.tar.bz2
+- tar -vxjf samtools-1.6.tar.bz2
+- cd samtools-1.6
+- make
+- cd ..
+- export PATH=samtools-1.6/:$PATH
+- curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+- chmod 755 ./travis-tool.sh
+install:
+- ./travis-tool.sh install_github mskilab/bamUtils
+- ./travis-tool.sh install_github mskilab/gUtils
+- ./travis-tool.sh install_github mskilab/gTrack
+- ./travis-tool.sh install_github mskilab/gGnome
+script:
+- "Rscript -e 'devtools::install_bioc(\"copynumber\")'"
+- "Rscript -e 'setRepositories(graphics = FALSE, ind = 1:6);install.packages(\"sequenza\")'"
+- "Rscript -e 'devtools::install()'"
+- "./travis-tool.sh run_tests"
+after_failure:
+- "./travis-tool.sh dump_logs"
+after_success:
+- travis_wait Rscript -e 'covr::codecov()'
+env:
+  global:
+  - CPLEX_DIR=$HOME/my.cplex/
+  - CPLEX_INCLUDE_PATH=$HOME/my.cplex/include
+  - CPLEX_LIB_PATH=$HOME/my.cplex/lib
+  - R_CHECK_ARGS="--no-build-vignettes --no-manual --as-cran --no-examples"
+  - _R_CHECK_TESTS_NLINES_=0
+  - R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
+  - _R_CHECK_FORCE_SUGGESTS_=false

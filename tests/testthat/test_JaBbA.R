@@ -289,3 +289,15 @@ test_that("JaBbA", {
     expect_equal(jab.lp$nodes$dt[!is.na(cn) & cn > 0, cn], c(5, 3, 2, 4, 5, 3, 5, 3, 2, 3, 5), tolerance = 1.1)
     expect_equal(jab.lp$junctions$dt$cn, c(3, 2, 2, 1, 2, 4, 3, 2, 3, 3, 2, 2, 1, 2, 3), tolerance = 1.1)
 })
+
+print("Comparing QC stats for test data:")
+test_that("QCStats", {
+    statTest=QCStats(data.table(),NA,testMode=TRUE)
+    expect_equal(statTest[1], 406.0)
+    expect_equal(statTest[2], 34.0)
+    expect_equal(statTest[3], 0.7884, tolerance=0.0001)
+    expect_equal(statTest[4], 0.0, tolerance=0.0001)
+  
+  })
+
+print("QC_Done")
