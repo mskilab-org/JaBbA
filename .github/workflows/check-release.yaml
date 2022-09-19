@@ -52,7 +52,9 @@ jobs:
         with:
           cache: true
           cache-version: 1
-          extra-packages: rcmdcheck, any::covr
+          extra-packages: |
+            rcmdcheck
+            any::covr
           needs: coverage
 
       - uses: r-lib/actions/check-r-package@v2
