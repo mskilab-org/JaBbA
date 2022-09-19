@@ -52,7 +52,8 @@ jobs:
         with:
           cache: true
           cache-version: 1
-          extra-packages: rcmdcheck
+          extra-packages: rcmdcheck, any::covr
+          needs: coverage
 
       - uses: r-lib/actions/check-r-package@v2
         with:
@@ -62,6 +63,11 @@ jobs:
         if: always()
         run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
         shell: bash
+
+      - name: Check test coverage
+        if: success()
+        run: covr::codecov(quiet = FALSE)
+        shell: Rscript {0}
 
       - name: Upload check results
         if: failure()
