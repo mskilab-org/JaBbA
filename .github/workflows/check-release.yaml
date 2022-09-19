@@ -2,9 +2,9 @@
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
   push:
-    branches: [master, qc]
+    branches: [master]
   pull_request:
-    branches: [master, qc]
+    branches: [master]
 
 name: R-CMD-check
 
@@ -53,7 +53,7 @@ jobs:
           cache: true
           cache-version: 1
           extra-packages: |
-            rcmdcheck
+            any::rcmdcheck
             any::covr
           needs: coverage
 
