@@ -66,10 +66,8 @@ jobs:
         run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
         shell: bash
 
-      - name: Check test coverage
-        if: success()
-        run: covr::codecov(quiet = FALSE)
-        shell: Rscript {0}
+      - name: Check unit test coverage
+        uses: codecov/codecov-action@v3
 
       - name: Upload check results
         if: failure()
