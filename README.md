@@ -1,4 +1,4 @@
-![Build Status](https://github.com/mskilab/JaBbA/actions/workflows/check-release.yaml/badge.svg)
+![Build Status](https://github.com/mskilab/JaBbA/actions/workflows/check-release.yaml/badge.svg) ![codecov.io](https://img.shields.io/codecov/c/github/mskilab/JaBbA.svg)](https://codecov.io/github/mskilab/JaBbA?branch=master)
 
 # JaBbA (Junction Balance Analysis)
 ```
