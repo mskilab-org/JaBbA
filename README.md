@@ -1,4 +1,4 @@
-![Build Status](https://github.com/mskilab/JaBbA/actions/workflows/check-release/badge.svg)
+![Build Status](https://github.com/mskilab/JaBbA/actions/workflows/check-release.yaml/badge.svg)
 
 # JaBbA (Junction Balance Analysis)
 ```
