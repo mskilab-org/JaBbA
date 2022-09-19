@@ -6,3 +6,4 @@
 ^\.travis\.yml$     # Used for continuous integration testing with travis
 internal.Rd         # keep internal functions out of documentation
 ^\.github*$	    # GitHub Actions workflows
+^\.github$

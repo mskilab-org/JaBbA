@@ -2,9 +2,9 @@
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
   push:
-    branches: [master, qc]
+    branches: [master]
   pull_request:
-    branches: [master, qc]
+    branches: [master]
 
 name: R-CMD-check
 
@@ -52,7 +52,10 @@ jobs:
         with:
           cache: true
           cache-version: 1
-          extra-packages: rcmdcheck
+          extra-packages: |
+            any::rcmdcheck
+            any::covr
+          needs: coverage
 
       - uses: r-lib/actions/check-r-package@v2
         with:
@@ -62,6 +65,9 @@ jobs:
         if: always()
         run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
         shell: bash
+
+      - name: Check unit test coverage
+        uses: codecov/codecov-action@v3
 
       - name: Upload check results
         if: failure()
