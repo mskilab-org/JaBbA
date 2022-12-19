@@ -3,9 +3,9 @@ library(gUtils)
 library(gGnome)
 library(testthat)
 
-jj = system.file("testing", "junctions.rds", package = "JaBbA")
-sg = system.file("testing", "segs.rds", package = "JaBbA")
-cf = system.file("testing", "coverage.txt", package = "JaBbA")
+jj = system.file("extdata", "junctions.rds", package = "JaBbA")
+sg = system.file("extdata", "segs.rds", package = "JaBbA")
+cf = system.file("extdata", "coverage.txt", package = "JaBbA")
 
 test_that(desc = "Testing LP JaBbA with .bw coverage input",
           code = {
