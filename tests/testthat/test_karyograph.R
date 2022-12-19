@@ -3,7 +3,7 @@ library(testthat)
 context('JaBbA')
 
 ## for testing any function upstream of junction balance
-invalid.jjs = system.file("testing", "invalid.junctions.rds", package = "JaBbA")
+invalid.jjs = system.file("extdata", "invalid.junctions.rds", package = "JaBbA")
 
 test_that(desc = "test filtering of junctions with invalid endpoints",
           code = {
@@ -17,7 +17,7 @@ test_that(desc = "test filtering of junctions with invalid endpoints",
               )})
           
         
-kag = system.file("testing", "fix.thres.kag.rds", package = "JaBbA")
+kag = system.file("extdata", "fix.thres.kag.rds", package = "JaBbA")
 
 test_that(desc = "test ppgrid with various perturbations to input",
           code = {
