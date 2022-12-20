@@ -3,13 +3,13 @@ library(gUtils)
 library(gGnome)
 library(testthat)
 
-jj = system.file("testing", "junctions.rds", package = "JaBbA")
-sg = system.file("testing", "segs.rds", package = "JaBbA")
-cf = system.file("testing", "coverage.txt", package = "JaBbA")
+jj = system.file("extdata", "junctions.rds", package = "JaBbA")
+sg = system.file("extdata", "segs.rds", package = "JaBbA")
+cf = system.file("extdata", "coverage.txt", package = "JaBbA")
 
 ## save stuff as bw
-cf.bw = system.file("testing", "coverage.bw", package = "JaBbA")
-seg.bw = system.file("testing", "segs.bw", package = "JaBbA")
+cf.bw = system.file("extdata", "coverage.bw", package = "JaBbA")
+seg.bw = system.file("extdata", "segs.bw", package = "JaBbA")
 
 expected.cns = c(5,3,2,4,5,3,5,3,2,3,5)
 
