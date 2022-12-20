@@ -3,14 +3,14 @@ library(gUtils)
 library(testthat)
 
 context('JaBbA')
-jj = system.file("testing", "junctions.rds", package = "JaBbA")
-empty.jj = system.file("testing", "empty.junctions.rds", package = "JaBbA")
-tier.jj = system.file("testing", "tier.juncs.rds", package = "JaBbA")
-sg = system.file("testing", "segs.rds", package = "JaBbA")
-cf = system.file("testing", "coverage.txt", package = "JaBbA")
-empty.cf = system.file("testing", "empty.cov.txt", package = "JaBbA")
-ht = system.file("testing", "hets.txt", package = "JaBbA")
-new.ht = system.file("testing", "new.hets.txt", package = "JaBbA")
+jj = system.file("extdata", "junctions.rds", package = "JaBbA")
+empty.jj = system.file("extdata", "empty.junctions.rds", package = "JaBbA")
+tier.jj = system.file("extdata", "tier.juncs.rds", package = "JaBbA")
+sg = system.file("extdata", "segs.rds", package = "JaBbA")
+cf = system.file("extdata", "coverage.txt", package = "JaBbA")
+empty.cf = system.file("extdata", "empty.cov.txt", package = "JaBbA")
+ht = system.file("extdata", "hets.txt", package = "JaBbA")
+new.ht = system.file("extdata", "new.hets.txt", package = "JaBbA")
 hr = fread(ht) %>% dt2gr
 
 blacklist.junctions = system.file("extdata", "blacklist.junctions.rds", package = 'JaBbA')
@@ -19,9 +19,9 @@ blacklist.coverage = system.file("extdata", "hg19.blacklist.coverage.rds", packa
 
 expected.cns = c(5,3,2,4,5,3,5,3,2,3,5)
 
-dup.juncs = readRDS(system.file("testing", "duplicate.juncs.rds", package = "JaBbA"))
-dup.juncs.gg = system.file("testing", "duplicate.juncs.gg.rds", package = "JaBbA")
-dup.juncs.grl = system.file("testing", "duplicate.juncs.grl.rds", package = "JaBbA")
+dup.juncs = readRDS(system.file("extdata", "duplicate.juncs.rds", package = "JaBbA"))
+dup.juncs.gg = system.file("extdata", "duplicate.juncs.gg.rds", package = "JaBbA")
+dup.juncs.grl = system.file("extdata", "duplicate.juncs.grl.rds", package = "JaBbA")
 
 message("Testing duplicate breakpoint detection")
 vanilla.op = detect_duplicate_breakpoints(dup.juncs, tfield = "tier")
@@ -39,7 +39,7 @@ ref.only = detect_duplicate_breakpoints(dup.juncs[type == "REF"], tfield = "tier
 expect_equal(length(ref.only), 0)
 
 ## check that fix.thres works as expected for jbaLP
-kag.sg = readRDS(system.file("testing", "fix.thres.kag.rds", package = "JaBbA"))
+kag.sg = readRDS(system.file("extdata", "fix.thres.kag.rds", package = "JaBbA"))
 
 test_that(desc = "test that treemem works as expected",
           code = {
@@ -153,8 +153,7 @@ test_that(desc = "Test incorporation of Tier 1 junctions even with ISM = TRUE",
 
 test_that(desc = "Testing LP JaBbA without input junctions",
           code = {
-
-              expect_warning(JaBbA(
+              expect_error(JaBbA(
                   junctions = "",
                   coverage = cf,
                   slack.penalty = 100,
@@ -173,14 +172,13 @@ test_that(desc = "Testing LP JaBbA without input junctions",
                   lp = TRUE,
                   ism = FALSE,
                   max.na = 1),
-                  regexp = "no junction file is given")
+                  regexp = "invalid file")
           })
 
 test_that(desc = "Testing LP JaBbA with wrong coverage field",
           code = {
-
               expect_warning(JaBbA(
-                  junctions = "",
+                  junctions = jj,
                   coverage = cf,
                   slack.penalty = 100,
                   tilim = 60,
