@@ -66,11 +66,11 @@ junc = rep(juncs, 2)
 
 test_that("ra.merge", {
     ram = JaBbA:::ra.merge(read.junctions(juncs.fn),
-                           read.junctions(bedpe, flipstrand = TRUE),
+                           read.junctions(bedpe),
                            read.junctions(juncs.fn),
                            pad = 1e3)
     ## expect_equal(ncol(values(ram)), 29)
-    expect_equal(length(ram), 83)
+    expect_equal(length(ram), 97)
     junc2 = GenomicRanges::split(GenomicRanges::shift(unlist(junc),400),
                                  rep(c(1,2), each = length(junc)))
     ram = JaBbA:::ra.merge(junc, junc2)
