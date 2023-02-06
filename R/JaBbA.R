@@ -254,7 +254,7 @@ JaBbA = function(## Two required inputs
     ## Only when tier exists or unfiltered junctions provided, do we do the iterations
     ## if unfiltered set is given first parse it
     ra.uf = NULL
-    if (!is.null(juncs.uf)){
+    if (!is.null(juncs.uf) && file.exists(juncs.uf) && file.info(juncs.uf)$size > 0){
         jmessage("Loading supplementary junctions")
         ra.uf = read.junctions(juncs.uf, geno=FALSE)
     }
@@ -299,7 +299,9 @@ JaBbA = function(## Two required inputs
         ## ra.all = ra.all.uf[ndup]
     }
 
-    if (!is.null(blacklist.junctions)){2
+    if (!is.null(blacklist.junctions) &&
+        file.exists(blacklist.junctions) &&
+        file.info(blacklist.junctions)$size > 0){
         blacklist.junctions = read.junctions(blacklist.junctions)
         if (length(blacklist.junctions)>0){
             black.ix = which(gUtils::grl.in(ra.all, blacklist.junctions))
@@ -310,7 +312,7 @@ JaBbA = function(## Two required inputs
         }
     }
 
-    if (!is.null(whitelist.junctions)){
+    if (!is.null(whitelist.junctions) && file.exists(whitelist.junctions) && file.info(whitelist.junctions)$size > 0){
         whitelist.junctions = read.junctions(whitelist.junctions)
         if (length(whitelist.junctions)>0){
             white.ix = which(gUtils::grl.in(ra.all, whitelist.junctions))
@@ -1285,7 +1287,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                    tfield = tfield,
                    fix.thres = fix.thres,
                    min.bins = min.bins,
-                   customparams = T)
+                   customparams = !use.gurobi)
 
     }
 

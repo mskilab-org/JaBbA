@@ -66,7 +66,7 @@ junc = rep(juncs, 2)
 
 test_that("ra.merge", {
     ram = JaBbA:::ra.merge(read.junctions(juncs.fn),
-                           read.junctions(bedpe, flipstrand = TRUE),
+                           read.junctions(bedpe),
                            read.junctions(juncs.fn),
                            pad = 1e3)
     ## expect_equal(ncol(values(ram)), 29)
