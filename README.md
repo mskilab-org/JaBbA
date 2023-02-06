@@ -30,6 +30,13 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
 - [Fun fact](#fun-fact)
 
 ## Installation
+
+### Dockerized installation
+
+A Docker container with the latest stable release of JaBbA and its dependencies installed can be found [here](https://hub.docker.com/r/graskind1/jabba) - many thanks to [grasskind](https://github.com/grasskind).
+
+### Installation from GitHub
+
 1. Install IBM ILOG
    [CPLEX Studio](https://www.ibm.com/products/ilog-cplex-optimization-studio).
    The software is proprietary, but can be obtained for free under [IBM's academic
