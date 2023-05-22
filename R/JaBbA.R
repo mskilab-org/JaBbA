@@ -1046,7 +1046,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     if (drop.chr){
        seg = gr.nochr(seg)
        coverage = gr.nochr(coverage)
-       ra = gr.nochr(ra)
+       ra = GrangesList(lapply(ra, function(x){gr.nochr(x)}),
+                        compress = T)
     }
     ## clean up the seqlevels before moving on
     seg.sl = seqlengths(seg)
