@@ -114,6 +114,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 #' @param fix.thres (numeric) freeze the CN of large nodes with cost penalty exceeding this multiple of lambda. default -1 (no nodes are fixed)
 #' @param min.bins (numeric) minimum number of bins needed for a valid segment CN estimate (default 5)
 #' @param filter_loose (logical) run loose end annotation? (default FALSE)
+#' @param drop.chr (logical) Drops chr from chromosome names. (default TRUE)
 #' @export
 JaBbA = function(## Two required inputs
                  junctions,
@@ -167,7 +168,8 @@ JaBbA = function(## Two required inputs
                  fix.thres = -1,
                  min.bins = 1,
                  filter_loose = FALSE,
-		 QCout=FALSE)
+		 QCout=FALSE,
+                 drop.chr = TRUE)
 {
     system(paste('mkdir -p', outdir))
     jmessage('Starting analysis in ', outdir <- normalizePath(outdir))
@@ -193,8 +195,7 @@ JaBbA = function(## Two required inputs
                    !file.exists(paste0(cplex.dir, "/cplex/lib"))){
             jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
         }
-    }
-    
+    }   
     ## if (is.character(ra))
     ## {
     ##     if (!file.exists(ra))
@@ -453,6 +454,7 @@ JaBbA = function(## Two required inputs
                 ism = ism,
                 fix.thres = fix.thres,
                 min.bins = min.bins,
+                drop.chr = TRUE,
                 filter_loose = filter_loose)
             
             gc()
@@ -690,6 +692,7 @@ JaBbA = function(## Two required inputs
 #' @param fix.thres (numeric) multiple of lambda above which to fix nodes
 #' @param min.bins (numeric) min number of coverage bins for a valid CN estimate
 #' @param filter_loose (logical) run loose end analysis?
+#' @param drop.chr (logical) Drops chr from chromosome names. (default TRUE)
 jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file or rds of GRangesList of junctions (with strands oriented pointing AWAY from breakpoint)
                       coverage, # path to cov file, rds of GRanges
                       blacklist.coverage = NULL,
@@ -733,7 +736,8 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
                       geno = FALSE,
                       filter_loose = FALSE,
                       outlier.thresh = 0.9999,
-                      cn.signif = 1e-5)
+                      cn.signif = 1e-5,
+		      drop.chr = TRUE)
 {
     kag.file = paste(outdir, 'karyograph.rds', sep = '/')
     hets.gr.rds.file = paste(outdir, 'hets.gr.rds', sep = '/')
@@ -1038,7 +1042,12 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     } else {
         jwarning("doing nothing special to the small INDEL-like isolated junctions")
     }
-
+    ## Dropping chr across the sample
+    if (drop.chr){
+       seg = gr.nochr(seg)
+       coverage = gr.nochr(coverage)
+       ra = gr.nochr(ra)
+    }
     ## clean up the seqlevels before moving on
     seg.sl = seqlengths(seg)
     cov.sl = seqlengths(coverage)
