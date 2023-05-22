@@ -178,6 +178,11 @@ if (!exists("opt"))
             type = "logical",
             default = FALSE,
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
+        make_option(
+           c("--drop.chr"),
+           type = "logical",
+           default = TRUE,
+           help = "drops chr in seqlevels for inputs"),
         ## make_option(c("--gurobi"),
         ##             type = 'character',
         ##             default = 'FALSE',
@@ -311,7 +316,8 @@ suppressPackageStartupMessages(
         mc.cores = opt$cores,
         lp = opt$lp,
         ism = opt$ism,
-        verbose = 2
+        verbose = 2,
+        drop.chr = op$drop.chr
         ## TODO init, dyn.tuning
     )
 })
