@@ -454,7 +454,7 @@ JaBbA = function(## Two required inputs
                 ism = ism,
                 fix.thres = fix.thres,
                 min.bins = min.bins,
-                drop.chr = TRUE,
+                drop.chr = drop.chr,
                 filter_loose = filter_loose)
             
             gc()
