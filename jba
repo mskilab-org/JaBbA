@@ -1,5 +1,11 @@
 #!/usr/bin/env Rscript
+require(devtools)
 library(optparse)
+devtools::load_all("~/git/forks/JaBbA/")
+# Setting up the dev version
+message("Loading Max's development version of JaBbA...")
+
+
 jbastr = "
  _____         ___    _      _____ 
 (___  )       (  _`\\ ( )    (  _  )
@@ -169,6 +175,16 @@ if (!exists("opt"))
             default = 1,
             help = "Number of cores for JaBBa MIP"),
         make_option(
+            c("--mem"),
+            type = "numeric",
+            default = 16,
+            help = "(uncompressed) tree memory limit for CPLEX"),
+        make_option(
+            c("--fix.thres"),
+            type = "numeric",
+            default = -1,
+            help = "fix nodes above a threshold multiple of lambda"),
+        make_option(
             c("--lp"),
             type = "logical",
             default = FALSE,
@@ -199,11 +215,11 @@ if (!exists("opt"))
                                             "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
                                           collapse="\n"),
                                           option_list=option_list)
-
+    parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE) 
     args = tryCatch(parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE),
                     error = function(e) {message(jbastr); print_help(parseobj); NULL})
 
-
+ 
     opt = NULL;
     if (!is.null(args)) {
         opt = args$options
@@ -317,7 +333,7 @@ suppressPackageStartupMessages(
         lp = opt$lp,
         ism = opt$ism,
         verbose = 2,
-        drop.chr = op$drop.chr
+        drop.chr = opt$drop.chr
         ## TODO init, dyn.tuning
     )
 })
