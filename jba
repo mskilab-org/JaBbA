@@ -1,9 +1,6 @@
 #!/usr/bin/env Rscript
-require(devtools)
+
 library(optparse)
-devtools::load_all("~/git/forks/JaBbA/")
-# Setting up the dev version
-message("Loading Max's development version of JaBbA...")
 
 
 jbastr = "
