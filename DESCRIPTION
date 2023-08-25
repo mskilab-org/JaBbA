@@ -13,11 +13,11 @@ biocViews:
   bioc::3.15/VariantAnnotation,
   bioc::3.15/copynumber,
 Remotes:
-  github::mskilab/bamUtils,
-  github::mskilab/gUtils,
-  github::mskilab/gTrack,
-  github::mskilab/gChain,
-  github::mskilab/gGnome
+  github::mskilab-org/bamUtils,
+  github::mskilab-org/gUtils,
+  github::mskilab-org/gTrack,
+  github::mskilab-org/gChain,
+  github::mskilab-org/gGnome
 Depends:
   R (>= 4.0.0),
   GenomicRanges,
@@ -43,4 +43,4 @@ Suggests:
   covr
 License: MIT + file LICENSE
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.3
