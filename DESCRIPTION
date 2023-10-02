@@ -18,7 +18,7 @@ Remotes:
   github::mskilab-org/gTrack,
   github::mskilab-org/gChain,
   github::mskilab-org/gGnome,
-  url::https://https://cran.r-project.org/src/contrib/Archive/sequenza/sequenza_3.0.0.tar.gz
+  url::https://cran.r-project.org/src/contrib/Archive/sequenza/sequenza_3.0.0.tar.gz
 Depends:
   R (>= 4.0.0),
   GenomicRanges,
