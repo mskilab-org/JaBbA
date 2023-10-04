@@ -1,6 +1,6 @@
 Package: JaBbA
 Title: Infer cancer graph genomes from read depth and junctions
-Version: 0.0.0.9000
+Version: 1.1
 Authors@R: person(given = "Marcin", family = "Imielinski", email = "mimielinski@nygenome.org", role = c("aut", "cre"))
 Description: JaBbA simultaneously infers integer copy numbers for genomic segments and their connections based on the read depth and the graph structure defined by the structural variations identified from WGS data. Two essential inputs are 1) a high-density read depth ratio between tumor and normal samples (we also have guidelines for the cases lacking paired normal sequencing) and 2) the putative somatic structural variations. The output is a somatic rearrangement graph representing the integer copy numbers of DNA segments and their connections. The output is a copy number annotated genome graph.
 NeedsCompilation: yes
@@ -13,11 +13,12 @@ biocViews:
   bioc::3.15/VariantAnnotation,
   bioc::3.15/copynumber,
 Remotes:
-  github::mskilab/bamUtils,
-  github::mskilab/gUtils,
-  github::mskilab/gTrack,
-  github::mskilab/gChain,
-  github::mskilab/gGnome
+  github::mskilab-org/bamUtils,
+  github::mskilab-org/gUtils,
+  github::mskilab-org/gTrack,
+  github::mskilab-org/gChain,
+  github::mskilab-org/gGnome,
+  url::https://cran.r-project.org/src/contrib/Archive/sequenza/sequenza_3.0.0.tar.gz
 Depends:
   R (>= 4.0.0),
   GenomicRanges,
@@ -43,4 +44,4 @@ Suggests:
   covr
 License: MIT + file LICENSE
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.3

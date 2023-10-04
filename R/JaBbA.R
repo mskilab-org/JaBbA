@@ -55,6 +55,9 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
         jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     }
 
+    library(gGnome)
+    gGnome:::testOptimizationFunction()
+
     invisible()
 }
 

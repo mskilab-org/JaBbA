@@ -70,6 +70,16 @@ $ jba ## to see usage
 $ jba ${JABBA_PATH}/junctions.vcf ${JABBA_PATH}/coverage.txt 
 ```
 
+**_WARNING_** :
+`JaBbA` uses some functions from `gGnome` package as a wrapper that needs`CPLEX` functionality to be added to `gGnome`. If the dependency package `gGnome` was installed before installing `JaBbA` or if CPLEX functionality was not added while installing `gGnome` or if you get an error while running JaBbA as shown below:
+```{bash}
+Error in names(x) <- c("xopt", "obj", "status", "extra", "epgap") :
+  'names' attribute [5] must be the same length as the vector [1]
+Error in .C("Rcplex_free", PACKAGE = "gGnome") :
+  "Rcplex_free" not available for .C() for package "gGnome"
+```
+**This means `gGnome` was installed without `CPLEX` functionality.** Currently, `JaBbA` checks if `gGnome` has `CPLEX` functionality added while installing and loading the JaBbA package, if not, it will reinstall gGnome to add the CPLEX functionality, so it should take some time for applying this optimization during installation.
+
 ### Running JaBbA with Gurobi
 
 As of ```v1.1``` JaBbA can now be run with [Gurobi](https://www.gurobi.com/products/gurobi-optimizer/), which offers a [free academic license](https://www.gurobi.com/academia/academic-program-and-licenses/). To use Gurobi with JaBbA, please follow the following steps for installation:
