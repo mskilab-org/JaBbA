@@ -55,13 +55,28 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
         jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     }
 
-    if (!requireNamespace("gurobi", quietly = TRUE)) {
-        jmessage("Gurobi is not installed! REMEMBER: You need to have either CPLEX or Gurobi!")
+    if (((!file.exists(paste0(cplex.dir, "/cplex"))) & (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
+               !file.exists(paste0(cplex.dir, "/cplex/lib")))) & (requireNamespace("gurobi", quietly = TRUE))) {
+        jmessage("Gurobi is installed! Will use Gurobi instead of CPLEX if mentioned use.gurobi=TRUE")
         
-    } else {
+    } else if (((file.exists(paste0(cplex.dir, "/cplex"))) & (file.exists(paste0(cplex.dir, "/cplex/include")) ||
+               file.exists(paste0(cplex.dir, "/cplex/lib")))) & (!requireNamespace("gurobi", quietly = TRUE))) {
+
+	jmessage("CPLEX found, will check if gGnome is wired up with CPLEX...")
         library(gGnome)
         gGnome:::testOptimizationFunction()
-    } 
+
+    } else if (((file.exists(paste0(cplex.dir, "/cplex"))) & (file.exists(paste0(cplex.dir, "/cplex/include")) ||
+               file.exists(paste0(cplex.dir, "/cplex/lib")))) & (requireNamespace("gurobi", quietly = TRUE))) {
+
+	jmessage("Both CPLEX and Gurobi is found, will check if gGnome has CPLEX wired since by default JaBbA use CPLEX...")
+	library(gGnome)
+	gGnome:::testOptimizationFunction()
+	
+    } else {
+
+	jmessage("Both CPLEX and Gurobi not found! REMEMBER: You need any one of these optimizers to run JaBbA")
+    }
 
     invisible()
 }
