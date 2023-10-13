@@ -54,14 +54,29 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
                !file.exists(paste0(cplex.dir, "/cplex/lib"))){
         jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     }
+    
+    cplex_installed = ((file.exists(paste0(cplex.dir, "/cplex"))) & (file.exists(paste0(cplex.dir, "/cplex/include")) ||
+               file.exists(paste0(cplex.dir, "/cplex/lib"))))
 
-    if (!requireNamespace("gurobi", quietly = TRUE)) {
-        jmessage("Gurobi is not installed! REMEMBER: You need to have either CPLEX or Gurobi!")
+    gurobi_installed = (requireNamespace("gurobi", quietly = TRUE))
+
+    if ((!cplex_installed) & (gurobi_installed)) {
+        jmessage("Gurobi is found.")
         
-    } else {
+    } else if ((cplex_installed) & (!gurobi_installed)) {
+
         library(gGnome)
         gGnome:::testOptimizationFunction()
-    } 
+
+    } else if ((cplex_installed) & (gurobi_installed)) {
+
+	library(gGnome)
+	gGnome:::testOptimizationFunction()
+	
+    } else {
+
+	jmessage("WARNING: Both CPLEX and Gurobi not found!")
+    }
 
     invisible()
 }
