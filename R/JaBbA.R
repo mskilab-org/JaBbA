@@ -40,43 +40,6 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
     toset <- !(names(op.JaBbA) %in% names(op))
     if(any(toset)) options(op.JaBbA[toset])
 
-    ## test for CPLEX environment
-    ## either CPLEX or gurobi must be installed
-    cplex.dir = Sys.getenv("CPLEX_DIR")
-    if (!requireNamespace("gurobi", quietly = TRUE)) {
-        jmessage("Gurobi not installed")
-    }
-    if (is.null(cplex.dir)){
-        jmessage("CPLEX_DIR environment variable not found!")
-    } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-        jmessage("${CPLEX_DIR}/cplex not found")
-    } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
-               !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-        jmessage("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
-    }
-    
-    cplex_installed = ((file.exists(paste0(cplex.dir, "/cplex"))) & (file.exists(paste0(cplex.dir, "/cplex/include")) ||
-               file.exists(paste0(cplex.dir, "/cplex/lib"))))
-
-    gurobi_installed = (requireNamespace("gurobi", quietly = TRUE))
-
-    if ((!cplex_installed) & (gurobi_installed)) {
-        jmessage("Gurobi is found.")
-        
-    } else if ((cplex_installed) & (!gurobi_installed)) {
-
-        library(gGnome)
-        gGnome:::testOptimizationFunction()
-
-    } else if ((cplex_installed) & (gurobi_installed)) {
-
-	library(gGnome)
-	gGnome:::testOptimizationFunction()
-	
-    } else {
-
-	jmessage("WARNING: Both CPLEX and Gurobi not found!")
-    }
 
     invisible()
 }
@@ -205,20 +168,46 @@ JaBbA = function(## Two required inputs
 
     ## check optimizer choice is appropriate
     if (use.gurobi) {
-        if (!requireNamespace("gurobi", quietly = TRUE)) {
-            jerror("use.gurobi is TRUE but gurobi is not installed")
+        gurobi.dir = Sys.getenv("GUROBI_HOME")
+        if (is.null(gurobi.dir)){
+            jerror("GUROBI_HOME environment variable is not defined. Please
+                install Gurobi or set this variable to the correct installation
+                directory.")
+        } else {
+            if (!requireNamespace("gurobi", quietly = TRUE)) {
+                jerror("Gurobi R library not found, attempting to install
+                    from package binary in $GUROBI_HOME/R...") 
+                gurobi_pattern <- "^gurobi_"
+                gurobi_r_package_path <- list.files(
+                    file.path(Sys.getenv("GUROBI_HOME"), "R"),
+                    pattern = gurobi_pattern, full.names = TRUE
+                )[1]
+                if (!is.na(gurobi_r_package_path) && !is.null(gurobi_r_package_path)) {
+                    install.packages(gurobi_r_package_path, repos = NULL)
+                }
+            } else {
+                library(gurobi)
+                if (!requireNamespace("gurobi", quietly = TRUE)) {
+                    jerror("Gurobi installation was found but the gurobi R
+                        package could not be imported.")
+                }
+            }
         }
     } else {
         cplex.dir = Sys.getenv("CPLEX_DIR")
         if (is.null(cplex.dir)){
-            jerror("CPLEX_DIR environment variable not found!")
+            jerror("CPLEX_DIR environment variable not found.")
         } else if (!file.exists(paste0(cplex.dir, "/cplex"))) {
-            jerror("${CPLEX_DIR}/cplex not found")
+            jerror("${CPLEX_DIR}/cplex not found.")
         } else if (!file.exists(paste0(cplex.dir, "/cplex/include")) ||
                    !file.exists(paste0(cplex.dir, "/cplex/lib"))){
-            jerror("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
+            jerror("Neither of ${CPLEX_DIR}/cplex/[(include)|(lib)] exist.")
+        } else {
+            library(gGnome)
+            gGnome:::testOptimizationFunction()
         }
     }   
+
     ## if (is.character(ra))
     ## {
     ##     if (!file.exists(ra))

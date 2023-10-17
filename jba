@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
-
 library(optparse)
-
-
 jbastr = "
  _____         ___    _      _____ 
 (___  )       (  _`\\ ( )    (  _  )
@@ -63,8 +60,7 @@ if (!exists("opt"))
         make_option(
             c("--rescue.all"),
             type = "logical",
-            default = FALSE,
-            action = "store_true",
+            default = TRUE,
             help = "Attempt to rescue all loose ends regardless of internal quality filter"
         ),
         make_option(
@@ -99,7 +95,7 @@ if (!exists("opt"))
         make_option(
             c("--maxna"),
             type = "numeric",
-            default = 0.1,
+            default = 0.5,
             help = "Any node with more NA than this fraction will be ignored"),
         make_option(
             c("--blacklist.coverage"),
@@ -154,7 +150,7 @@ if (!exists("opt"))
         make_option(
             c("--epgap"),
             type="numeric",
-            default = 0.01,
+            default = 1e-5,
             help = "threshold for calling convergence"),        
         make_option(
             c("-o", "--outdir"),
@@ -184,7 +180,7 @@ if (!exists("opt"))
         make_option(
             c("--lp"),
             type = "logical",
-            default = FALSE,
+            default = TRUE,
             help = "Whether to run optimization as LP"),
         make_option(
             c("--ism"),
@@ -192,14 +188,15 @@ if (!exists("opt"))
             default = FALSE,
             help = "Add ISM constraints? (only valid if LP = TRUE)"),
         make_option(
-           c("--drop.chr"),
-           type = "logical",
-           default = TRUE,
-           help = "drops chr in seqlevels for inputs"),
-        ## make_option(c("--gurobi"),
-        ##             type = 'character',
-        ##             default = 'FALSE',
-        ##             help = "if TRUE will use gurobi (gurobi R package must be installed) and if FALSE will use CPLEX (cplex must be installed prior to library installation)"),
+            c("--filter_loose"),
+            type = "logical",
+            default = FALSE,
+            help = "run filter.loose to get a breakdown of loose ends?"),
+        make_option(
+            c("--gurobi"),
+            type = "logical",
+            default = FALSE,
+            help = "use gurobi optimizer instead of CPLEX?"),
         make_option(c("-v", "--verbose"),
                     action = "store_true",
                     default = FALSE,
@@ -212,11 +209,11 @@ if (!exists("opt"))
                                             "\tuse --field=FIELD argument so specify which column to use if specific meta field of a multi-column table"),
                                           collapse="\n"),
                                           option_list=option_list)
-    parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE) 
+
     args = tryCatch(parse_args(parseobj, positional_arguments= 2, print_help_and_exit = FALSE),
                     error = function(e) {message(jbastr); print_help(parseobj); NULL})
 
- 
+
     opt = NULL;
     if (!is.null(args)) {
         opt = args$options
@@ -226,7 +223,6 @@ if (!exists("opt"))
         {
             message('Did not find junction file ', opt$junctions)
             message('Warning: will be running JaBbA without junctions')
-            ## print_help(parseobj); stop()
             opt$junctions = ""
         }
         if (!file.exists(opt$coverage))
@@ -274,7 +270,7 @@ suppressPackageStartupMessages(
   }
 
 
-    library(JaBbA)
+    require(JaBbA)
     jmessage = function(..., pre = 'JaBbA'){
         message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
     }
@@ -321,17 +317,18 @@ suppressPackageStartupMessages(
         loose.penalty.mode = ifelse(opt$linear, "linear", "boolean"),
         tilim = opt$tilim,
         epgap = opt$epgap,
-        ## TODO use.gurobi = opt$gurobi,
+        use.gurobi = opt$gurobi,
         ## TODO max.threads = Inf, max.mem = 16
         ## below are general options
+        max.mem = opt$mem,
         outdir = opt$outdir,
         name = opt$name,
         mc.cores = opt$cores,
         lp = opt$lp,
         ism = opt$ism,
         verbose = 2,
-        drop.chr = opt$drop.chr
-        ## TODO init, dyn.tuning
+        fix.thres = opt$fix.thres,
+        filter_loose = opt$filter_loose
     )
 })
 
