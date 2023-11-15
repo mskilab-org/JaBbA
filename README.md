@@ -33,7 +33,25 @@ If you use JaBbA in your work, please cite: [Distinct Classes of Complex Structu
 
 ### Dockerized installation
 
-A Docker container with the latest stable release of JaBbA and its dependencies installed can be found [here](https://hub.docker.com/r/graskind1/jabba) - many thanks to [grasskind](https://github.com/grasskind).
+A Docker container with the latest stable release of JaBbA v1.1 and its dependencies installed can be found [here](https://hub.docker.com/r/mskilab/jabba). 
+
+#### :warning: **Warning:**
+
+JaBbA depends on CPLEX MIP Optimizer to work. Because CPLEX is a proprietary software, it isn't included in the image and needs to be installed by the user. 
+To add CPLEX:
+>  1. Download CPLEX (Linux x86-64). (You may need to use the HTTP method.)
+>  2. Pull image and run the container using:
+> ```
+> docker pull mskilab/jabba:latest
+> docker run -it --rm --platform linux/amd64 mskilab/jabba:latest
+> ``` 
+>  3. Copy CPLEX binary into the container: docker cp /PATH/TO/DOWNLOADED_CPLEX.bin CONTAINER_ID:/opt/cplex_studio
+>  4. Install CPLEX: /opt/cplex_studio/DOWNLOADED_CPLEX.bin (If you get a Permission denied error, run 
+>  chmod 777 /PATH/TO/DOWNLOADED_CPLEX.bin before copying it into the container.)
+>  5. When prompted for an installation path, type /opt/cplex. This is what the CPLEX_DIR environmental variable is set to.
+>  6. Save changes to a new image for future use:
+>           Exit container (type exit or press Ctrl-D)
+>           Run docker commit CONTAINER_ID NEW_IMAGE_ID
 
 ### Installation from GitHub
 
@@ -54,7 +72,7 @@ export CPLEX_DIR=/path/to/your/copy/of/CPLEX_Studio/
 3. Install JaBbA 
 
 ```{r}
-devtools::install_github('mskilab/JaBbA')
+devtools::install_github('mskilab-org/JaBbA')
 ```
 
 4. For convenience, add `jba` executable to your `PATH`
@@ -70,7 +88,7 @@ $ jba ## to see usage
 $ jba ${JABBA_PATH}/junctions.vcf ${JABBA_PATH}/coverage.txt 
 ```
 
-**_WARNING_** :
+:warning: **_WARNING_** :
 `JaBbA` uses some functions from `gGnome` package as a wrapper that needs`CPLEX` functionality to be added to `gGnome`. If the dependency package `gGnome` was installed before installing `JaBbA` or if CPLEX functionality was not added while installing `gGnome` or if you get an error while running JaBbA as shown below:
 ```{bash}
 Error in names(x) <- c("xopt", "obj", "status", "extra", "epgap") :
@@ -92,7 +110,7 @@ As of ```v1.1``` JaBbA can now be run with [Gurobi](https://www.gurobi.com/produ
 
 4. Install JaBbA 
 ```{r}
-devtools::install_github('mskilab/JaBbA')
+devtools::install_github('mskilab-org/JaBbA')
 ```
 
 5. For convenience, add `jba` executable to your `PATH`
