@@ -646,6 +646,11 @@ JaBbA = function(## Two required inputs
     	QCStats(inputDT=data.table(pair=name,inputdir=outdir),outdir=outdir)
     }
     setwd(cdir)
+    # exit with error if epgap did not converge
+    sol_epgap = jab$nodes$gr$epgap %>% unique 
+    if (sol_epgap > opt$epgap) {
+        stop(paste("JaBbA did not converge. Try increasing the tilim. Final epgap:", sol_epgap))
+    }
     return(jab)
 }
 
