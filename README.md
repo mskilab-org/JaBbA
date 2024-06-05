@@ -40,7 +40,9 @@ A Docker container with the latest stable release of JaBbA v1.1 and its dependen
 JaBbA depends on CPLEX MIP Optimizer to work. Because CPLEX is a proprietary software, it isn't included in the image and needs to be installed by the user. 
 To add CPLEX:
 >  1. Download CPLEX (Linux x86-64). (You may need to use the HTTP method.)
->  2. Pull image and run the container using:
+>  2. Run the `add_mip_solver.sh` script and enter the requested information.
+
+Alternatively, you can follow these steps to install CPLEX manually:
 > ```
 > docker pull mskilab/jabba:latest
 > docker run -it --rm --platform linux/amd64 mskilab/jabba:latest
