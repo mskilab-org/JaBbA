@@ -29,6 +29,8 @@ Imports:
   data.table,
   Matrix,
   VariantAnnotation,
+  BiocGenerics,
+  S4Vectors,
   GenomeInfoDb,
   rtracklayer,
   DNAcopy,
@@ -44,4 +46,5 @@ Suggests:
   covr
 License: MIT + file LICENSE
 LazyData: true
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
+Encoding: UTF-8
