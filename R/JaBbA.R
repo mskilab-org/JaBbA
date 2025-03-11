@@ -330,251 +330,253 @@ JaBbA = function(## Two required inputs
     if (all.in & length(ra.all)>0){
 	    t3 = values(ra.all)[, tfield]==3
 
-		    if (any(t3)){
-## save every t3 except small indel
-			    t3.indel = which.indel(ra.all[which(t3)])
-				    t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
-				    values(ra.all)[t3.non.indel, tfield] = 2
-				    jmessage('All-in mode: ', length(t3.non.indel),
-						    ' tier 3 junctions being included yielding ',
-						    sum(values(ra.all)[, tfield]==2), ' total junctions\n')
-		    }
+        if (any(t3)){
+            ## save every t3 except small indel
+            t3.indel = which.indel(ra.all[which(t3)])
+            t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+            values(ra.all)[t3.non.indel, tfield] = 2
+            jmessage('All-in mode: ', length(t3.non.indel),
+                    ' tier 3 junctions being included yielding ',
+                    sum(values(ra.all)[, tfield]==2), ' total junctions\n')
+        }
 
-## and then bump t2 to t1
+        ## and then bump t2 to t1
 	    t2 = values(ra.all)[, tfield]==2
 		    if (any(t2)){
 			    values(ra.all)[t2, tfield] = 1
-				    jmessage("All-in mode: ", length(t2),
-						    " tier 2 junctions forced into the model")
+                jmessage("All-in mode: ", length(t2),
+                        " tier 2 junctions forced into the model")
 		    }
     }
-## if we are iterating more than once
-    if (reiterate>1){
+    ## if we are iterating more than once
+    if (reiterate>1) {
 
-## important: rescue.all should always be TRUE if not running filter.loose
+        ## important: rescue.all should always be TRUE if not running filter.loose
 	    if ((!rescue.all) & (!filter_loose)) {
 		    jmessage("Resetting rescue.all to TRUE as filter.loose is FALSE")
 			    rescue.all = TRUE
 	    }
 
 	    continue = TRUE
-		    this.iter = 1;
+        this.iter = 1;
 
 	    values(ra.all)$id = seq_along(ra.all)
-		    saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
+        saveRDS(ra.all, paste(outdir, '/junctions.all.rds', sep = ''))
 
-		    last.ra = ra.all[values(ra.all)[, tfield]<3]
+        this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
+        last.ra = ra.all[values(ra.all)[, tfield]<3]
 
-		    jmessage('Starting JaBbA iterative with ', length(last.ra), ' junctions')
-		    jmessage('Will progressively add junctions within ', rescue.window, 'bp of a loose end in prev iter')
-		    jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
+        jmessage('Starting JaBbA iterative with ', length(last.ra), ' junctions')
+        jmessage('Will progressively add junctions within ', rescue.window, 'bp of a loose end in prev iter')
+        jmessage('Iterating for max ', reiterate, ' iterations or until convergence (i.e. no new junctions added)')
 
-		    while (continue) {
-			    gc()
+        while (continue) {
+            gc()
 
-				    this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
-				    system(paste('mkdir -p', this.iter.dir))
+            this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
+            system(paste('mkdir -p', this.iter.dir))
 
-				    jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
+            jmessage('Starting iteration ', this.iter, ' in ', this.iter.dir, ' using ', length(last.ra), ' junctions')
 
-				    if (this.iter>1){
-					    kag1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds'))
-						    ploidy = kag1$ploidy
-						    purity = kag1$purity
-						    jmessage("Using ploidy ", ploidy,
-								    " and purity ", purity,
-								    " consistent with the initial iteration")
+            if (this.iter>1){
+                kag1 = readRDS(paste0(outdir, '/iteration1/karyograph.rds'))
+                    ploidy = kag1$ploidy
+                    purity = kag1$purity
+                    jmessage("Using ploidy ", ploidy,
+                            " and purity ", purity,
+                            " consistent with the initial iteration")
 
-						    if (lp) {
-							    jmessage("Using segments from JaBbA output of previous iteration")
-								    loose.ends.fn = file.path(outdir,
-										    paste0("iteration", this.iter - 1),
-										    "loose.end.stats.rds")
-								    seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
+                    if (lp) {
+                        jmessage("Using segments from JaBbA output of previous iteration")
+                            loose.ends.fn = file.path(outdir,
+                                    paste0("iteration", this.iter - 1),
+                                    "loose.end.stats.rds")
+                            seg.fn = file.path(outdir, paste0("iteration", this.iter - 1), "jabba.simple.rds")
 
-								    seg = readRDS(seg.fn)$segstats[, c()]
-								    seg = seg %Q% (strand(seg) == "+")
-								    seg = gr.stripstrand(seg)
-						    }
+                            seg = readRDS(seg.fn)$segstats[, c()]
+                            seg = seg %Q% (strand(seg) == "+")
+                            seg = gr.stripstrand(seg)
+                    }
 
-				    }
+            }
 
-			    this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
-				    saveRDS(last.ra, this.ra.file)
+            this.ra.file = paste(this.iter.dir, '/junctions.rds', sep = '')
+            saveRDS(last.ra, this.ra.file)
 
-				    jab = jabba_stub(
-						    junctions = this.ra.file,
-						    seg = seg,
-						    coverage = coverage,
-						    blacklist.coverage = blacklist.coverage,
-						    hets = hets,
-						    nseg = nseg,
-						    cfield = cfield,
-						    tfield = tfield,
-						    nudge.balanced = as.logical(nudge.balanced),
-						    outdir = this.iter.dir,
-						    mc.cores = as.numeric(mc.cores),
-						    max.threads = as.numeric(max.threads),
-						    max.mem = as.numeric(max.mem),
-						    max.na = max.na,
-						    edgenudge = as.numeric(edgenudge),
-						    tilim = as.numeric(tilim),
-						    strict = strict,
-						    name = name,
-						    use.gurobi = as.logical(use.gurobi),
-						    field = field,
-						    epgap = epgap,
-## subsample = subsample,
-						    slack.penalty = as.numeric(slack.penalty),
-						    loose.penalty.mode = loose.penalty.mode,
-						    mipstart = init,
-						    ploidy = as.numeric(ploidy),
-						    purity = as.numeric(purity),
-						    pp.method = pp.method,
-						    indel = indel,
-						    min.nbins = min.nbins,
-						    overwrite = as.logical(overwrite),
-						    verbose = as.numeric(verbose),
-						    dyn.tuning = dyn.tuning,
-						    geno = geno,
-						    cn.signif = cn.signif,
-						    lp = lp,
-						    ism = ism,
-						    fix.thres = fix.thres,
-						    min.bins = min.bins,
-						    drop.chr = drop.chr,
-						    filter_loose = filter_loose)
+            jab = jabba_stub(
+                junctions = this.ra.file,
+                seg = seg,
+                coverage = coverage,
+                blacklist.coverage = blacklist.coverage,
+                hets = hets,
+                nseg = nseg,
+                cfield = cfield,
+                tfield = tfield,
+                nudge.balanced = as.logical(nudge.balanced),
+                outdir = this.iter.dir,
+                mc.cores = as.numeric(mc.cores),
+                max.threads = as.numeric(max.threads),
+                max.mem = as.numeric(max.mem),
+                max.na = max.na,
+                edgenudge = as.numeric(edgenudge),
+                tilim = as.numeric(tilim),
+                strict = strict,
+                name = name,
+                use.gurobi = as.logical(use.gurobi),
+                field = field,
+                epgap = epgap,
+                ## subsample = subsample,
+                slack.penalty = as.numeric(slack.penalty),
+                loose.penalty.mode = loose.penalty.mode,
+                mipstart = init,
+                ploidy = as.numeric(ploidy),
+                purity = as.numeric(purity),
+                pp.method = pp.method,
+                indel = indel,
+                min.nbins = min.nbins,
+                overwrite = as.logical(overwrite),
+                verbose = as.numeric(verbose),
+                dyn.tuning = dyn.tuning,
+                geno = geno,
+                cn.signif = cn.signif,
+                lp = lp,
+                ism = ism,
+                fix.thres = fix.thres,
+                min.bins = min.bins,
+                drop.chr = drop.chr,
+                filter_loose = filter_loose
+            )
 
-							    gc()
+            gc()
 
-							    jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
-							    jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
-							    le = gr.stripstrand(jab$segstats %Q% (loose==TRUE & strand=="+"))
-							    if (length(le)==0){
-								    jmessage("No more loose ends to resolve, terminating.")
-									    break
-							    } else if (!rescue.all){
-								    le = le %Q% which(passed==TRUE)
-									    if (length(le)==0){
-										    jmessage("No more plausible loose ends, terminating")
-											    break
-									    }
-							    } else {
-								    jmessage("Rescuing all ", length(le), " loose ends, regardless of confidence.")
-							    }
+            jab = readRDS(paste(this.iter.dir, '/jabba.simple.rds', sep = ''))
+            jabr = readRDS(paste(this.iter.dir, '/jabba.raw.rds', sep = ''))
+            le = gr.stripstrand(jab$segstats %Q% (loose==TRUE & strand=="+"))
+            if (length(le)==0){
+                jmessage("No more loose ends to resolve, terminating.")
+                break
+            } else if (!rescue.all){
+                le = le %Q% which(passed==TRUE)
+                    if (length(le)==0){
+                        jmessage("No more plausible loose ends, terminating")
+                            break
+                    }
+            } else {
+                jmessage("Rescuing all ", length(le), " loose ends, regardless of confidence.")
+            }
 
-## determine orientation of loose ends
-			    le.right = le %&% gr.start(jab$segstats %Q% (loose==FALSE))
-				    strand(le.right) = "+"
-				    le.left = le %&% gr.end(jab$segstats %Q% (loose==FALSE))
-				    strand(le.left) = "-"
-				    le = grbind(le.right, le.left)
+            ## determine orientation of loose ends
+            le.right = le %&% gr.start(jab$segstats %Q% (loose==FALSE))
+            strand(le.right) = "+"
+            le.left = le %&% gr.end(jab$segstats %Q% (loose==FALSE))
+            strand(le.left) = "-"
+            le = grbind(le.right, le.left)
 
-## Annotate ra.all
-				    all.input = readRDS(paste0(outdir, "/junctions.all.rds"))
-				    all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
-				    if (ncol(all.ov)==2){
-					    all.ov = data.table(data.frame(all.ov))
-						    all.ov[, this.cn := values(jab$junctions)$cn[ra2.ix]]
-						    values(all.input)[, paste0("iteration", this.iter, ".cn")] =
-						    all.ov[, setNames(this.cn, ra1.ix)][as.character(seq_along(all.input))]
-				    } else {
-					    values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
-				    }
-			    saveRDS(all.input, paste0(outdir, "/junctions.all.rds"))
+            ## Annotate ra.all
+            all.input = readRDS(paste0(outdir, "/junctions.all.rds"))
+            all.ov = ra.overlaps(all.input, jab$junctions, pad=0, arr.ind=TRUE)
+            if (ncol(all.ov)==2){
+                all.ov = data.table(data.frame(all.ov))
+                    all.ov[, this.cn := values(jab$junctions)$cn[ra2.ix]]
+                    values(all.input)[, paste0("iteration", this.iter, ".cn")] =
+                    all.ov[, setNames(this.cn, ra1.ix)][as.character(seq_along(all.input))]
+            } else {
+                values(all.input)[, paste0("iteration", this.iter, ".cn")] = NA
+            }
+            saveRDS(all.input, paste0(outdir, "/junctions.all.rds"))
 
-## junction rescue
-## rescues junctions that are within rescue.window bp of a loose end
-## got used, stay there
-## but not loose ends overlapping an exorbitant number of junctions
-				    le.keep = which((le %N% (stack(ra.all) + rescue.window)) < 6)
-				    tokeep = which(values(jab$junctions)$cn>0) 
-				    new.ra.id = unique(c(
-							    values(jab$junctions)$id[tokeep],
-## near a loose ends, got another chance
-							    values(ra.all)$id[which(grl.in(ra.all,
-									    le[le.keep] + rescue.window,
-									    some = T,
-									    ignore.strand = FALSE))],
-## tier 2 or higher must stay for all iterations
-							    values(ra.all)$id[which(values(ra.all)$tier==2)]
-							)) 
-				    if (tfield %in% colnames(ra.all)){
-					    high.tier.id = values(ra.all)$id[which(as.numeric(values(ra.all)[, tfield])<3)]
-						    new.ra.id = union(new.ra.id, high.tier.id)
-				    }
-			    new.ra = ra.all[which(values(ra.all)$id %in% new.ra.id)]
-## new.ra  = ra.all[union(values(last.ra)$id,
-##                        values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
-## new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
-				    new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id)
-## num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
-				    num.new.junc = length(new.junc.id)
-				    jcn = rep(0, nrow(jab$ab.edges))
-				    abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
-				    if (any(abix)){
-					    jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
-				    }
-			    num.used.junc = length(which(jcn>0))
+            ## junction rescue
+            ## rescues junctions that are within rescue.window bp of a loose end
+            ## got used, stay there
+            ## but not loose ends overlapping an exorbitant number of junctions
+            le.keep = which((le %N% (stack(ra.all) + rescue.window)) < 6)
+            tokeep = which(values(jab$junctions)$cn>0) 
+            new.ra.id = unique(c(
+                        values(jab$junctions)$id[tokeep],
+                        ## near a loose ends, got another chance
+                        values(ra.all)$id[which(grl.in(ra.all,
+                                le[le.keep] + rescue.window,
+                                some = T,
+                                ignore.strand = FALSE))],
+                        ## tier 2 or higher must stay for all iterations
+                        values(ra.all)$id[which(values(ra.all)$tier==2)]
+                    )) 
+            if (tfield %in% colnames(ra.all)){
+                high.tier.id = values(ra.all)$id[which(as.numeric(values(ra.all)[, tfield])<3)]
+                    new.ra.id = union(new.ra.id, high.tier.id)
+            }
+            new.ra = ra.all[which(values(ra.all)$id %in% new.ra.id)]
+            ## new.ra  = ra.all[union(values(last.ra)$id,
+            ##                        values(ra.all)$id[grl.in(ra.all, le + rescue.window, some = T)])]
+            ## new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id[which(values(jab$junctions)$cn>0)])
+            new.junc.id = setdiff(new.ra.id, values(jab$junctions)$id)
+            ## num.new.junc = length(setdiff(values(new.ra)$id, values(last.ra)$id)==0)
+            num.new.junc = length(new.junc.id)
+            jcn = rep(0, nrow(jab$ab.edges))
+            abix = rowSums(is.na(rbind(jab$ab.edges[, 1:2, 1])))==0
+            if (any(abix)){
+                jcn[abix] = jab$adj[rbind(jab$ab.edges[abix, 1:2, 1])]
+            }
+            num.used.junc = length(which(jcn>0))
 
-				    t3 = values(new.ra)[, tfield]==3
-				    jmessage('Adding ', num.new.junc,
-						    ' new junctions, including ', sum(t3),
-						    ' tier 3 junctions, yielding ', num.used.junc,
-						    ' used junctions and ', length(new.ra), ' total junctions\n')
+            t3 = values(new.ra)[, tfield]==3
+            jmessage('Adding ', num.new.junc,
+                    ' new junctions, including ', sum(t3),
+                    ' tier 3 junctions, yielding ', num.used.junc,
+                    ' used junctions and ', length(new.ra), ' total junctions\n')
 
-				    if (any(t3)){
-					    values(new.ra)[t3, tfield] = 2
-				    }
+            if (any(t3)){
+                values(new.ra)[t3, tfield] = 2
+            }
 
-			    if (num.new.junc==0 | this.iter >= reiterate)
-				    continue = FALSE
-			    else {
-				    last.ra = new.ra
-					    this.iter = this.iter + 1
-			    }
-## keep using the initial purity ploidy values
-			    pp1 = readRDS(paste0(
-						    outdir,
-						    '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
-				    purity = pp1$purity[1]
-				    ploidy = pp1$ploidy[1]
+            if (num.new.junc==0 | this.iter >= reiterate)
+                continue = FALSE
+            else {
+                last.ra = new.ra
+                this.iter = this.iter + 1
+            }
+            ## keep using the initial purity ploidy values
+            pp1 = readRDS(paste0(
+                outdir,
+                '/iteration1/karyograph.rds.ppgrid.solutions.rds'))
+            purity = pp1$purity[1]
+            ploidy = pp1$ploidy[1]
 
-				    seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## read from the first iteration
+            seg = readRDS(paste0(outdir,'/iteration1/seg.rds')) ## read from the first iteration
 
 
-				    if (verbose)
-				    {
-					    jmessage("Setting mipstart to previous iteration's jabba graph")
-				    }
+            if (verbose)
+            {
+                jmessage("Setting mipstart to previous iteration's jabba graph")
+            }
 
-			    init = jab
+            init = jab
 
-				    if (verbose)
-				    {
-					    jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
-				    }
-		    }
+            if (verbose)
+            {
+                jmessage('Using purity ', round(purity,2), ' and ploidy ', round(ploidy,2), ' across ', length(seg), ' segments used in iteration 1')
+            }
+        }
 
 	    this.iter.dir = paste(outdir, '/iteration', this.iter, sep = '')
 		    system(sprintf('cp %s/* %s', this.iter.dir, outdir))
 					    jab = readRDS(paste0(outdir, "/jabba.simple.gg.rds"))
 					    jmessage('Done Iterating')
-					    } else {
-## if all.in, convert all tier 3 to tier 2
-## if (tfield %in% colnames(values(ra.all))){
-##     t3 = (values(ra.all)[, tfield] == 3)
-##     if (all.in & length(ra.all)>0){
-##         if (any(t3)){
-##             ## save every t3 except small indel
-##             t3.indel = which.indel(ra.all[which(t3)])
-##             t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
-##             values(ra.all)[t3.non.indel, tfield] = 2
-##             t3 = values(ra.all)[, tfield] == 3
-##         }
-##     }
-##     ## if not all.in, only use t2 or t1
-##     ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
+	} else {
+        ## if all.in, convert all tier 3 to tier 2
+        ## if (tfield %in% colnames(values(ra.all))){
+        ##     t3 = (values(ra.all)[, tfield] == 3)
+        ##     if (all.in & length(ra.all)>0){
+        ##         if (any(t3)){
+        ##             ## save every t3 except small indel
+        ##             t3.indel = which.indel(ra.all[which(t3)])
+        ##             t3.non.indel = which(t3)[setdiff(seq_along(which(t3)), t3.indel)]
+        ##             values(ra.all)[t3.non.indel, tfield] = 2
+        ##             t3 = values(ra.all)[, tfield] == 3
+        ##         }
+        ##     }
+        ##     ## if not all.in, only use t2 or t1
+        ##     ra.all = ra.all[setdiff(seq_along(ra.all), which(t3))]
         ## }
         jab = jabba_stub(
             junctions = ra.all,
@@ -631,7 +633,7 @@ JaBbA = function(## Two required inputs
     # sol_epgap = jab$nodes$gr$epgap %>% unique 
     sol_epgap = max(jab$nodes$gr$epgap, na.rm = TRUE)
     if (sol_epgap > opt$epgap) {
-        stop(paste("JaBbA did not converge. Try increasing the tilim. Final epgap:", sol_epgap))
+        jmessage(paste("JaBbA did not converge. Try increasing the tilim. Final epgap:", sol_epgap))
     }
     return(jab)
 }
