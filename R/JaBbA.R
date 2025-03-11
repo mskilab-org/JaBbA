@@ -624,7 +624,12 @@ JaBbA = function(## Two required inputs
     }
     setwd(cdir)
     # exit with error if epgap did not converge
-    sol_epgap = jab$nodes$gr$epgap %>% unique 
+    # Something weird happens with numeric precision
+    # epgap field should all be the same number but unique() does not 
+    # guarantee that a single value will be returned.
+    # Switch to max() for robustness.
+    # sol_epgap = jab$nodes$gr$epgap %>% unique 
+    sol_epgap = max(jab$nodes$gr$epgap, na.rm = TRUE)
     if (sol_epgap > opt$epgap) {
         stop(paste("JaBbA did not converge. Try increasing the tilim. Final epgap:", sol_epgap))
     }
@@ -1194,6 +1199,7 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
             balanced.jix = unlist(reciprocal.cycles(juncs, thresh = 1e3, mc.cores = mc.cores, verbose = verbose>1))
             dp.jix = which(gUtils::ra.duplicated(juncs, pad=1500))
             balanced.jix = setdiff(balanced.jix, dp.jix)
+            ##browser()
         }
         ## only adds edge nudge to the balanced junctions
         edgenudge = edgenudge * as.numeric(seq_along(juncs) %in% balanced.jix)
