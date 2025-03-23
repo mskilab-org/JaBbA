@@ -11,6 +11,7 @@ biocViews:
   bioc::3.15/GenomicRanges,
   bioc::3.15/rtracklayer,
   bioc::3.15/VariantAnnotation,
+  bioc::3.15/MatrixGenerics,
 Remotes:
   github::mskilab-org/bamUtils,
   github::mskilab-org/gUtils,
@@ -24,17 +25,18 @@ Depends:
   GenomicRanges,
   gUtils,
   gTrack,
-  gGnome (>= 0.1)
+  gGnome (>= 0.1),
+  igraph,
+  Matrix,
+  MatrixGenerics
 Imports:
   data.table,
-  Matrix,
   VariantAnnotation,
   BiocGenerics,
   S4Vectors,
   GenomeInfoDb,
   rtracklayer,
   DNAcopy,
-  igraph,
   methods,
   optparse,
   gplots,
