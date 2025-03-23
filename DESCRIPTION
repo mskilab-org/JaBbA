@@ -11,7 +11,7 @@ biocViews:
   bioc::3.15/GenomicRanges,
   bioc::3.15/rtracklayer,
   bioc::3.15/VariantAnnotation,
-  bioc::3.15/MatrixGenerics,
+  bioc::3.15/MatrixGenerics
 Remotes:
   github::mskilab-org/bamUtils,
   github::mskilab-org/gUtils,
@@ -19,7 +19,7 @@ Remotes:
   github::mskilab-org/gChain,
   github::mskilab-org/gGnome,
   url::https://cran.r-project.org/src/contrib/Archive/sequenza/sequenza_3.0.0.tar.gz,
-  url::https://bioconductor.statistik.tu-dortmund.de/packages/3.15/bioc/src/contrib/copynumber_1.36.0.tar.gz,
+  url::https://bioconductor.statistik.tu-dortmund.de/packages/3.15/bioc/src/contrib/copynumber_1.36.0.tar.gz
 Depends:
   R (>= 4.0.0),
   GenomicRanges,
