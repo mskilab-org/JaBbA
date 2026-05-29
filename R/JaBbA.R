@@ -21,6 +21,15 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
     invisible()
 }
 
+
+seqlevels_to_ncbi = function(gr) {
+    sl = GenomeInfoDb::seqlevels(gr)
+    GenomeInfoDb::seqlevelsStyle(sl) = "NCBI"
+    GenomeInfoDb::seqlevels(gr) = sl
+    return(gr)
+}
+
+
 #' @name JaBbA
 #' @title JaBbA
 #' @description
@@ -1046,9 +1055,9 @@ jabba_stub = function(junctions, # path to junction VCF file, dRanger txt file o
     ## Dropping chr across the sample
     if (drop.chr){
        jmessage(drop.chr , " for drop.chr, dropping chr in chromosome names.")
-       seg = gr.nochr(seg)
-       coverage = gr.nochr(coverage)
-       ra = gr.nochr(ra)
+       seg = seqlevels_to_ncbi(seg)
+       coverage = seqlevels_to_ncbi(coverage)
+       ra = seqlevels_to_ncbi(ra)
     }else{
        jmessage(drop.chr , " for drop.chr, continuing on with chr names as is.") 
     }
@@ -1758,6 +1767,7 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
         if (!is.null(nseg)){
             sl = .fixsl(sl, nseg)
         }
+        nseg = seqlevels_to_ncbi(nseg)
     }
 
     ## make sure all sl's are equiv
@@ -1901,9 +1911,10 @@ karyograph_stub = function(seg.file, ## path to rds file of initial genome parti
             jmessage("hets is neither data.table nor GRanges, ignore.")
         }
 
-
-        hets.gr = hets.gr[which(hets.gr %^% this.kag$tile)]
+        
         if (!is.null(hets.gr) & length(hets.gr)>0){
+            hets.gr = seqlevels_to_ncbi(hets.gr)
+            hets.gr = hets.gr[which(hets.gr %^% this.kag$tile)]
             ## save hets object for later
             saveRDS(hets.gr, paste(dirname(out.file), 'hets.gr.rds', sep = '/'))
         } else {
