@@ -24,6 +24,7 @@ low.count=high.count=seg=chromosome=alpha_high=alpha_low=beta_high=beta_low=pred
 
 seqlevels_to_ncbi = function(gr) {
     sl = GenomeInfoDb::seqlevels(gr)
+    if (NROW(sl) == 0) return(gr)
     GenomeInfoDb::seqlevelsStyle(sl) = "NCBI"
     GenomeInfoDb::seqlevels(gr) = sl
     return(gr)
