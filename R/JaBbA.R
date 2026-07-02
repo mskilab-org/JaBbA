@@ -8833,26 +8833,71 @@ reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, v
 {
     bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
 
-    ix = split(seq_along(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
-    ixu = unlist(ix)
     eps = 1e-9
-    ij = do.call(rbind, split(seq_along(bp), bp$grl.ix))
-    adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+    n = length(bp)
 
-    ## matrix of (strand aware) reference distances between breakpoint pairs
-    adj[ixu, ] = do.call(rbind, parallel::mclapply(ix,
-                                         function(iix)
-                                         {
-                                             if (verbose)
-                                                 cat('.')
-                                             tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
-                                             tmpm[is.na(tmpm)] = 0
-                                             tmpm[tmpm>thresh] = 0
-                                             tmpm = as(tmpm>0, 'Matrix')
-                                         },
-                                         mc.cores = mc.cores))
+    ## Reciprocal adjacency: bp[i] is adjacent to bp[j] when bp[i] lies within
+    ## `thresh` bases of the strand-flipped bp[j] on the reference, i.e. the two
+    ## breakpoints point toward one another and sit close together.
+    ##
+    ## The previous implementation materialised the full length(bp) x length(bp)
+    ## dense distance matrix by calling gr.dist over random row-chunks. That is
+    ## O(n^2) in memory and blows up for large inputs: 100k junctions -> ~200k
+    ## breakpoints -> ~1.6 GB per 1e3-row chunk, multiplied across mc.cores and
+    ## copied by each of the +eps / is.na / >thresh / >0 steps, causing OOM.
+    ##
+    ## Since only pairs within `thresh` can ever produce an edge, we query just
+    ## those candidate pairs with a strand-aware windowed overlap and build the
+    ## sparse adjacency directly. Memory now scales with the number of nearby
+    ## breakpoint pairs instead of n^2, while the downstream logic is unchanged.
+    bpf = gr.flipstrand(bp)
+
+    ## candidate pairs whose (strand-aware) separation is <= thresh, found via a
+    ## windowed overlap (`maxgap`) so no dense matrix is ever allocated. The query
+    ## side is processed in `chunksize` blocks so the transient hit/distance
+    ## vectors stay bounded even in pathologically dense regions; each block only
+    ## ever emits the sparse pairs it actually finds.
+    qchunks = split(seq_len(n), ceiling(seq_len(n) / max(1, chunksize)))
+    ijl = parallel::mclapply(qchunks, function(iix)
+    {
+        if (verbose)
+            cat('.')
+        hits = GenomicRanges::findOverlaps(bp[iix], bpf, maxgap = thresh,
+                                           ignore.strand = FALSE)
+        if (!length(hits))
+            return(NULL)
+        ## map local query indices back to global breakpoint indices
+        qh = iix[S4Vectors::queryHits(hits)]
+        sh = S4Vectors::subjectHits(hits)
+        ## reproduce the original filter exactly (0 < dist + eps <= thresh), but
+        ## only over the small candidate set rather than every pair
+        d = GenomicRanges::distance(bp[qh], bpf[sh]) + eps
+        keep = !is.na(d) & d > 0 & d <= thresh
+        if (!any(keep))
+            return(NULL)
+        cbind(qh[keep], sh[keep])
+    }, mc.cores = mc.cores)
+
+    ij = do.call(rbind, ijl)
     if (verbose)
-        cat('\n')
+        cat(sprintf('\nreciprocal.cycles: %d breakpoints, %d candidate adjacencies\n',
+                    n, if (is.null(ij)) 0L else nrow(ij)))
+
+    if (is.null(ij) || !nrow(ij))
+    {
+        qh = integer(0)
+        sh = integer(0)
+    }
+    else
+    {
+        qh = ij[, 1]
+        sh = ij[, 2]
+    }
+
+    if (length(qh))
+        adj = sparseMatrix(i = qh, j = sh, x = TRUE, dims = c(n, n))
+    else
+        adj = sparseMatrix(1, 1, x = FALSE, dims = c(n, n))
 
     adj = adj | Matrix::t(adj) ## symmetrize
 
